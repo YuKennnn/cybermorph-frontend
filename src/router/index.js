@@ -4,6 +4,9 @@ import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import LeaderboardView from '../views/LeaderboardView.vue'
+import ClassroomManagementView from '../views/ClassroomManagementView.vue'
+import ClassroomStudentsView from '../views/ClassroomStudentsView.vue'
+import ClassroomJoinView from '../views/ClassroomJoinView.vue'
 
 const routes = [
   {
@@ -31,6 +34,24 @@ const routes = [
     name: 'leaderboard',
     component: LeaderboardView,
   },
+  {
+    path: '/classroom/manage',
+    name: 'classroom-manage',
+    component: ClassroomManagementView,
+    meta: { requiresAuth: true, roles: ['educator'] },
+  },
+  {
+    path: '/classroom/students/:code_id',
+    name: 'classroom-students',
+    component: ClassroomStudentsView,
+    meta: { requiresAuth: true, roles: ['educator'] },
+  },
+  {
+    path: '/classroom/join',
+    name: 'classroom-join',
+    component: ClassroomJoinView,
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
 ]
 
 const router = createRouter({
@@ -45,6 +66,12 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+    next('/dashboard')
+  } else if (
+    to.meta.roles &&
+    to.meta.roles.length > 0 &&
+    (!authStore.userRole || !to.meta.roles.includes(authStore.userRole))
+  ) {
     next('/dashboard')
   } else {
     next()

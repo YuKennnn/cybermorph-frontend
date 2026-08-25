@@ -1,40 +1,47 @@
-# Current Task: Public Leaderboard
+# Current Task: Classroom Feature
 
 ## Task
-Implement the public Leaderboard view (`LeaderboardView.vue`), configure the public `/leaderboard` route, add navigation access from `DashboardView.vue`, and extend the mock backend (`src/api/mock.js`) with a paginated, filterable `GET /leaderboard` endpoint.
+Implement the Classroom system, allowing educators to create, view, edit, and soft-delete classrooms, and view enrolled students, while allowing players to join classrooms using a 6-character access code. Supported by stateful in-memory mock endpoints in `src/api/mock.js` and role-aware navigation guards.
 
 ## Objective
-Provide an interactive, publicly accessible leaderboard allowing users and guests to view player rankings, search by username with debouncing, filter by map name, and navigate through paginated scores.
+Enable complete educator classroom management workflows and player classroom enrollment with role-based view separation.
 
 ## Scope
 
 ### In Scope
-- Mock data endpoint in `src/api/mock.js`:
-  - `GET /leaderboard` supporting `map_name`, `search`, `page`, `page_size`, and returning `total_count` and `items`.
+- Mock data endpoints in `src/api/mock.js`:
+  - `POST /classroom/generate`
+  - `GET /classroom/my-codes` and `GET /educator/classrooms`
+  - `POST /classroom/join`
+  - `GET /classroom/:id/students`
+  - `PATCH /classroom/:id`
+  - `DELETE /classroom/:id`
 - Views:
-  - `src/views/LeaderboardView.vue` (rank table, debounced search, map selector, loading/empty states, pagination controls).
+  - `src/views/ClassroomManagementView.vue` (educator: list, create, edit, delete, view roster)
+  - `src/views/ClassroomStudentsView.vue` (educator: roster table, map progress)
+  - `src/views/ClassroomJoinView.vue` (player: join form, validation, error handling)
 - Routing:
-  - `src/router/index.js` (public route `/leaderboard`).
+  - `src/router/index.js` (routes `/classroom/manage`, `/classroom/students/:code_id`, `/classroom/join` with `meta.roles` enforcement)
 - Navigation:
-  - `src/views/DashboardView.vue` (link to `/leaderboard`).
+  - `src/views/EducatorDashboard.vue` (link to `/classroom/manage`)
+  - `src/views/PlayerDashboard.vue` (link to `/classroom/join`)
 
 ### Out of Scope
 - Real backend integration
-- Score editing/deletion
-- Detailed player profile popups/modals
+- Advanced analytics or gradebook features
+- Classroom code expiration workflows
 - Modifications to `src/api/client.js`
 
 ## Security & Architecture Rules
-- `/leaderboard` is a public route and must not require authentication.
-- API communication must flow through `src/api/client.js`.
-- Debouncing must be used on user search inputs to prevent excessive network requests.
+- Role verification must use `authStore.userRole`.
+- Route guards check authentication and role (`meta.roles`).
+- Unauthenticated requests redirect to `/login`; unauthorized role requests redirect to `/dashboard`.
 
 ## Verification Checklist
 1. `npm run lint` passes with 0 errors and 0 warnings.
 2. `npm run build` completes successfully.
-3. Accessing `/leaderboard` unauthenticated works without redirect.
-4. Searching by username filters results after a 300ms debounce.
-5. Filtering by map name updates table results.
-6. Previous/Next pagination buttons navigate pages correctly.
-7. Empty state is displayed when no records match.
-8. Leaderboard link in Dashboard navigates to `/leaderboard`.
+3. Educator can generate a new classroom code and see it in `/classroom/manage`.
+4. Educator can edit and soft-delete classrooms.
+5. Educator can view student rosters in `/classroom/students/:id`.
+6. Player can join a classroom via `/classroom/join` with code validation.
+7. Role guards prevent cross-role access between educator and player views.

@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import apiClient from '../api/client'
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 const stats = ref({
@@ -31,13 +33,20 @@ onMounted(async () => {
 const handlePlayGame = () => {
   gameLaunchMessage.value = 'Connecting to Godot game client... (Simulation mode)'
 }
+
+const handleJoinClassroom = () => {
+  router.push('/classroom/join')
+}
 </script>
 
 <template>
   <div class="role-dashboard">
     <div class="welcome-banner">
-      <h3>Welcome back, {{ authStore.user?.username || 'Player' }}!</h3>
-      <p class="subtitle">Your cybersecurity simulation progress and threat metrics.</p>
+      <div class="banner-text">
+        <h3>Welcome back, {{ authStore.user?.username || 'Player' }}!</h3>
+        <p class="subtitle">Your cybersecurity simulation progress and threat metrics.</p>
+      </div>
+      <button class="join-btn" @click="handleJoinClassroom">Join Classroom</button>
     </div>
 
     <div class="stats-grid">
@@ -78,6 +87,14 @@ const handlePlayGame = () => {
   gap: 1.5rem;
 }
 
+.welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
 .welcome-banner h3 {
   margin: 0 0 0.25rem 0;
   color: #111827;
@@ -88,6 +105,21 @@ const handlePlayGame = () => {
   margin: 0;
   color: #6b7280;
   font-size: 0.95rem;
+}
+
+.join-btn {
+  padding: 0.5rem 1rem;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.join-btn:hover {
+  background-color: #1d4ed8;
 }
 
 .stats-grid {
@@ -156,6 +188,42 @@ const handlePlayGame = () => {
 
 .primary-btn:hover {
   background-color: #1d4ed8;
+}
+
+.classroom-cta-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f9fafb;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.cta-text h4 {
+  margin: 0 0 0.25rem 0;
+  color: #334155;
+}
+
+.cta-text p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.secondary-btn {
+  padding: 0.5rem 1rem;
+  background-color: white;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondary-btn:hover {
+  background-color: #eff6ff;
 }
 
 .notice-box {

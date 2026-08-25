@@ -4,8 +4,53 @@ import apiClient from './client'
 const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 
 // ==========================================
-// Mock Data Sets
+// Stateful Mock Data Sets
 // ==========================================
+let mockClassrooms = [
+  {
+    id: 'c1',
+    code: 'CYB101',
+    name: 'Intro to Cybersecurity',
+    description: 'Fundamental security principles, phishing detection, and baseline hygiene.',
+    is_active: true,
+    created_at: '2026-08-20T10:00:00Z',
+    deleted_at: null,
+  },
+  {
+    id: 'c2',
+    code: 'NET202',
+    name: 'Network Defense & Firewalls',
+    description: 'Network topology defense, firewall rule evaluation, and intrusion analysis.',
+    is_active: true,
+    created_at: '2026-08-22T14:30:00Z',
+    deleted_at: null,
+  },
+]
+
+let mockStudentEnrollments = [
+  {
+    classroom_id: 'c1',
+    profile_id: 'p1',
+    username: 'AgentZero',
+    map_progress: 'Map 3: Power Grid',
+    joined_at: '2026-08-21T09:15:00Z',
+  },
+  {
+    classroom_id: 'c1',
+    profile_id: 'p2',
+    username: 'CipherQueen',
+    map_progress: 'Map 4: Command Center',
+    joined_at: '2026-08-21T11:40:00Z',
+  },
+  {
+    classroom_id: 'c2',
+    profile_id: 'p1',
+    username: 'AgentZero',
+    map_progress: 'Map 2: Water Facility',
+    joined_at: '2026-08-23T08:20:00Z',
+  },
+]
+
 const mockLeaderboardEntries = [
   { id: 1, rank: 1, username: 'CipherQueen', score: 9850, map_name: 'Home' },
   { id: 2, rank: 2, username: 'NeoMatrix', score: 9600, map_name: 'Office' },
@@ -104,7 +149,7 @@ mock.onPost('/auth/register-web').reply((config) => {
 })
 
 // ==========================================
-// Dashboard Data Endpoints
+// Player Dashboard Data Endpoint
 // ==========================================
 mock.onGet('/players/me').reply(200, {
   id: 101,
@@ -117,44 +162,9 @@ mock.onGet('/players/me').reply(200, {
   current_map: 'Industrial Control Station',
 })
 
-mock.onGet('/educator/classrooms').reply(200, {
-  classrooms: [
-    {
-      id: 'c1',
-      name: 'Intro to Cybersecurity',
-      code: 'CYB101',
-      student_count: 28,
-      is_active: true,
-    },
-    {
-      id: 'c2',
-      name: 'Network Defense & Firewalls',
-      code: 'NET202',
-      student_count: 19,
-      is_active: true,
-    },
-  ],
-  total_students: 47,
-  recent_activity: [
-    { id: 1, text: 'Student AgentZero completed Map 2 simulation', time: '10m ago' },
-    { id: 2, text: 'New student joined Intro to Cybersecurity', time: '1h ago' },
-    { id: 3, text: 'Class average Threat Index score improved by 12%', time: 'Yesterday' },
-  ],
-})
-
-mock.onGet('/classroom/my-codes').reply(200, {
-  classrooms: [
-    {
-      id: 'c1',
-      name: 'Intro to Cybersecurity',
-      code: 'CYB101',
-      student_count: 28,
-      is_active: true,
-    },
-  ],
-  total_students: 28,
-})
-
+// ==========================================
+// Admin Dashboard Data Endpoint
+// ==========================================
 mock.onGet('/admin/stats').reply(200, {
   total_users: 156,
   active_sessions: 23,
@@ -166,6 +176,184 @@ mock.onGet('/admin/stats').reply(200, {
     { id: 2, action: 'Threat Simulation Sync', user: 'AgentZero', status: 'Success' },
     { id: 3, action: 'Classroom Code Generated', user: 'prof_jones@univ.edu', status: 'Success' },
   ],
+})
+
+// ==========================================
+// Classroom Endpoints (Stateful)
+// ==========================================
+const getClassroomResponse = () => {
+  const activeClassrooms = mockClassrooms.filter((c) => !c.deleted_at)
+  return activeClassrooms.map((c) => {
+    const studentCount = mockStudentEnrollments.filter((s) => s.classroom_id === c.id || s.classroom_id === c.code).length
+    return {
+      ...c,
+      student_count: studentCount,
+    }
+  })
+}
+
+mock.onGet('/classroom/my-codes').reply(() => {
+  const list = getClassroomResponse()
+  return [200, { classrooms: list, total_students: mockStudentEnrollments.length }]
+})
+
+mock.onGet('/educator/classrooms').reply(() => {
+  const list = getClassroomResponse()
+  return [
+    200,
+    {
+      classrooms: list,
+      total_students: mockStudentEnrollments.length,
+      recent_activity: [
+        { id: 1, text: 'Student AgentZero completed Map 2 simulation', time: '10m ago' },
+        { id: 2, text: 'New student joined Intro to Cybersecurity', time: '1h ago' },
+        { id: 3, text: 'Class average Threat Index score improved by 12%', time: 'Yesterday' },
+      ],
+    },
+  ]
+})
+
+mock.onPost('/classroom/generate').reply((config) => {
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+  const { name, description } = data
+
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let newCode = ''
+  for (let i = 0; i < 6; i++) {
+    newCode += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+
+  const newId = 'c' + (mockClassrooms.length + 1)
+  const newClassroom = {
+    id: newId,
+    code: newCode,
+    name: name || 'Untitled Classroom',
+    description: description || '',
+    is_active: true,
+    created_at: new Date().toISOString(),
+    deleted_at: null,
+  }
+
+  mockClassrooms.push(newClassroom)
+
+  return [201, { ...newClassroom, student_count: 0 }]
+})
+
+mock.onPost('/classroom/join').reply((config) => {
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+  const rawCode = (data.code || '').trim().toUpperCase()
+
+  if (!rawCode) {
+    return [400, { detail: 'Classroom code is required.' }]
+  }
+
+  const targetClassroom = mockClassrooms.find(
+    (c) => !c.deleted_at && (c.code.toUpperCase() === rawCode || c.id === rawCode),
+  )
+
+  if (!targetClassroom) {
+    return [404, { detail: 'Classroom code not found. Please verify the code with your educator.' }]
+  }
+
+  if (!targetClassroom.is_active) {
+    return [409, { detail: 'This classroom is currently inactive and cannot accept new students.' }]
+  }
+
+  const alreadyJoined = mockStudentEnrollments.some(
+    (s) =>
+      (s.classroom_id === targetClassroom.id || s.classroom_id === targetClassroom.code) &&
+      s.username === 'AgentZero',
+  )
+
+  if (alreadyJoined) {
+    return [409, { detail: 'You have already joined this classroom.' }]
+  }
+
+  const newEnrollment = {
+    classroom_id: targetClassroom.id,
+    profile_id: 'p' + (mockStudentEnrollments.length + 1),
+    username: 'AgentZero',
+    map_progress: 'Map 1: Home Baseline',
+    joined_at: new Date().toISOString(),
+  }
+
+  mockStudentEnrollments.push(newEnrollment)
+
+  return [
+    200,
+    {
+      classroom_id: targetClassroom.id,
+      code: targetClassroom.code,
+      name: targetClassroom.name,
+      message: `Successfully joined ${targetClassroom.name}!`,
+    },
+  ]
+})
+
+// GET /classroom/:code_id/students
+mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply((config) => {
+  const match = config.url.match(/\/classroom\/([^/]+)\/students/)
+  const codeId = match ? match[1] : null
+
+  const classroom = mockClassrooms.find((c) => !c.deleted_at && (c.id === codeId || c.code === codeId))
+  if (!classroom) {
+    return [404, { detail: 'Classroom not found.' }]
+  }
+
+  const students = mockStudentEnrollments.filter(
+    (s) => s.classroom_id === classroom.id || s.classroom_id === classroom.code,
+  )
+
+  return [
+    200,
+    {
+      classroom: {
+        id: classroom.id,
+        code: classroom.code,
+        name: classroom.name,
+      },
+      students,
+      total_count: students.length,
+    },
+  ]
+})
+
+// PATCH /classroom/:code_id
+mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply((config) => {
+  const match = config.url.match(/\/classroom\/([^/]+)$/)
+  const codeId = match ? match[1] : null
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+
+  const index = mockClassrooms.findIndex((c) => !c.deleted_at && (c.id === codeId || c.code === codeId))
+  if (index === -1) {
+    return [404, { detail: 'Classroom not found.' }]
+  }
+
+  const updated = {
+    ...mockClassrooms[index],
+    name: data.name !== undefined ? data.name : mockClassrooms[index].name,
+    description: data.description !== undefined ? data.description : mockClassrooms[index].description,
+    is_active: data.is_active !== undefined ? data.is_active : mockClassrooms[index].is_active,
+  }
+
+  mockClassrooms[index] = updated
+
+  return [200, updated]
+})
+
+// DELETE /classroom/:code_id
+mock.onDelete(new RegExp('/classroom/([^/]+)$')).reply((config) => {
+  const match = config.url.match(/\/classroom\/([^/]+)$/)
+  const codeId = match ? match[1] : null
+
+  const index = mockClassrooms.findIndex((c) => !c.deleted_at && (c.id === codeId || c.code === codeId))
+  if (index === -1) {
+    return [404, { detail: 'Classroom not found.' }]
+  }
+
+  mockClassrooms[index].deleted_at = new Date().toISOString()
+
+  return [200, { success: true, message: 'Classroom soft-deleted successfully.' }]
 })
 
 // ==========================================

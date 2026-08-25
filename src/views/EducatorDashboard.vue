@@ -1,37 +1,19 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import apiClient from '../api/client'
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 const classroomData = ref({
-  classrooms: [
-    {
-      id: 'c1',
-      name: 'Intro to Cybersecurity',
-      code: 'CYB101',
-      student_count: 28,
-      is_active: true,
-    },
-    {
-      id: 'c2',
-      name: 'Network Defense & Firewalls',
-      code: 'NET202',
-      student_count: 19,
-      is_active: true,
-    },
-  ],
-  total_students: 47,
-  recent_activity: [
-    { id: 1, text: 'Student AgentZero completed Map 2 simulation', time: '10m ago' },
-    { id: 2, text: 'New student joined Intro to Cybersecurity', time: '1h ago' },
-    { id: 3, text: 'Class average Threat Index score improved by 12%', time: 'Yesterday' },
-  ],
+  classrooms: [],
+  total_students: 0,
+  recent_activity: [],
 })
 
 const isLoading = ref(true)
-const actionNotice = ref('')
 
 onMounted(async () => {
   try {
@@ -40,22 +22,25 @@ onMounted(async () => {
       classroomData.value = { ...classroomData.value, ...response.data }
     }
   } catch (error) {
-    console.warn('Could not fetch classrooms, using mock defaults:', error)
+    console.warn('Could not fetch classrooms:', error)
   } finally {
     isLoading.value = false
   }
 })
 
-const handleCreateClassroom = () => {
-  actionNotice.value = 'Classroom creation panel will be connected in the next milestone.'
+const handleManageClassrooms = () => {
+  router.push('/classroom/manage')
 }
 </script>
 
 <template>
   <div class="role-dashboard">
     <div class="welcome-banner">
-      <h3>Welcome, Educator {{ authStore.user?.username || authStore.user?.email || '' }}!</h3>
-      <p class="subtitle">Classroom rosters, security analytics, and student threat performance.</p>
+      <div class="banner-text">
+        <h3>Welcome, Educator {{ authStore.user?.username || authStore.user?.email || '' }}!</h3>
+        <p class="subtitle">Classroom rosters, security analytics, and student threat performance.</p>
+      </div>
+      <button class="primary-btn" @click="handleManageClassrooms">Manage Classrooms</button>
     </div>
 
     <div class="stats-grid">
@@ -72,15 +57,13 @@ const handleCreateClassroom = () => {
 
     <div class="section-container">
       <div class="section-header">
-        <h4>Classrooms</h4>
-        <button class="primary-btn" @click="handleCreateClassroom">+ Create Classroom</button>
+        <h4>Your Classrooms</h4>
+        <button class="secondary-btn" @click="handleManageClassrooms">+ Create / Manage</button>
       </div>
 
-      <div v-if="actionNotice" class="notice-box">
-        {{ actionNotice }}
-      </div>
+      <div v-if="isLoading" class="loading-text">Loading classroom overview...</div>
 
-      <div class="classrooms-list">
+      <div v-else-if="classroomData.classrooms.length > 0" class="classrooms-list">
         <div
           v-for="classroom in classroomData.classrooms"
           :key="classroom.id"
@@ -93,16 +76,21 @@ const handleCreateClassroom = () => {
           <div class="student-count">{{ classroom.student_count }} Students</div>
         </div>
       </div>
+
+      <div v-else class="empty-note">
+        No active classrooms found. Click "Manage Classrooms" to generate your first code.
+      </div>
     </div>
 
     <div class="section-container">
       <h4>Recent Student Activity</h4>
-      <ul class="activity-list">
+      <ul v-if="classroomData.recent_activity.length > 0" class="activity-list">
         <li v-for="item in classroomData.recent_activity" :key="item.id" class="activity-item">
           <span>{{ item.text }}</span>
           <span class="activity-time">{{ item.time }}</span>
         </li>
       </ul>
+      <div v-else class="empty-note">No recent student activity recorded.</div>
     </div>
   </div>
 </template>
@@ -112,6 +100,14 @@ const handleCreateClassroom = () => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .welcome-banner h3 {
@@ -179,7 +175,7 @@ const handleCreateClassroom = () => {
 }
 
 .primary-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.25rem;
   background-color: #059669;
   color: white;
   border: none;
@@ -191,6 +187,21 @@ const handleCreateClassroom = () => {
 
 .primary-btn:hover {
   background-color: #047857;
+}
+
+.secondary-btn {
+  padding: 0.4rem 0.8rem;
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.secondary-btn:hover {
+  background-color: #dbeafe;
 }
 
 .classrooms-list {
@@ -257,13 +268,11 @@ const handleCreateClassroom = () => {
   font-size: 0.8rem;
 }
 
-.notice-box {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  background-color: #eff6ff;
-  border: 1px solid #3b82f6;
-  color: #1e40af;
-  border-radius: 6px;
+.loading-text,
+.empty-note {
+  color: #6b7280;
   font-size: 0.9rem;
+  padding: 1rem 0;
+  text-align: center;
 }
 </style>
