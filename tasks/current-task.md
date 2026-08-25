@@ -1,40 +1,41 @@
-# Current Task: Authentication UI + Mock Backend
+# Current Task: Role-Based Dashboards
 
 ## Task
-Build the authentication UI, update `authStore.js` to align with the documented `/auth/` backend endpoints, implement a development-only mock backend using `axios-mock-adapter`, and set up client-side routes with navigation guards.
+Build role-specific dashboard views (`PlayerDashboard.vue`, `EducatorDashboard.vue`, `AdminDashboard.vue`), refactor `DashboardView.vue` as a dynamic container rendering the appropriate view according to `authStore.userRole`, and extend the mock backend (`src/api/mock.js`) with sample dashboard data endpoints.
 
 ## Objective
-Enable complete frontend authentication workflows (login, registration for player and educator roles, logout, route protection) against a simulated backend in development without connecting to the production database or assuming undocumented API behaviors.
+Provide a tailored web portal experience for each of the three CyberMorph user roles (`player`, `educator`, `admin`) with relevant metrics, actions, and simulated backend responses.
 
 ## Scope
 
 ### In Scope
-- Development dependency: `axios-mock-adapter`
-- Development mock backend: `src/api/mock.js` (gated by `import.meta.env.DEV`)
-- Simulated endpoints:
-  - `POST /auth/login`
-  - `POST /auth/register`
-  - `POST /auth/register-web`
-- Store updates: `src/stores/authStore.js` (`login`, `logout`, `registerPlayer`, `registerWeb`)
-- Views:
-  - `src/views/LoginView.vue`
-  - `src/views/RegisterView.vue`
-  - `src/views/DashboardView.vue` (placeholder)
-- Routing: `src/router/index.js` (routes `/`, `/login`, `/register`, `/dashboard` and `beforeEach` navigation guards)
-- App layout: `src/App.vue` hosting `<RouterView />`
+- Mock data endpoints in `src/api/mock.js`:
+  - `GET /players/me`
+  - `GET /educator/classrooms` (and `GET /classroom/my-codes`)
+  - `GET /admin/stats`
+- Role components:
+  - `src/views/PlayerDashboard.vue` (stats: games played, best score, Threat Index progress, "Play Game" placeholder)
+  - `src/views/EducatorDashboard.vue` (overview: classrooms count, enrolled students, recent activity, "Create Classroom" placeholder)
+  - `src/views/AdminDashboard.vue` (stats: total users, active sessions, pending approvals, admin panel quick links)
+- Container component:
+  - `src/views/DashboardView.vue` (renders role view based on `authStore.userRole`, shared header and logout action)
 
 ### Out of Scope
 - Real backend integration
-- Token refresh or server-side token revocation
-- Detailed educator/admin analytics dashboards (placeholder dashboard only)
-- Modifications to `src/api/client.js`
+- Live Godot mobile game integration
+- Full classroom creation/student management CRUD forms
+- Full admin approval management CRUD views
+- Modifying `src/api/client.js` or authentication logic
 
-## Security Requirements
-- Do not store credentials or secrets in source code.
-- Route guards are client-side UX only; FastAPI backend remains authoritative for authorization.
-- The mock adapter must be excluded from production execution.
+## Security & Architecture Rules
+- Role determination must be read from `authStore.userRole`, not URL parameters.
+- Client-side dashboard routing remains a UX organization layer; actual authorization boundaries are enforced by the FastAPI backend.
+- Mock backend code remains restricted to development mode (`import.meta.env.DEV`).
 
-## Verification
-1. Run `npm run lint` (0 errors/warnings).
-2. Run `npm run build` (successful compilation).
-3. Test login, registration (player & educator), logout, and protected route redirection in development.
+## Verification Checklist
+1. `npm run lint` passes with 0 errors and 0 warnings.
+2. `npm run build` completes successfully.
+3. Logging in as player renders `PlayerDashboard`.
+4. Logging in as educator renders `EducatorDashboard`.
+5. Logging in as admin renders `AdminDashboard`.
+6. Logout works cleanly from all role dashboards.
