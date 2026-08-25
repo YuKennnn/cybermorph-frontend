@@ -1,41 +1,40 @@
-# Current Task: Role-Based Dashboards
+# Current Task: Public Leaderboard
 
 ## Task
-Build role-specific dashboard views (`PlayerDashboard.vue`, `EducatorDashboard.vue`, `AdminDashboard.vue`), refactor `DashboardView.vue` as a dynamic container rendering the appropriate view according to `authStore.userRole`, and extend the mock backend (`src/api/mock.js`) with sample dashboard data endpoints.
+Implement the public Leaderboard view (`LeaderboardView.vue`), configure the public `/leaderboard` route, add navigation access from `DashboardView.vue`, and extend the mock backend (`src/api/mock.js`) with a paginated, filterable `GET /leaderboard` endpoint.
 
 ## Objective
-Provide a tailored web portal experience for each of the three CyberMorph user roles (`player`, `educator`, `admin`) with relevant metrics, actions, and simulated backend responses.
+Provide an interactive, publicly accessible leaderboard allowing users and guests to view player rankings, search by username with debouncing, filter by map name, and navigate through paginated scores.
 
 ## Scope
 
 ### In Scope
-- Mock data endpoints in `src/api/mock.js`:
-  - `GET /players/me`
-  - `GET /educator/classrooms` (and `GET /classroom/my-codes`)
-  - `GET /admin/stats`
-- Role components:
-  - `src/views/PlayerDashboard.vue` (stats: games played, best score, Threat Index progress, "Play Game" placeholder)
-  - `src/views/EducatorDashboard.vue` (overview: classrooms count, enrolled students, recent activity, "Create Classroom" placeholder)
-  - `src/views/AdminDashboard.vue` (stats: total users, active sessions, pending approvals, admin panel quick links)
-- Container component:
-  - `src/views/DashboardView.vue` (renders role view based on `authStore.userRole`, shared header and logout action)
+- Mock data endpoint in `src/api/mock.js`:
+  - `GET /leaderboard` supporting `map_name`, `search`, `page`, `page_size`, and returning `total_count` and `items`.
+- Views:
+  - `src/views/LeaderboardView.vue` (rank table, debounced search, map selector, loading/empty states, pagination controls).
+- Routing:
+  - `src/router/index.js` (public route `/leaderboard`).
+- Navigation:
+  - `src/views/DashboardView.vue` (link to `/leaderboard`).
 
 ### Out of Scope
 - Real backend integration
-- Live Godot mobile game integration
-- Full classroom creation/student management CRUD forms
-- Full admin approval management CRUD views
-- Modifying `src/api/client.js` or authentication logic
+- Score editing/deletion
+- Detailed player profile popups/modals
+- Modifications to `src/api/client.js`
 
 ## Security & Architecture Rules
-- Role determination must be read from `authStore.userRole`, not URL parameters.
-- Client-side dashboard routing remains a UX organization layer; actual authorization boundaries are enforced by the FastAPI backend.
-- Mock backend code remains restricted to development mode (`import.meta.env.DEV`).
+- `/leaderboard` is a public route and must not require authentication.
+- API communication must flow through `src/api/client.js`.
+- Debouncing must be used on user search inputs to prevent excessive network requests.
 
 ## Verification Checklist
 1. `npm run lint` passes with 0 errors and 0 warnings.
 2. `npm run build` completes successfully.
-3. Logging in as player renders `PlayerDashboard`.
-4. Logging in as educator renders `EducatorDashboard`.
-5. Logging in as admin renders `AdminDashboard`.
-6. Logout works cleanly from all role dashboards.
+3. Accessing `/leaderboard` unauthenticated works without redirect.
+4. Searching by username filters results after a 300ms debounce.
+5. Filtering by map name updates table results.
+6. Previous/Next pagination buttons navigate pages correctly.
+7. Empty state is displayed when no records match.
+8. Leaderboard link in Dashboard navigates to `/leaderboard`.

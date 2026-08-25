@@ -4,6 +4,32 @@ import apiClient from './client'
 const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 
 // ==========================================
+// Mock Data Sets
+// ==========================================
+const mockLeaderboardEntries = [
+  { id: 1, rank: 1, username: 'CipherQueen', score: 9850, map_name: 'Home' },
+  { id: 2, rank: 2, username: 'NeoMatrix', score: 9600, map_name: 'Office' },
+  { id: 3, rank: 3, username: 'AgentZero', score: 9200, map_name: 'Industrial Control Station' },
+  { id: 4, rank: 4, username: 'ByteMaster', score: 8950, map_name: 'Internet Cafe' },
+  { id: 5, rank: 5, username: 'CyberGhost', score: 8700, map_name: 'Public Park' },
+  { id: 6, rank: 6, username: 'ShadowCoder', score: 8550, map_name: 'Home' },
+  { id: 7, rank: 7, username: 'FirewallFox', score: 8300, map_name: 'Office' },
+  { id: 8, rank: 8, username: 'DataNinja', score: 8150, map_name: 'Internet Cafe' },
+  { id: 9, rank: 9, username: 'NetSentinel', score: 7900, map_name: 'Public Park' },
+  { id: 10, rank: 10, username: 'PixelGuard', score: 7750, map_name: 'Home' },
+  { id: 11, rank: 11, username: 'ZeroDayHero', score: 7500, map_name: 'Office' },
+  { id: 12, rank: 12, username: 'CryptoKnight', score: 7350, map_name: 'Internet Cafe' },
+  { id: 13, rank: 13, username: 'PacketHunter', score: 7100, map_name: 'Public Park' },
+  { id: 14, rank: 14, username: 'SecOpsPro', score: 6950, map_name: 'Home' },
+  { id: 15, rank: 15, username: 'KernelPanic', score: 6800, map_name: 'Office' },
+  { id: 16, rank: 16, username: 'LogicBomb', score: 6600, map_name: 'Internet Cafe' },
+  { id: 17, rank: 17, username: 'BufferOverflow', score: 6450, map_name: 'Public Park' },
+  { id: 18, rank: 18, username: 'RootAccess', score: 6300, map_name: 'Home' },
+  { id: 19, rank: 19, username: 'SynFlood', score: 6100, map_name: 'Office' },
+  { id: 20, rank: 20, username: 'PortScanner', score: 5900, map_name: 'Internet Cafe' },
+]
+
+// ==========================================
 // Authentication Endpoints
 // ==========================================
 mock.onPost('/auth/login').reply((config) => {
@@ -140,6 +166,46 @@ mock.onGet('/admin/stats').reply(200, {
     { id: 2, action: 'Threat Simulation Sync', user: 'AgentZero', status: 'Success' },
     { id: 3, action: 'Classroom Code Generated', user: 'prof_jones@univ.edu', status: 'Success' },
   ],
+})
+
+// ==========================================
+// Leaderboard Endpoint
+// ==========================================
+mock.onGet('/leaderboard').reply((config) => {
+  const params = config.params || {}
+  const { map_name, search } = params
+  const page = parseInt(params.page, 10) || 1
+  const pageSize = parseInt(params.page_size, 10) || 10
+
+  let filtered = [...mockLeaderboardEntries]
+
+  if (map_name && map_name !== 'All') {
+    filtered = filtered.filter(
+      (entry) => entry.map_name.toLowerCase() === map_name.toLowerCase(),
+    )
+  }
+
+  if (search && search.trim()) {
+    const q = search.trim().toLowerCase()
+    filtered = filtered.filter((entry) => entry.username.toLowerCase().includes(q))
+  }
+
+  const total_count = filtered.length
+  const startIndex = (page - 1) * pageSize
+  const paginatedItems = filtered.slice(startIndex, startIndex + pageSize).map((item, index) => ({
+    ...item,
+    rank: startIndex + index + 1,
+  }))
+
+  return [
+    200,
+    {
+      items: paginatedItems,
+      total_count,
+      page,
+      page_size: pageSize,
+    },
+  ]
 })
 
 mock.onAny().passThrough()

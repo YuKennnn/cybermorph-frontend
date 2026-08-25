@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/authStore'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
+import LeaderboardView from '../views/LeaderboardView.vue'
 
 const routes = [
   {
@@ -24,6 +25,11 @@ const routes = [
     name: 'dashboard',
     component: DashboardView,
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/leaderboard',
+    name: 'leaderboard',
+    component: LeaderboardView,
   },
 ]
 

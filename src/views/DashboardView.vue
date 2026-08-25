@@ -37,7 +37,10 @@ const handleLogout = () => {
           {{ authStore.userRole }}
         </span>
       </div>
-      <button class="logout-btn" @click="handleLogout">Log Out</button>
+      <div class="header-actions">
+        <router-link to="/leaderboard" class="nav-link">🏆 Leaderboard</router-link>
+        <button class="logout-btn" @click="handleLogout">Log Out</button>
+      </div>
     </header>
 
     <main class="dashboard-content">
@@ -74,6 +77,12 @@ const handleLogout = () => {
   gap: 0.75rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 h2 {
   margin: 0;
   color: #111827;
@@ -101,6 +110,22 @@ h2 {
 .role-badge.admin {
   background-color: #fef3c7;
   color: #92400e;
+}
+
+.nav-link {
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2563eb;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  transition: background-color 0.2s;
+}
+
+.nav-link:hover {
+  background-color: #dbeafe;
 }
 
 .logout-btn {
