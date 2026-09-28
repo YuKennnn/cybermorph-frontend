@@ -7,8 +7,20 @@ export const useAuthStore = defineStore('auth', () => {
   // 1. STATE (The Data)
   // ==========================================
   const token = ref(localStorage.getItem('cyber_token') || null)
-  const user = ref(null)
-  const userRole = ref(null)
+
+  const getInitialUser = () => {
+    try {
+      const rawUser = localStorage.getItem('cyber_user')
+      return rawUser ? JSON.parse(rawUser) : null
+    } catch {
+      return null
+    }
+  }
+  const initialUser = getInitialUser()
+  const user = ref(initialUser)
+
+  const storedRole = localStorage.getItem('cyber_role') || initialUser?.role || null
+  const userRole = ref(storedRole)
 
   // ==========================================
   // 2. ACTIONS (The Functions that change the Data)
@@ -22,8 +34,24 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = authToken
       localStorage.setItem('cyber_token', authToken)
 
-      user.value = data.user || null
-      userRole.value = data.user?.role || data.role || null
+      const extractedUser = data.user || {
+        email: credentials.email,
+        username: credentials.email?.split('@')[0] || 'User',
+      }
+      const extractedRole =
+        data.user?.role ||
+        data.role ||
+        (credentials.email?.includes('admin')
+          ? 'admin'
+          : credentials.email?.includes('educator')
+            ? 'educator'
+            : 'player')
+
+      user.value = extractedUser
+      userRole.value = extractedRole
+
+      localStorage.setItem('cyber_user', JSON.stringify(extractedUser))
+      localStorage.setItem('cyber_role', extractedRole)
 
       return data
     } catch (error) {
@@ -57,6 +85,8 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     userRole.value = null
     localStorage.removeItem('cyber_token')
+    localStorage.removeItem('cyber_user')
+    localStorage.removeItem('cyber_role')
   }
 
   // ==========================================

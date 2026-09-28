@@ -69,7 +69,7 @@ onMounted(() => {
 
     <main class="page-body">
       <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+        {{ errorMessage }}
       </div>
 
       <div v-if="isLoading" class="loading-state">
@@ -224,7 +224,7 @@ onMounted(() => {
 }
 
 .btn-inspect-link:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-subtle);
   border-color: var(--color-primary);
 }
 

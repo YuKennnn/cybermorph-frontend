@@ -314,7 +314,7 @@ const handleLogout = () => {
 }
 
 .nav-item.router-link-active {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-muted);
   color: var(--color-primary);
   font-weight: 700;
   border-left-color: var(--color-primary);
@@ -349,7 +349,7 @@ const handleLogout = () => {
 }
 
 .logout-btn:hover {
-  background-color: #fee2e2;
+  background-color: var(--color-danger-border);
   border-color: var(--color-danger);
 }
 

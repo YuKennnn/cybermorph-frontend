@@ -155,11 +155,11 @@ onMounted(() => {
 
     <main class="page-body">
       <div v-if="successMessage" class="success-banner">
-        ✓ {{ successMessage }}
+        {{ successMessage }}
       </div>
 
       <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+        {{ errorMessage }}
       </div>
 
       <div v-if="isLoading" class="loading-state">
@@ -178,7 +178,7 @@ onMounted(() => {
 
           <h3 class="classroom-name">{{ c.name }}</h3>
           <div class="card-meta">
-            <span class="student-count">👥 {{ c.student_count || 0 }} Enrolled Agents</span>
+            <span class="student-count">{{ c.student_count || 0 }} Enrolled Agents</span>
           </div>
 
           <div class="card-actions">
@@ -416,6 +416,8 @@ onMounted(() => {
   flex-direction: column;
   box-shadow: var(--shadow-purple);
   transition: all 0.2s ease;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .classroom-card:hover {
@@ -469,14 +471,6 @@ onMounted(() => {
   font-size: 1.25rem;
 }
 
-.classroom-desc {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  flex: 1;
-  margin: 0 0 1.25rem 0;
-  line-height: 1.45;
-}
-
 .card-meta {
   padding: 0.75rem 0;
   border-top: 1px solid var(--color-border-subtle);
@@ -497,11 +491,16 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
+  width: 100%;
 }
 
 .btn-roster,
 .btn-analytics {
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0.55rem 0.75rem;
   border-radius: 8px;
   font-family: var(--font-sans);
@@ -520,7 +519,7 @@ onMounted(() => {
 }
 
 .btn-roster:hover {
-  background: #ede9fe;
+  background: var(--color-bg-muted);
   border-color: var(--color-primary);
 }
 
@@ -764,5 +763,11 @@ onMounted(() => {
 
 .btn-danger:hover:not(:disabled) {
   background-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+  .primary-actions {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

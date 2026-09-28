@@ -1,33 +1,48 @@
-# Current Task: UI Polish & CyberMorph Color/Layout Cohesion
+# Current Task: UI Polish, Centralized main.css & Routing Architecture
 
-## Task
-Refine and polish the CyberMorph educator interface to resolve button overcrowding on classroom cards, remove decorative emojis in favor of a clean **text-only navigation**, and unify the color palette around the core CyberMorph Purple/White Design System without altering the established visual identity or redesigning the application.
+## Task Summary
+Refine and polish the CyberMorph educator and public interface to establish `src/assets/main.css` as the single source of truth for design tokens, ensure the public landing page (`/`) serves as the default entry point without bouncing unauthenticated visitors, resolve button overcrowding on classroom cards with multi-tier containment, eliminate emojis from public and authenticated views in favor of a minimalist text-focused presentation, and ensure reliable session hydration on reload.
 
-## Objectives
-1. **Sidebar Navigation (`src/components/SidebarNav.vue`)**:
-   - Completely remove multi-colored platform emojis from navigation items and the logout button.
-   - Use clean, text-only navigation labels ("Dashboard", "Leaderboard", "Manage Classrooms", "Threat Analytics", "Log Out").
-   - Adjust padding and text alignment for clean text-only layout.
-   - Unify the user role pill (`.role-pill.educator`) to use `var(--color-primary)` instead of vivid green.
-2. **Classroom Cards (`src/views/ClassroomManagementView.vue`)**:
-   - Restructure card actions into a 2-tier layout:
-     - Tier 1: `.primary-actions` (equal-width 2-column grid for `[ Students ]` and `[ Analytics ]` without text wrapping).
-     - Tier 2: `.utility-actions` (subtle, secondary utility row for `Edit` and `Delete`).
-   - Remove trailing emoji `📈` from button labels.
-   - Increase card grid column minimum to `minmax(310px, 1fr)` for comfortable spacing.
-   - Replace hardcoded slate colors (`#cbd5e1`, `#64748b`, `#f1f5f9`) with design tokens (`--color-border-subtle`, `--color-text-muted`, `--color-bg-subtle`).
-   - Harmonize active/inactive status pill styling with the purple design system.
-3. **Educator Dashboard (`src/views/EducatorDashboard.vue`) & Students View (`src/views/ClassroomStudentsView.vue`)**:
-   - Remove trailing emoji `📈` from the "Threat Analytics" and "Sector Analytics" action buttons.
-4. **Code Quality**:
-   - 0 linter errors and 0 warnings (`npm run lint`).
-   - Clean production build (`npm run build`).
+## Completed Objectives
+1. **Centralized Design System Architecture (`src/assets/main.css`, `src/App.vue`, `src/main.js`)**:
+   - Created `src/assets/main.css` consolidating `:root` variables, reset rules, body gradient styling, heading typography, and shared UI classes (`.btn-primary`, `.btn-outline`, `.status-pill`, `.risk-badge`, `.spinner`, `.error-banner`, `.success-banner`).
+   - Imported `src/assets/main.css` globally in `src/main.js`.
+   - Scoped `src/App.vue` style block (`<style scoped>`) to contain only layout scaffolding (`.app-layout`, `.main-content`, `.content-wrapper`).
+
+2. **Public Entry & Router Guard Alignment (`src/router/index.js`)**:
+   - Ensured route `/` maps to `LandingView.vue` as a public view.
+   - Updated navigation guard in `router.beforeEach` so that visitors navigating to `/` always land on the public landing page without unwanted redirects to `/login`.
+   - Protected routes explicitly requiring `meta.requiresAuth` while redirecting authenticated users from `/login` and `/register` directly to `/dashboard`.
+
+3. **Text-Focused Minimalist Landing Page (`src/views/LandingView.vue`)**:
+   - Removed OS emojis from 3 Core Pillars ("Play", "Learn", "Track"), 4 Simulation Maps, and 8 Threat Curriculum cards.
+   - Implemented clean monospace tags (`PILLAR 01` - `03`, `SECTOR 01` - `04`, `THREAT 01` - `08`).
+   - Standardized map tags to clean text `UNLOCKED` / `LOCKED`.
+   - Replaced all raw slate hex codes (`#f1f5f9`, `#64748b`, `#cbd5e1`, `#f1edff`) with design system tokens (`var(--color-bg-subtle)`, `var(--color-border)`, `var(--color-text-dim)`).
+   - Added conditional authenticated header navigation (linking directly to `/dashboard` when logged in).
+
+4. **Classroom Cards Action Containment (`src/views/ClassroomManagementView.vue`)**:
+   - Replaced single-row overflowing button flex layout with a structured 2-tier layout:
+     - Tier 1: `.primary-actions` (equal-width 2-column grid for `[ Students ]` and `[ Analytics ]` with `min-width: 0` and ellipsis protection).
+     - Tier 2: `.utility-actions` (subtle secondary text actions for `Edit` and `Delete`).
+   - Added container clipping `overflow: hidden; box-sizing: border-box;` and responsive mobile stack at `<= 480px`.
+   - Removed decorative emojis (`✓`, `⚠️`, `👥`, `📈`) and replaced `#ede9fe` with `var(--color-bg-muted)`.
+
+5. **Authentication Session Hydration & Role Mapping (`src/stores/authStore.js`, `src/views/DashboardView.vue`)**:
+   - Persisted and hydrated `user` and `userRole` in `localStorage` alongside `cyber_token`.
+   - Case-normalized user role checks in `DashboardView.vue` (`admin`, `educator`, `player`).
+
+6. **Sidebar Navigation & Telemetry Drill-Down Polish (`src/components/SidebarNav.vue`, `src/views/EducatorAnalyticsView.vue`)**:
+   - Enforced text-only labels in sidebar with zero emojis and zero replacement icons.
+   - Stripped emojis across all 3 tiers of telemetry drill-downs, standardizing risk badges to subtle semantic tints.
 
 ## Verification Checklist
-1. `npm run lint` passes with 0 errors and 0 warnings.
-2. `npm run build` completes successfully.
-3. Sidebar navigation uses clean text-only labels with zero emojis or icons.
-4. Role pill in the sidebar user snippet uses the unified CyberMorph violet palette.
-5. Classroom management cards render with a 2-tier action layout where "Students" and "Analytics" sit side by side without text wrapping.
-6. "Edit" and "Delete" are subtle utility actions with delete highlighting danger red only on hover.
-7. Slate hex codes are eliminated in favor of CyberMorph theme variables.
+- [x] Initial navigation to `/` serves `LandingView.vue` without redirecting unauthenticated visitors to `/login`.
+- [x] `src/assets/main.css` holds centralized design tokens and resets, imported via `src/main.js`.
+- [x] `src/App.vue` contains only scoped layout scaffolding.
+- [x] Landing page is free of OS emojis and utilizes clean monospace sector/pillar tags and design tokens.
+- [x] Classroom management cards contain buttons cleanly within card boundaries on all viewports.
+- [x] Sidebar navigation is text-only.
+- [x] Session state preserves on page reload (`F5`).
+- [x] `npm run lint` passes with 0 errors and 0 warnings.
+- [x] `npm run build` completes successfully.

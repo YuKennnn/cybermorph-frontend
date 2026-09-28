@@ -1,4 +1,8 @@
 <script setup>
+import { useAuthStore } from '../stores/authStore'
+
+const authStore = useAuthStore()
+
 const scrollToSection = (id) => {
   const element = document.getElementById(id)
   if (element) {
@@ -6,28 +10,46 @@ const scrollToSection = (id) => {
   }
 }
 
+const pillars = [
+  {
+    tag: 'PILLAR 01',
+    title: 'Play',
+    description: 'Engage in 2D simulation missions navigating real-world scenarios and hands-on defense puzzles.',
+  },
+  {
+    tag: 'PILLAR 02',
+    title: 'Learn',
+    description: 'Master 8 critical cyber threats including social engineering, credential harvesting, and ransomware.',
+  },
+  {
+    tag: 'PILLAR 03',
+    title: 'Track',
+    description: 'Monitor progress, earn high scores on the global leaderboard, and sync classroom telemetry.',
+  },
+]
+
 const maps = [
   {
+    sector: 'SECTOR 01',
     name: 'Home Network',
-    emoji: '🏠',
     description: 'Defend your personal network and smart IoT devices from basic threats.',
     unlocked: true,
   },
   {
+    sector: 'SECTOR 02',
     name: 'Corporate Office',
-    emoji: '🏢',
     description: 'Secure corporate infrastructure and employee workstations against phishing.',
     unlocked: true,
   },
   {
+    sector: 'SECTOR 03',
     name: 'Internet Cafe',
-    emoji: '☕',
     description: 'Protect public workstations from eavesdropping and Wi-Fi hijack attacks.',
     unlocked: false,
   },
   {
+    sector: 'SECTOR 04',
     name: 'Public Park',
-    emoji: '🌳',
     description: 'Master advanced threat detection and social engineering in open spaces.',
     unlocked: false,
   },
@@ -35,43 +57,43 @@ const maps = [
 
 const threats = [
   {
+    code: 'THREAT 01',
     name: 'Phishing',
-    emoji: '🎣',
     description: 'Deceptive emails and messages designed to steal credentials and data.',
   },
   {
+    code: 'THREAT 02',
     name: 'Smishing',
-    emoji: '📱',
     description: 'SMS-based phishing attacks targeting mobile devices and OTP tokens.',
   },
   {
+    code: 'THREAT 03',
     name: 'Vishing',
-    emoji: '📞',
     description: 'Voice phishing — attackers impersonate trusted entities to extract secrets.',
   },
   {
+    code: 'THREAT 04',
     name: 'Social Engineering',
-    emoji: '🧠',
     description: 'Psychological manipulation to exploit human cognitive vulnerabilities.',
   },
   {
+    code: 'THREAT 05',
     name: 'Credential Theft',
-    emoji: '🔑',
     description: 'Weak password attacks, credential harvesting, and brute force techniques.',
   },
   {
+    code: 'THREAT 06',
     name: 'Public Wi-Fi Attack',
-    emoji: '📶',
     description: 'Man-in-the-middle packet sniffing and rogue access point spoofing.',
   },
   {
+    code: 'THREAT 07',
     name: 'Malware Infection',
-    emoji: '💀',
     description: 'Malicious payloads and trojans that compromise system integrity.',
   },
   {
+    code: 'THREAT 08',
     name: 'Ransomware',
-    emoji: '💰',
     description: 'Extortion malware that encrypts files and demands ransom payments.',
   },
 ]
@@ -95,8 +117,13 @@ const threats = [
         </nav>
 
         <div class="header-auth-actions">
-          <router-link to="/login" class="btn-signin">Login</router-link>
-          <router-link to="/register" class="btn-signup">Register</router-link>
+          <template v-if="authStore.token">
+            <router-link to="/dashboard" class="btn-signup">Dashboard</router-link>
+          </template>
+          <template v-else>
+            <router-link to="/login" class="btn-signin">Login</router-link>
+            <router-link to="/register" class="btn-signup">Register</router-link>
+          </template>
         </div>
       </div>
     </header>
@@ -119,9 +146,11 @@ const threats = [
         </p>
 
         <div class="hero-actions">
-          <router-link to="/register" class="btn-hero-primary">Get Started</router-link>
+          <router-link :to="authStore.token ? '/dashboard' : '/register'" class="btn-hero-primary">
+            {{ authStore.token ? 'Enter Dashboard' : 'Get Started' }}
+          </router-link>
           <button class="btn-hero-secondary" @click="scrollToSection('features')">
-            Learn More ↓
+            Learn More
           </button>
         </div>
       </div>
@@ -140,37 +169,10 @@ const threats = [
         </div>
 
         <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon-wrapper">
-              <span class="feature-icon">🎮</span>
-            </div>
-            <h3>Play</h3>
-            <p>
-              Engage in 2D simulation missions navigating real-world scenarios and hands-on defense
-              puzzles.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon-wrapper">
-              <span class="feature-icon">🛡️</span>
-            </div>
-            <h3>Learn</h3>
-            <p>
-              Master 8 critical cyber threats including social engineering, credential harvesting,
-              and ransomware.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="feature-icon-wrapper">
-              <span class="feature-icon">📈</span>
-            </div>
-            <h3>Track</h3>
-            <p>
-              Monitor progress, earn high scores on the global leaderboard, and sync classroom
-              telemetry.
-            </p>
+          <div v-for="pillar in pillars" :key="pillar.title" class="feature-card">
+            <div class="pillar-tag">{{ pillar.tag }}</div>
+            <h3>{{ pillar.title }}</h3>
+            <p>{{ pillar.description }}</p>
           </div>
         </div>
       </div>
@@ -194,14 +196,14 @@ const threats = [
             :key="map.name"
             :class="['map-card', { locked: !map.unlocked }]"
           >
-            <div class="map-emoji">{{ map.emoji }}</div>
+            <div class="map-top">
+              <span class="sector-tag">{{ map.sector }}</span>
+              <span :class="['status-tag', map.unlocked ? 'unlocked' : 'locked']">
+                {{ map.unlocked ? 'UNLOCKED' : 'LOCKED' }}
+              </span>
+            </div>
             <div class="map-info">
-              <div class="map-header">
-                <h4>{{ map.name }}</h4>
-                <span :class="['status-tag', map.unlocked ? 'unlocked' : 'locked']">
-                  {{ map.unlocked ? '🔓 UNLOCKED' : '🔒 LOCKED' }}
-                </span>
-              </div>
+              <h4>{{ map.name }}</h4>
               <p class="map-desc">{{ map.description }}</p>
             </div>
           </div>
@@ -222,7 +224,7 @@ const threats = [
 
         <div class="threats-grid">
           <div v-for="threat in threats" :key="threat.name" class="threat-card">
-            <div class="threat-icon">{{ threat.emoji }}</div>
+            <div class="threat-tag">{{ threat.code }}</div>
             <h4>{{ threat.name }}</h4>
             <p>{{ threat.description }}</p>
           </div>
@@ -341,7 +343,7 @@ const threats = [
 }
 
 .btn-signin:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-muted);
   border-color: var(--color-primary);
 }
 
@@ -391,13 +393,6 @@ const threats = [
   border-radius: 9999px;
   margin-bottom: 1.5rem;
   letter-spacing: 0.06em;
-}
-
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
 }
 
 .hero-title {
@@ -536,21 +531,18 @@ const threats = [
   border-color: var(--color-secondary);
 }
 
-.feature-icon-wrapper {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 1.25rem auto;
-  background-color: #ffffff;
-  border: 1.5px solid var(--color-border);
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-purple-sm);
-}
-
-.feature-icon {
-  font-size: 2rem;
+.pillar-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+  margin-bottom: 1.25rem;
 }
 
 .feature-card h3 {
@@ -581,7 +573,7 @@ const threats = [
   box-shadow: var(--shadow-purple);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
   transition: all 0.2s ease;
 }
 
@@ -595,19 +587,26 @@ const threats = [
   background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
 }
 
-.map-emoji {
-  font-size: 2.75rem;
-}
-
-.map-header {
+.map-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.4rem;
 }
 
-.map-header h4 {
-  margin: 0;
+.sector-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.map-info h4 {
+  margin: 0 0 0.4rem 0;
   font-size: 1.15rem;
   color: var(--color-text-main);
 }
@@ -618,6 +617,7 @@ const threats = [
   font-weight: 700;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
+  letter-spacing: 0.04em;
 }
 
 .status-tag.unlocked {
@@ -627,9 +627,9 @@ const threats = [
 }
 
 .status-tag.locked {
-  background-color: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #cbd5e1;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
 }
 
 .map-desc {
@@ -672,14 +672,23 @@ const threats = [
 }
 
 .threat-card:hover {
-  background-color: #f1edff;
+  background-color: var(--color-card-hover);
   border-color: var(--color-secondary);
   box-shadow: var(--shadow-purple-sm);
   transform: translateY(-2px);
 }
 
-.threat-icon {
-  font-size: 2rem;
+.threat-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  display: inline-block;
   margin-bottom: 0.75rem;
 }
 
@@ -725,7 +734,7 @@ const threats = [
 
 .footer-desc {
   margin: 0.5rem 0 0 0;
-  color: #94a3b8;
+  color: var(--color-text-dim);
   font-size: 0.9rem;
   max-width: 380px;
 }
@@ -736,7 +745,7 @@ const threats = [
 }
 
 .link-item {
-  color: #cbd5e1;
+  color: var(--color-border);
   font-size: 0.9rem;
   cursor: pointer;
   transition: color 0.2s;
@@ -750,7 +759,7 @@ const threats = [
   max-width: 1120px;
   margin: 1.5rem auto 0 auto;
   text-align: center;
-  color: #64748b;
+  color: var(--color-text-dim);
   font-size: 0.85rem;
 }
 

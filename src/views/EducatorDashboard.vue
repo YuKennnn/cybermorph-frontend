@@ -80,7 +80,7 @@ const handleViewAnalytics = () => {
             <h5>{{ classroom.name }}</h5>
             <span class="code-badge">CODE: {{ classroom.code }}</span>
           </div>
-          <div class="student-count">👥 {{ classroom.student_count }} Enrolled</div>
+          <div class="student-count">{{ classroom.student_count }} Enrolled</div>
         </div>
       </div>
 

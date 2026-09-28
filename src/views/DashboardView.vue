@@ -10,7 +10,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const currentRoleComponent = computed(() => {
-  switch (authStore.userRole) {
+  const normalizedRole = authStore.userRole?.toLowerCase()
+  switch (normalizedRole) {
     case 'player':
       return PlayerDashboard
     case 'educator':

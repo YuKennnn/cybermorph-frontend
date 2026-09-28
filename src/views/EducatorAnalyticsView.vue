@@ -13,22 +13,22 @@ const router = useRouter()
 
 // Canonical DICT Threat Categories
 const CANONICAL_THREATS = [
-  { name: 'Phishing', icon: '🎣' },
-  { name: 'Smishing', icon: '📱' },
-  { name: 'Vishing', icon: '📞' },
-  { name: 'Social Engineering', icon: '🧠' },
-  { name: 'Credential Theft / Weak Password Attack', icon: '🔑' },
-  { name: 'Public Wi-Fi Attack', icon: '📶' },
-  { name: 'Malware Infection', icon: '💀' },
-  { name: 'Ransomware', icon: '💰' },
+  { name: 'Phishing' },
+  { name: 'Smishing' },
+  { name: 'Vishing' },
+  { name: 'Social Engineering' },
+  { name: 'Credential Theft / Weak Password Attack' },
+  { name: 'Public Wi-Fi Attack' },
+  { name: 'Malware Infection' },
+  { name: 'Ransomware' },
 ]
 
 // Canonical Simulation Maps
 const CANONICAL_MAPS = [
-  { name: 'Home', icon: '🏠' },
-  { name: 'Office', icon: '🏢' },
-  { name: 'Internet Cafe', icon: '☕' },
-  { name: 'Public Park', icon: '🌳' },
+  { name: 'Home' },
+  { name: 'Office' },
+  { name: 'Internet Cafe' },
+  { name: 'Public Park' },
 ]
 
 // ==========================================
@@ -272,7 +272,7 @@ onMounted(() => {
 
     <!-- Error Banner -->
     <div v-if="errorMessage" class="error-banner">
-      ⚠️ {{ errorMessage }}
+      {{ errorMessage }}
     </div>
 
     <!-- Main Loading State -->
@@ -283,7 +283,6 @@ onMounted(() => {
 
     <!-- Empty Classrooms State -->
     <div v-else-if="classrooms.length === 0" class="empty-state">
-      <div class="empty-icon">🏫</div>
       <h3>No Classrooms Deployed Yet</h3>
       <p>Create a classroom sector to enroll students and unlock automated threat telemetry insights.</p>
       <router-link to="/classroom/manage" class="btn-primary">
@@ -307,14 +306,13 @@ onMounted(() => {
             :disabled="isAnalyticsLoading"
             @click="loadClassroomData(selectedClassroomId)"
           >
-            {{ isAnalyticsLoading ? 'Refreshing...' : '🔄 Refresh Telemetry' }}
+            {{ isAnalyticsLoading ? 'Refreshing...' : 'Refresh Telemetry' }}
           </button>
         </div>
 
         <!-- KPI Grid -->
         <div class="kpi-grid">
           <div class="kpi-card">
-            <span class="kpi-icon">👥</span>
             <div class="kpi-content">
               <span class="kpi-value">{{ classroomAnalytics?.student_count ?? students.length }}</span>
               <span class="kpi-label">Enrolled Agents</span>
@@ -322,7 +320,6 @@ onMounted(() => {
           </div>
 
           <div class="kpi-card">
-            <span class="kpi-icon">🗺️</span>
             <div class="kpi-content">
               <span class="kpi-value">
                 {{
@@ -336,7 +333,6 @@ onMounted(() => {
           </div>
 
           <div class="kpi-card map-scores-card">
-            <span class="kpi-icon">🏆</span>
             <div class="kpi-content">
               <span class="kpi-label-title">Average Best Score by Map</span>
               <div class="map-pills-row">
@@ -345,7 +341,7 @@ onMounted(() => {
                   :key="m.name"
                   class="map-score-pill"
                 >
-                  <span class="map-pill-name">{{ m.icon }} {{ m.name }}:</span>
+                  <span class="map-pill-name">{{ m.name }}:</span>
                   <span
                     v-if="classroomAnalytics?.avg_best_score_by_map?.[m.name] !== undefined"
                     class="map-pill-value"
@@ -377,13 +373,11 @@ onMounted(() => {
               class="threat-card"
             >
               <div class="threat-top">
-                <span class="threat-icon">{{ threat.icon }}</span>
+                <h5 class="threat-name">{{ threat.name }}</h5>
                 <span :class="['risk-badge', getRiskLevelClass(classroomAnalytics?.category_fail_rates?.[threat.name])]">
                   {{ getRiskLabel(classroomAnalytics?.category_fail_rates?.[threat.name]) }}
                 </span>
               </div>
-
-              <h5 class="threat-name">{{ threat.name }}</h5>
 
               <!-- Metric Value -->
               <div class="threat-rate-row">
@@ -458,7 +452,7 @@ onMounted(() => {
                     class="btn-inspect"
                     @click="openStudentAnalytics(student)"
                   >
-                    Inspect Telemetry 🔍
+                    Inspect Telemetry
                   </button>
                 </td>
               </tr>
@@ -496,7 +490,7 @@ onMounted(() => {
         </div>
 
         <div v-else-if="studentErrorMessage" class="error-banner">
-          ⚠️ {{ studentErrorMessage }}
+          {{ studentErrorMessage }}
         </div>
 
         <div v-else-if="studentAnalytics" class="modal-body">
@@ -537,7 +531,6 @@ onMounted(() => {
                 :key="m.name"
                 class="student-map-card"
               >
-                <span class="s-map-icon">{{ m.icon }}</span>
                 <div class="s-map-info">
                   <span class="s-map-name">{{ m.name }}</span>
                   <span
@@ -561,7 +554,6 @@ onMounted(() => {
                 :key="threat.name"
                 class="student-threat-pill"
               >
-                <span class="st-icon">{{ threat.icon }}</span>
                 <span class="st-name">{{ threat.name }}</span>
                 <span
                   :class="[
@@ -623,7 +615,7 @@ onMounted(() => {
                         class="btn-telemetry"
                         @click="openSessionTelemetry(s)"
                       >
-                        Telemetry 📡
+                        View Telemetry
                       </button>
                     </td>
                   </tr>
@@ -659,7 +651,7 @@ onMounted(() => {
         </div>
 
         <div v-else-if="sessionErrorMessage" class="error-banner">
-          ⚠️ {{ sessionErrorMessage }}
+          {{ sessionErrorMessage }}
         </div>
 
         <div v-else-if="sessionTelemetry" class="modal-body">
@@ -714,7 +706,7 @@ onMounted(() => {
                       <span
                         :class="['assessment-tag', event.is_correct ? 'correct' : 'incorrect']"
                       >
-                        {{ event.is_correct ? '✓ Correct' : '✗ Mistake' }}
+                        {{ event.is_correct ? 'Correct' : 'Incorrect' }}
                       </span>
                     </td>
                     <td>
@@ -734,7 +726,6 @@ onMounted(() => {
 
             <!-- Graceful Empty State for Telemetry Streaming -->
             <div v-else class="telemetry-pending-banner">
-              <div class="pending-icon">🛰️</div>
               <div class="pending-text">
                 <h6>Telemetry Event Stream Synchronization</h6>
                 <p>
@@ -1425,28 +1416,32 @@ onMounted(() => {
 .st-badge {
   font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.15rem 0.45rem;
+  padding: 0.2rem 0.5rem;
   border-radius: 4px;
 }
 
 .st-badge.risk-low {
   background-color: var(--color-success-bg);
   color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .st-badge.risk-moderate {
   background-color: var(--color-warning-bg);
   color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .st-badge.risk-high {
   background-color: var(--color-danger-bg);
   color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
 }
 
 .st-badge.no-data {
-  background-color: #ffffff;
+  background-color: var(--color-bg-subtle);
   color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
 }
 
 /* Session Result Pills */
@@ -1500,7 +1495,7 @@ onMounted(() => {
 }
 
 .btn-telemetry:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-subtle);
   border-color: var(--color-primary);
 }
 
