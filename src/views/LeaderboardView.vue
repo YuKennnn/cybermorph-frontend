@@ -45,13 +45,12 @@ const fetchLeaderboard = async () => {
     totalCount.value = data.total_count || 0
   } catch (error) {
     console.error('Failed to load leaderboard:', error)
-    errorMessage.value = 'Unable to load leaderboard data. Please try again.'
+    errorMessage.value = 'Unable to load leaderboard telemetry. Please try again.'
   } finally {
     isLoading.value = false
   }
 }
 
-// Watch searchQuery with 300ms debounce
 watch(searchQuery, () => {
   if (debounceTimer) {
     clearTimeout(debounceTimer)
@@ -62,7 +61,6 @@ watch(searchQuery, () => {
   }, 300)
 })
 
-// Watch selectedMap immediately
 watch(selectedMap, () => {
   page.value = 1
   fetchLeaderboard()
@@ -102,11 +100,15 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <h2>Global Leaderboard</h2>
-          <p class="subtitle">Top agent scores and threat simulation rankings</p>
+          <div class="card-badge">
+            <span class="badge-dot"></span>
+            <span>GLOBAL RANKINGS // LIVE FEED</span>
+          </div>
+          <h2 class="title">Global Leaderboard</h2>
+          <p class="subtitle">Top agent performance and threat simulation scores across all sectors</p>
         </div>
-        <button class="nav-btn" @click="handleNavAction">
-          {{ authStore.token ? '← Back to Dashboard' : 'Sign In' }}
+        <button v-if="!authStore.token" class="btn-outline" @click="handleNavAction">
+          Sign In
         </button>
       </div>
     </header>
@@ -115,7 +117,6 @@ onMounted(() => {
       <!-- Filter Bar -->
       <div class="filter-bar">
         <div class="search-box">
-          <label for="search-input" class="sr-only">Search agents</label>
           <input
             id="search-input"
             v-model="searchQuery"
@@ -125,17 +126,17 @@ onMounted(() => {
         </div>
 
         <div class="map-filter">
-          <label for="map-select">Map:</label>
-          <select id="map-select" v-model="selectedMap">
+          <label for="map-select">Sector:</label>
+          <select id="map-select" v-model="selectedMap" class="select-input">
             <option v-for="mapName in mapOptions" :key="mapName" :value="mapName">
-              {{ mapName === 'All' ? 'All Maps' : mapName }}
+              {{ mapName === 'All' ? 'All Sectors' : mapName }}
             </option>
           </select>
         </div>
       </div>
 
       <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
+        ⚠️ {{ errorMessage }}
       </div>
 
       <!-- Loading Indicator -->
@@ -145,12 +146,12 @@ onMounted(() => {
       </div>
 
       <!-- Data Table -->
-      <div v-else-if="leaderboardItems.length > 0" class="table-container">
+      <div v-else-if="leaderboardItems.length > 0" class="table-card">
         <table class="leaderboard-table">
           <thead>
             <tr>
               <th class="rank-col">Rank</th>
-              <th>Agent Username</th>
+              <th>Agent Codename</th>
               <th>Simulation Map</th>
               <th class="score-col">High Score</th>
             </tr>
@@ -159,7 +160,7 @@ onMounted(() => {
             <tr
               v-for="entry in leaderboardItems"
               :key="entry.id || entry.rank"
-              :class="{ 'top-three': entry.rank <= 3 }"
+              :class="{ 'top-entry': entry.rank <= 3 }"
             >
               <td class="rank-col">
                 <span :class="['rank-badge', `rank-${entry.rank}`]">
@@ -167,13 +168,13 @@ onMounted(() => {
                 </span>
               </td>
               <td class="username-col">
-                <strong>{{ entry.username }}</strong>
+                <span class="agent-name">{{ entry.username }}</span>
               </td>
               <td>
                 <span class="map-badge">{{ entry.map_name }}</span>
               </td>
               <td class="score-col">
-                <span class="score-value">{{ entry.score.toLocaleString() }}</span>
+                <span class="score-value">{{ entry.score.toLocaleString() }} PTS</span>
               </td>
             </tr>
           </tbody>
@@ -182,8 +183,8 @@ onMounted(() => {
 
       <!-- Empty State -->
       <div v-else class="empty-state">
-        <h4>No rankings found</h4>
-        <p>No agents matched your current filter criteria.</p>
+        <h4>No Matching Agent Records</h4>
+        <p>No operatives found matching the specified query filters.</p>
       </div>
 
       <!-- Pagination Controls -->
@@ -195,7 +196,7 @@ onMounted(() => {
         </div>
         <div class="pagination-actions">
           <button class="page-btn" :disabled="page <= 1 || isLoading" @click="handlePrevPage">
-            Previous
+            ◀ Previous
           </button>
           <span class="page-indicator">Page {{ page }} of {{ totalPages() }}</span>
           <button
@@ -203,7 +204,7 @@ onMounted(() => {
             :disabled="page >= totalPages() || isLoading"
             @click="handleNextPage"
           >
-            Next
+            Next ▶
           </button>
         </div>
       </div>
@@ -213,49 +214,73 @@ onMounted(() => {
 
 <style scoped>
 .leaderboard-page {
-  max-width: 900px;
-  margin: 2rem auto;
-  padding: 1rem;
+  width: 100%;
 }
 
 .page-header {
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .header-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-h2 {
-  margin: 0 0 0.25rem 0;
-  color: #111827;
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.title {
+  margin: 0 0 0.35rem 0;
+  color: var(--color-primary);
+  font-size: 1.65rem;
 }
 
 .subtitle {
   margin: 0;
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
 }
 
-.nav-btn {
-  padding: 0.5rem 1rem;
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  text-decoration: none;
+.btn-outline {
+  padding: 0.55rem 1.15rem;
+  background-color: #ffffff;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
   font-size: 0.9rem;
-  transition: background-color 0.2s;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-purple-sm);
 }
 
-.nav-btn:hover {
-  background-color: #e5e7eb;
+.btn-outline:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
 }
 
 .filter-bar {
@@ -269,44 +294,64 @@ h2 {
 
 .search-box {
   flex: 1;
-  min-width: 240px;
+  min-width: 260px;
 }
 
 .search-box input {
   width: 100%;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
   font-size: 0.95rem;
-  box-sizing: border-box;
+  outline: none;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-purple-sm);
+}
+
+.search-box input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
 }
 
 .map-filter {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .map-filter label {
-  font-weight: 600;
-  color: #4b5563;
   font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-main);
 }
 
-.map-filter select {
-  padding: 0.6rem 0.8rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background-color: white;
-  font-size: 0.95rem;
-}
-
-.table-container {
-  background: white;
-  border: 1px solid #e5e7eb;
+.select-input {
+  padding: 0.7rem 1rem;
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
   border-radius: 8px;
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  outline: none;
+  box-shadow: var(--shadow-purple-sm);
+}
+
+.select-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
+}
+
+.table-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-purple);
 }
 
 .leaderboard-table {
@@ -316,20 +361,20 @@ h2 {
 }
 
 th {
-  background-color: #f9fafb;
-  color: #4b5563;
-  padding: 0.75rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #e5e7eb;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-primary);
+  font-family: var(--font-display);
+  padding: 0.95rem 1.25rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-bottom: 1.5px solid var(--color-border);
 }
 
 td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
-  color: #1f2937;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-main);
   font-size: 0.95rem;
 }
 
@@ -338,77 +383,96 @@ tr:last-child td {
 }
 
 tr:hover {
-  background-color: #f9fafb;
+  background-color: var(--color-bg-subtle);
+}
+
+.top-entry {
+  background-color: #faf8ff;
 }
 
 .rank-col {
-  width: 70px;
+  width: 80px;
   text-align: center;
 }
 
 .score-col {
   text-align: right;
-  width: 140px;
+  width: 160px;
 }
 
 .rank-badge {
   display: inline-block;
-  width: 28px;
-  height: 28px;
-  line-height: 28px;
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
   text-align: center;
-  border-radius: 50%;
+  border-radius: 8px;
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.85rem;
-  background-color: #f3f4f6;
-  color: #4b5563;
+  font-size: 1rem;
+  background-color: var(--color-bg-muted);
+  color: var(--color-primary);
 }
 
 .rank-1 {
-  background-color: #fef08a;
+  background: linear-gradient(135deg, #fef08a 0%, #fde047 100%);
   color: #854d0e;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.3);
 }
 
 .rank-2 {
-  background-color: #e5e7eb;
-  color: #374151;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: #334155;
+  box-shadow: 0 2px 8px rgba(148, 163, 184, 0.3);
 }
 
 .rank-3 {
-  background-color: #fed7aa;
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
   color: #9a3412;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+}
+
+.agent-name {
+  font-weight: 600;
+  color: var(--color-text-main);
 }
 
 .map-badge {
   display: inline-block;
-  padding: 0.2rem 0.5rem;
-  background-color: #eff6ff;
-  color: #1e40af;
-  border-radius: 4px;
+  padding: 0.25rem 0.65rem;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
   font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .score-value {
+  font-family: var(--font-mono);
   font-weight: 700;
-  color: #059669;
+  color: var(--color-primary);
+  font-size: 1rem;
 }
 
 .loading-state,
 .empty-state {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 3rem 1rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 3.5rem 1rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-muted);
+  box-shadow: var(--shadow-purple);
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   margin: 0 auto 1rem auto;
-  border: 3px solid #e5e7eb;
-  border-top-color: #2563eb;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -421,7 +485,7 @@ tr:hover {
 
 .empty-state h4 {
   margin: 0 0 0.5rem 0;
-  color: #1f2937;
+  color: var(--color-primary);
 }
 
 .pagination-bar {
@@ -435,7 +499,11 @@ tr:hover {
 
 .pagination-info {
   font-size: 0.9rem;
-  color: #4b5563;
+  color: var(--color-text-muted);
+}
+
+.pagination-info strong {
+  color: var(--color-primary);
 }
 
 .pagination-actions {
@@ -445,48 +513,42 @@ tr:hover {
 }
 
 .page-btn {
-  padding: 0.4rem 0.8rem;
-  background-color: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
-  font-weight: 500;
-  color: #374151;
+  color: var(--color-primary);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-purple-sm);
 }
 
 .page-btn:hover:not(:disabled) {
-  background-color: #f9fafb;
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
 }
 
 .page-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .page-indicator {
-  font-size: 0.9rem;
-  color: #6b7280;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .error-banner {
-  background-color: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-  padding: 0.75rem;
-  border-radius: 6px;
-  margin-bottom: 1rem;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  padding: 0.85rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
   font-size: 0.9rem;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
 }
 </style>

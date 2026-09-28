@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import LandingView from '../views/LandingView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import DashboardView from '../views/DashboardView.vue'
@@ -7,11 +8,13 @@ import LeaderboardView from '../views/LeaderboardView.vue'
 import ClassroomManagementView from '../views/ClassroomManagementView.vue'
 import ClassroomStudentsView from '../views/ClassroomStudentsView.vue'
 import ClassroomJoinView from '../views/ClassroomJoinView.vue'
+import EducatorAnalyticsView from '../views/EducatorAnalyticsView.vue'
 
 const routes = [
   {
     path: '/',
-    redirect: '/login',
+    name: 'landing',
+    component: LandingView,
   },
   {
     path: '/login',
@@ -52,6 +55,12 @@ const routes = [
     component: ClassroomJoinView,
     meta: { requiresAuth: true, roles: ['player'] },
   },
+  {
+    path: '/analytics/:code_id?',
+    name: 'educator-analytics',
+    component: EducatorAnalyticsView,
+    meta: { requiresAuth: true, roles: ['educator'] },
+  },
 ]
 
 const router = createRouter({
@@ -65,7 +74,7 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
-  } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+  } else if ((to.path === '/' || to.path === '/login' || to.path === '/register') && isAuthenticated) {
     next('/dashboard')
   } else if (
     to.meta.roles &&

@@ -45,43 +45,47 @@ const handleBack = () => {
   <div class="join-page">
     <div class="join-card">
       <div class="card-header">
-        <button class="back-link" @click="handleBack">← Back to Dashboard</button>
-        <h2>Join Classroom</h2>
+        <button class="back-link" @click="handleBack">← Return to Dashboard</button>
+        <div class="card-badge">
+          <span class="badge-dot"></span>
+          <span>SECTOR UPLINK // ENROLLMENT</span>
+        </div>
+        <h2 class="title">Join Classroom</h2>
         <p class="subtitle">
-          Enter the 6-character code provided by your cybersecurity educator.
+          Input the 6-character access key provided by your instructor to link your telemetry.
         </p>
       </div>
 
       <div v-if="successData" class="success-banner">
-        <h4>🎉 Successfully Enrolled!</h4>
+        <h4>🎉 Enrollment Confirmed!</h4>
         <p>
-          You are now enrolled in <strong>{{ successData.name }}</strong> (Code:
-          {{ successData.code }}).
+          You are now linked to sector <strong>{{ successData.name }}</strong> (Access Code:
+          <span class="code-highlight">{{ successData.code }}</span>).
         </p>
-        <button class="primary-btn" @click="handleBack">Return to Dashboard</button>
+        <button class="btn-primary" @click="handleBack">Return to Dashboard</button>
       </div>
 
       <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
+        ⚠️ {{ errorMessage }}
       </div>
 
       <form v-if="!successData" @submit.prevent="handleJoinClassroom">
         <div class="form-group">
-          <label for="code-input">Classroom Code</label>
+          <label for="code-input">6-Character Access Key</label>
           <input
             id="code-input"
             v-model="classroomCode"
             type="text"
-            placeholder="e.g. CYB101"
+            placeholder="CYB101"
             maxlength="10"
             required
             autocomplete="off"
           />
-          <span class="help-text">Classroom codes are usually 6 characters (letters and numbers).</span>
+          <span class="help-text">Access keys are case-insensitive alphanumeric codes.</span>
         </div>
 
-        <button type="submit" class="submit-btn" :disabled="isLoading">
-          {{ isLoading ? 'Verifying Code...' : 'Join Classroom' }}
+        <button type="submit" class="btn-primary" :disabled="isLoading">
+          {{ isLoading ? 'Verifying Code...' : 'Verify & Join Classroom' }}
         </button>
       </form>
     </div>
@@ -94,17 +98,22 @@ const handleBack = () => {
   justify-content: center;
   align-items: center;
   min-height: 75vh;
-  padding: 1rem;
+  padding: 1.5rem;
 }
 
 .join-card {
   width: 100%;
-  max-width: 440px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 2rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  max-width: 460px;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 2.25rem;
+  box-shadow: var(--shadow-purple);
+  transition: box-shadow 0.2s;
+}
+
+.join-card:hover {
+  box-shadow: var(--shadow-purple-hover);
 }
 
 .card-header {
@@ -114,28 +123,53 @@ const handleBack = () => {
 .back-link {
   background: none;
   border: none;
-  color: #2563eb;
-  font-size: 0.9rem;
-  font-weight: 500;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
   padding: 0;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
+  transition: all 0.2s ease;
 }
 
 .back-link:hover {
   text-decoration: underline;
 }
 
-h2 {
-  margin: 0 0 0.25rem 0;
-  color: #111827;
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.title {
+  margin: 0 0 0.35rem 0;
+  color: var(--color-primary);
+  font-size: 1.65rem;
 }
 
 .subtitle {
   margin: 0;
-  color: #6b7280;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .form-group {
@@ -145,94 +179,102 @@ h2 {
 }
 
 label {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #374151;
-  font-size: 0.9rem;
-  margin-bottom: 0.35rem;
+  color: var(--color-text-main);
+  margin-bottom: 0.4rem;
 }
 
 input {
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 1.25rem;
-  letter-spacing: 0.1em;
+  padding: 0.85rem 1rem;
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   text-align: center;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-primary);
+  outline: none;
+  transition: all 0.2s ease;
 }
 
 input:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
 }
 
 .help-text {
-  font-size: 0.8rem;
-  color: #9ca3af;
-  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-top: 0.5rem;
+  text-align: center;
 }
 
-.submit-btn {
+.btn-primary {
   width: 100%;
-  padding: 0.75rem;
-  background-color: #2563eb;
-  color: white;
+  padding: 0.8rem;
+  background: var(--btn-gradient);
   border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 1rem;
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  transition: background-color 0.2s;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease;
 }
 
-.submit-btn:hover {
-  background-color: #1d4ed8;
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-gradient-hover);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
 }
 
-.submit-btn:disabled {
-  background-color: #93c5fd;
+.btn-primary:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .success-banner {
-  background-color: #ecfdf5;
-  border: 1px solid #10b981;
-  color: #065f46;
-  padding: 1.25rem;
-  border-radius: 6px;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  padding: 1.5rem;
+  border-radius: 10px;
   margin-bottom: 1.5rem;
   text-align: center;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.1);
 }
 
 .success-banner h4 {
   margin: 0 0 0.5rem 0;
-  color: #065f46;
+  color: var(--color-success);
+  font-size: 1.15rem;
 }
 
 .success-banner p {
-  margin: 0 0 1rem 0;
-  font-size: 0.9rem;
+  margin: 0 0 1.25rem 0;
+  font-size: 0.92rem;
+  color: #065f46;
 }
 
-.primary-btn {
-  padding: 0.5rem 1rem;
-  background-color: #059669;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
+.code-highlight {
+  font-family: var(--font-mono);
+  color: var(--color-primary);
+  font-weight: 700;
 }
 
 .error-banner {
-  background-color: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
   margin-bottom: 1.25rem;
   font-size: 0.9rem;
 }

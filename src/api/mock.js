@@ -10,8 +10,7 @@ let mockClassrooms = [
   {
     id: 'c1',
     code: 'CYB101',
-    name: 'Intro to Cybersecurity',
-    description: 'Fundamental security principles, phishing detection, and baseline hygiene.',
+    name: 'BSIT 4A',
     is_active: true,
     created_at: '2026-08-20T10:00:00Z',
     deleted_at: null,
@@ -19,8 +18,7 @@ let mockClassrooms = [
   {
     id: 'c2',
     code: 'NET202',
-    name: 'Network Defense & Firewalls',
-    description: 'Network topology defense, firewall rule evaluation, and intrusion analysis.',
+    name: 'BSIT 3C',
     is_active: true,
     created_at: '2026-08-22T14:30:00Z',
     deleted_at: null,
@@ -215,7 +213,7 @@ mock.onGet('/educator/classrooms').reply(() => {
 
 mock.onPost('/classroom/generate').reply((config) => {
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const { name, description } = data
+  const { name} = data
 
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let newCode = ''
@@ -228,7 +226,6 @@ mock.onPost('/classroom/generate').reply((config) => {
     id: newId,
     code: newCode,
     name: name || 'Untitled Classroom',
-    description: description || '',
     is_active: true,
     created_at: new Date().toISOString(),
     deleted_at: null,
@@ -332,7 +329,6 @@ mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply((config) => {
   const updated = {
     ...mockClassrooms[index],
     name: data.name !== undefined ? data.name : mockClassrooms[index].name,
-    description: data.description !== undefined ? data.description : mockClassrooms[index].description,
     is_active: data.is_active !== undefined ? data.is_active : mockClassrooms[index].is_active,
   }
 
@@ -392,6 +388,150 @@ mock.onGet('/leaderboard').reply((config) => {
       total_count,
       page,
       page_size: pageSize,
+    },
+  ]
+})
+
+// ==========================================
+// Analytics Endpoints (Educator)
+// ==========================================
+mock.onGet(new RegExp('/analytics/classroom')).reply((config) => {
+  const codeId = config.params?.code_id || 'c1'
+  return [
+    200,
+    {
+      code_id: codeId,
+      student_count: 3,
+      avg_map_progress: 2.33,
+      avg_best_score_by_map: {
+        Home: 723.3,
+        Office: 750.0,
+      },
+      category_fail_rates: {
+        Phishing: 0.15,
+        Smishing: 0.28,
+        Vishing: 0.45,
+        'Social Engineering': 0.12,
+        'Credential Theft / Weak Password Attack': 0.35,
+        'Public Wi-Fi Attack': null,
+        'Malware Infection': 0.52,
+        Ransomware: null,
+      },
+    },
+  ]
+})
+
+mock.onGet(new RegExp('/analytics/player')).reply((config) => {
+  const profileId = config.params?.profile_id || 'p1'
+  return [
+    200,
+    {
+      profile_id: profileId,
+      wins: 6,
+      losses: 2,
+      avg_duration_seconds: 132.5,
+      best_score_by_map: {
+        Home: 850,
+        Office: 720,
+      },
+      category_breakdown: {
+        Phishing: 0.10,
+        Smishing: 0.25,
+        Vishing: 0.40,
+        'Social Engineering': 0.08,
+        'Credential Theft / Weak Password Attack': 0.30,
+        'Public Wi-Fi Attack': null,
+        'Malware Infection': 0.45,
+        Ransomware: null,
+      },
+      recent_sessions: [
+        {
+          session_id: 'e2a8b351-9c2f-4612-8342-210394857612',
+          map_name: 'Office',
+          duration_seconds: 145,
+          credits_earned: 40,
+          credits_lost: 60,
+          false_positives: 2,
+          result: 'lose',
+          played_at: '2026-09-28T13:45:00+08:00',
+        },
+        {
+          session_id: 'c1f7a240-8b1e-4501-9231-109283746501',
+          map_name: 'Home',
+          duration_seconds: 110,
+          credits_earned: 95,
+          credits_lost: 5,
+          false_positives: 0,
+          result: 'win',
+          played_at: '2026-09-27T10:20:00+08:00',
+        },
+        {
+          session_id: 'f3b9c462-0d3a-4723-9453-321405968723',
+          map_name: 'Office',
+          duration_seconds: 160,
+          credits_earned: 80,
+          credits_lost: 20,
+          false_positives: 1,
+          result: 'win',
+          played_at: '2026-09-26T16:10:00+08:00',
+        },
+      ],
+    },
+  ]
+})
+
+mock.onGet(new RegExp('/analytics/session')).reply((config) => {
+  const sessionId = config.params?.session_id || ''
+
+  if (sessionId === 'e2a8b351-9c2f-4612-8342-210394857612') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p1',
+        username: 'AgentZero',
+        map_name: 'Office',
+        result: 'lose',
+        threat_events: [
+          {
+            threat_type: 'Social Engineering',
+            player_action: 'ignored',
+            is_correct: false,
+            is_legitimate_item: false,
+            credits_affected: -15,
+            logged_at: '2026-09-28T13:46:12+08:00',
+          },
+          {
+            threat_type: 'Phishing',
+            player_action: 'quarantined',
+            is_correct: true,
+            is_legitimate_item: false,
+            credits_affected: 20,
+            logged_at: '2026-09-28T13:47:35+08:00',
+          },
+          {
+            threat_type: 'Credential Theft / Weak Password Attack',
+            player_action: 'accepted',
+            is_correct: false,
+            is_legitimate_item: false,
+            credits_affected: -45,
+            logged_at: '2026-09-28T13:48:50+08:00',
+          },
+        ],
+      },
+    ]
+  }
+
+  // Graceful empty threat_events list matching real backend behavior
+  return [
+    200,
+    {
+      session_id: sessionId || 'c1f7a240-8b1e-4501-9231-109283746501',
+      profile_id: 'p1',
+      username: 'AgentZero',
+      map_name: 'Home',
+      result: 'win',
+      threat_events: [],
     },
   ]
 })

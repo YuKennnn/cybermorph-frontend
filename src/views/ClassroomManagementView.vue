@@ -13,14 +13,12 @@ const successMessage = ref('')
 // Modal state: Create
 const isCreateModalOpen = ref(false)
 const newName = ref('')
-const newDescription = ref('')
 const isCreating = ref(false)
 
 // Modal state: Edit
 const isEditModalOpen = ref(false)
 const editId = ref('')
 const editName = ref('')
-const editDescription = ref('')
 const editIsActive = ref(true)
 const isUpdating = ref(false)
 
@@ -47,7 +45,6 @@ const fetchClassrooms = async () => {
 
 const openCreateModal = () => {
   newName.value = ''
-  newDescription.value = ''
   isCreateModalOpen.value = true
 }
 
@@ -61,9 +58,8 @@ const handleCreateClassroom = async () => {
   try {
     const response = await apiClient.post('/classroom/generate', {
       name: newName.value.trim(),
-      description: newDescription.value.trim(),
     })
-    successMessage.value = `Classroom "${response.data.name}" generated with code: ${response.data.code}`
+    successMessage.value = `Classroom "${response.data.name}" generated with access code: ${response.data.code}`
     isCreateModalOpen.value = false
     await fetchClassrooms()
   } catch (error) {
@@ -77,7 +73,6 @@ const handleCreateClassroom = async () => {
 const openEditModal = (classroom) => {
   editId.value = classroom.id
   editName.value = classroom.name
-  editDescription.value = classroom.description || ''
   editIsActive.value = classroom.is_active
   isEditModalOpen.value = true
 }
@@ -90,10 +85,9 @@ const handleUpdateClassroom = async () => {
   try {
     await apiClient.patch(`/classroom/${editId.value}`, {
       name: editName.value.trim(),
-      description: editDescription.value.trim(),
       is_active: editIsActive.value,
     })
-    successMessage.value = 'Classroom updated successfully.'
+    successMessage.value = 'Classroom configurations updated successfully.'
     isEditModalOpen.value = false
     await fetchClassrooms()
   } catch (error) {
@@ -132,6 +126,10 @@ const handleViewStudents = (codeId) => {
   router.push(`/classroom/students/${codeId}`)
 }
 
+const handleViewAnalytics = (codeId) => {
+  router.push(`/analytics/${codeId}`)
+}
+
 onMounted(() => {
   fetchClassrooms()
 })
@@ -142,74 +140,84 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <h2>Classroom Management</h2>
-          <p class="subtitle">Generate, configure, and oversee security simulation classrooms</p>
+          <div class="card-badge">
+            <span class="badge-dot"></span>
+            <span>INSTRUCTOR CONSOLE // SECTORS</span>
+          </div>
+          <h2 class="title">Classroom Management</h2>
+          <p class="subtitle">Generate codes, manage sector configurations, and inspect enrolled student progression</p>
         </div>
         <div class="header-actions">
-          <router-link to="/dashboard" class="nav-btn">← Back to Dashboard</router-link>
-          <button class="primary-btn" @click="openCreateModal">+ Generate New Classroom</button>
+          <button class="btn-primary" @click="openCreateModal">+ Generate Classroom</button>
         </div>
       </div>
     </header>
 
     <main class="page-body">
       <div v-if="successMessage" class="success-banner">
-        {{ successMessage }}
+        ✓ {{ successMessage }}
       </div>
 
       <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
+        ⚠️ {{ errorMessage }}
       </div>
 
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Loading your classrooms...</p>
+        <p>Fetching classroom roster...</p>
       </div>
 
       <div v-else-if="classrooms.length > 0" class="classroom-grid">
         <div v-for="c in classrooms" :key="c.id" class="classroom-card">
           <div class="card-top">
-            <div class="code-tag">Code: {{ c.code }}</div>
+            <div class="code-tag">CODE: {{ c.code }}</div>
             <span :class="['status-pill', c.is_active ? 'active' : 'inactive']">
-              {{ c.is_active ? 'Active' : 'Inactive' }}
+              {{ c.is_active ? 'ACTIVE' : 'INACTIVE' }}
             </span>
           </div>
 
           <h3 class="classroom-name">{{ c.name }}</h3>
-          <p class="classroom-desc">{{ c.description || 'No description provided.' }}</p>
-
           <div class="card-meta">
-            <span class="student-count">👥 {{ c.student_count || 0 }} Enrolled Students</span>
+            <span class="student-count">👥 {{ c.student_count || 0 }} Enrolled Agents</span>
           </div>
 
           <div class="card-actions">
-            <button class="btn-secondary" @click="handleViewStudents(c.id)">
-              View Students
-            </button>
-            <div class="btn-group">
-              <button class="btn-edit" @click="openEditModal(c)">Edit</button>
-              <button class="btn-delete" @click="openDeleteModal(c)">Delete</button>
+            <div class="primary-actions">
+              <button class="btn-roster" @click="handleViewStudents(c.id)">
+                Students
+              </button>
+              <button class="btn-analytics" @click="handleViewAnalytics(c.id || c.code)">
+                Analytics
+              </button>
+            </div>
+            <div class="utility-actions">
+              <button class="btn-utility edit" @click="openEditModal(c)">Edit</button>
+              <span class="utility-divider">·</span>
+              <button class="btn-utility delete" @click="openDeleteModal(c)">Delete</button>
             </div>
           </div>
         </div>
       </div>
 
       <div v-else class="empty-state">
-        <h4>No Classrooms Generated</h4>
-        <p>You have not created any classrooms yet. Click "+ Generate New Classroom" to get started.</p>
-        <button class="primary-btn" @click="openCreateModal">+ Generate Classroom</button>
+        <h4>No Active Classrooms Found</h4>
+        <p>Initialize a new security curriculum sector by generating a 6-character classroom code.</p>
+        <button class="btn-primary" @click="openCreateModal">+ Generate Classroom</button>
       </div>
     </main>
 
     <!-- Create Classroom Modal -->
     <div v-if="isCreateModalOpen" class="modal-overlay" @click.self="isCreateModalOpen = false">
       <div class="modal-card">
-        <h3>Generate New Classroom</h3>
-        <p class="modal-desc">Create a new classroom and generate a 6-character joining code.</p>
+        <div class="modal-header">
+          <h3 class="modal-title">Generate New Classroom</h3>
+          <button class="close-btn" @click="isCreateModalOpen = false">✕</button>
+        </div>
+        <p class="modal-desc">Create a classroom deployment and issue an access key for your students.</p>
 
         <form @submit.prevent="handleCreateClassroom">
           <div class="form-group">
-            <label for="new-name">Classroom Name</label>
+            <label for="new-name">Classroom Sector Name</label>
             <input
               id="new-name"
               v-model="newName"
@@ -219,21 +227,11 @@ onMounted(() => {
             />
           </div>
 
-          <div class="form-group">
-            <label for="new-desc">Description</label>
-            <textarea
-              id="new-desc"
-              v-model="newDescription"
-              rows="3"
-              placeholder="Brief overview of curriculum or focus areas..."
-            ></textarea>
-          </div>
-
           <div class="modal-buttons">
             <button type="button" class="btn-cancel" @click="isCreateModalOpen = false">
               Cancel
             </button>
-            <button type="submit" class="primary-btn" :disabled="isCreating">
+            <button type="submit" class="btn-primary" :disabled="isCreating">
               {{ isCreating ? 'Generating...' : 'Generate Code' }}
             </button>
           </div>
@@ -244,23 +242,21 @@ onMounted(() => {
     <!-- Edit Classroom Modal -->
     <div v-if="isEditModalOpen" class="modal-overlay" @click.self="isEditModalOpen = false">
       <div class="modal-card">
-        <h3>Edit Classroom</h3>
+        <div class="modal-header">
+          <h3 class="modal-title">Edit Classroom Configuration</h3>
+          <button class="close-btn" @click="isEditModalOpen = false">✕</button>
+        </div>
 
         <form @submit.prevent="handleUpdateClassroom">
           <div class="form-group">
-            <label for="edit-name">Classroom Name</label>
+            <label for="edit-name">Classroom Sector Name</label>
             <input id="edit-name" v-model="editName" type="text" required />
-          </div>
-
-          <div class="form-group">
-            <label for="edit-desc">Description</label>
-            <textarea id="edit-desc" v-model="editDescription" rows="3"></textarea>
           </div>
 
           <div class="form-group-checkbox">
             <label>
               <input v-model="editIsActive" type="checkbox" />
-              Active (allows players to join and synchronize records)
+              Active Status (Permit new students to join and synchronize session logs)
             </label>
           </div>
 
@@ -268,7 +264,7 @@ onMounted(() => {
             <button type="button" class="btn-cancel" @click="isEditModalOpen = false">
               Cancel
             </button>
-            <button type="submit" class="primary-btn" :disabled="isUpdating">
+            <button type="submit" class="btn-primary" :disabled="isUpdating">
               {{ isUpdating ? 'Saving...' : 'Save Changes' }}
             </button>
           </div>
@@ -278,11 +274,14 @@ onMounted(() => {
 
     <!-- Delete Confirmation Modal -->
     <div v-if="isDeleteModalOpen" class="modal-overlay" @click.self="isDeleteModalOpen = false">
-      <div class="modal-card">
-        <h3 class="danger-title">Confirm Classroom Deletion</h3>
-        <p>
+      <div class="modal-card danger-modal">
+        <div class="modal-header">
+          <h3 class="modal-title danger-title">Confirm Deletion</h3>
+          <button class="close-btn" @click="isDeleteModalOpen = false">✕</button>
+        </div>
+        <p class="modal-desc">
           Are you sure you want to soft-delete <strong>"{{ deleteTargetName }}"</strong>?
-          Enrolled students will no longer see active assignments for this classroom.
+          Enrolled students will no longer synchronize progress to this classroom.
         </p>
 
         <div class="modal-buttons">
@@ -305,15 +304,11 @@ onMounted(() => {
 
 <style scoped>
 .management-page {
-  max-width: 960px;
-  margin: 2rem auto;
-  padding: 1rem;
+  width: 100%;
 }
 
 .page-header {
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .header-content {
@@ -324,215 +319,298 @@ onMounted(() => {
   gap: 1rem;
 }
 
-h2 {
-  margin: 0 0 0.25rem 0;
-  color: #111827;
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.title {
+  margin: 0 0 0.35rem 0;
+  color: var(--color-primary);
+  font-size: 1.65rem;
 }
 
 .subtitle {
   margin: 0;
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
 }
 
-.header-actions {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.nav-btn {
-  padding: 0.5rem 1rem;
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.9rem;
-}
-
-.primary-btn {
-  padding: 0.5rem 1rem;
-  background-color: #059669;
-  color: white;
+.btn-primary {
+  padding: 0.65rem 1.35rem;
+  background: var(--btn-gradient);
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.92rem;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  font-size: 0.9rem;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
-.primary-btn:hover {
-  background-color: #047857;
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-gradient-hover);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+  transform: translateY(-1px);
 }
 
-.primary-btn:disabled {
-  background-color: #a7f3d0;
+.btn-primary:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .success-banner {
-  background-color: #ecfdf5;
-  border: 1px solid #10b981;
-  color: #065f46;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  padding: 0.85rem 1.25rem;
+  border-radius: 8px;
   margin-bottom: 1.5rem;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 500;
 }
 
 .error-banner {
-  background-color: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  padding: 0.85rem 1.25rem;
+  border-radius: 8px;
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
 }
 
 .classroom-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 1.25rem;
 }
 
 .classroom-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.25rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-purple);
+  transition: all 0.2s ease;
+}
+
+.classroom-card:hover {
+  box-shadow: var(--shadow-purple-hover);
+  border-color: var(--color-secondary);
+  transform: translateY(-2px);
 }
 
 .card-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .code-tag {
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 700;
-  background-color: #e0e7ff;
-  color: #3730a3;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  background-color: var(--color-bg-muted);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
   letter-spacing: 0.05em;
 }
 
 .status-pill {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 9999px;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
 }
 
 .status-pill.active {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .status-pill.inactive {
-  background-color: #f3f4f6;
-  color: #6b7280;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
 }
 
 .classroom-name {
   margin: 0 0 0.5rem 0;
-  color: #1f2937;
-  font-size: 1.15rem;
+  color: var(--color-text-main);
+  font-size: 1.25rem;
 }
 
 .classroom-desc {
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   flex: 1;
-  margin: 0 0 1rem 0;
-  line-height: 1.4;
+  margin: 0 0 1.25rem 0;
+  line-height: 1.45;
 }
 
 .card-meta {
-  padding: 0.5rem 0;
-  border-top: 1px solid #f3f4f6;
-  font-size: 0.85rem;
-  color: #4b5563;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 0.88rem;
+  color: var(--color-primary);
+  font-weight: 600;
   margin-bottom: 1rem;
 }
 
 .card-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: auto;
 }
 
-.btn-secondary {
-  padding: 0.4rem 0.75rem;
-  background-color: #eff6ff;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+.primary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.btn-roster,
+.btn-analytics {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 600;
+  text-align: center;
   cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
-.btn-group {
+.btn-roster {
+  background: var(--color-bg-subtle);
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-border);
+}
+
+.btn-roster:hover {
+  background: #ede9fe;
+  border-color: var(--color-primary);
+}
+
+.btn-analytics {
+  background: #ffffff;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-border);
+}
+
+.btn-analytics:hover {
+  background: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.utility-actions {
   display: flex;
-  gap: 0.35rem;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
-.btn-edit {
-  padding: 0.4rem 0.6rem;
-  background-color: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
+.btn-utility {
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.45rem;
   border-radius: 4px;
-  font-size: 0.85rem;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-delete {
-  padding: 0.4rem 0.6rem;
-  background-color: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  cursor: pointer;
+.btn-utility.edit {
+  color: var(--color-text-muted);
+}
+
+.btn-utility.edit:hover {
+  color: var(--color-primary);
+  background-color: var(--color-bg-subtle);
+}
+
+.btn-utility.delete {
+  color: var(--color-text-dim);
+}
+
+.btn-utility.delete:hover {
+  color: var(--color-danger);
+  background-color: var(--color-danger-bg);
+}
+
+.utility-divider {
+  color: var(--color-border);
+  font-size: 0.8rem;
 }
 
 .empty-state {
   text-align: center;
-  padding: 3rem 1rem;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  color: #6b7280;
+  padding: 3.5rem 1.5rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  box-shadow: var(--shadow-purple);
 }
 
 .empty-state h4 {
   margin: 0 0 0.5rem 0;
-  color: #111827;
+  color: var(--color-primary);
+}
+
+.empty-state p {
+  margin-bottom: 1.5rem;
 }
 
 .loading-state {
   text-align: center;
-  padding: 3rem 1rem;
+  padding: 3.5rem 1rem;
+  color: var(--color-text-muted);
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   margin: 0 auto 1rem auto;
-  border: 3px solid #e5e7eb;
-  border-top-color: #059669;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -543,97 +621,148 @@ h2 {
   }
 }
 
-/* Modals */
+/* Modal Styling */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(30, 27, 75, 0.4);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
-  z-index: 50;
+  padding: 1.5rem;
+  z-index: 1000;
 }
 
 .modal-card {
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  max-width: 480px;
+  background-color: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 2rem;
+  max-width: 500px;
   width: 100%;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 40px rgba(124, 58, 237, 0.2);
 }
 
-.modal-card h3 {
-  margin: 0 0 0.25rem 0;
-  color: #111827;
+.danger-modal {
+  border-color: var(--color-danger-border);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.modal-title {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 1.35rem;
 }
 
 .danger-title {
-  color: #dc2626 !important;
+  color: var(--color-danger) !important;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: var(--color-text-main);
 }
 
 .modal-desc {
-  margin: 0 0 1.25rem 0;
-  color: #6b7280;
+  margin: 0 0 1.5rem 0;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .form-group label {
+  font-size: 0.85rem;
   font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 0.35rem;
-  color: #374151;
+  margin-bottom: 0.4rem;
+  color: var(--color-text-main);
 }
 
 .form-group input,
 .form-group textarea {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
   font-size: 0.95rem;
-  font-family: inherit;
+  font-family: var(--font-sans);
+  color: var(--color-text-main);
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
 }
 
 .form-group-checkbox {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   font-size: 0.9rem;
-  color: #374151;
+  color: var(--color-text-muted);
+}
+
+.form-group-checkbox input {
+  accent-color: var(--color-primary);
+  margin-right: 0.5rem;
 }
 
 .modal-buttons {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: 0.85rem;
+  margin-top: 1.75rem;
 }
 
 .btn-cancel {
-  padding: 0.5rem 1rem;
-  background: white;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 0.65rem 1.25rem;
+  background: #ffffff;
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
   cursor: pointer;
-  color: #374151;
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.btn-cancel:hover {
+  background-color: var(--color-bg-subtle);
 }
 
 .btn-danger {
-  padding: 0.5rem 1rem;
-  background-color: #dc2626;
+  padding: 0.65rem 1.25rem;
+  background-color: var(--color-danger);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
+  font-family: var(--font-sans);
   font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background-color: #b91c1c;
 }
 </style>

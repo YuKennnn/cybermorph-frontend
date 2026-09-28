@@ -35,73 +35,79 @@ onMounted(async () => {
 })
 
 const handleAdminAction = (panelName) => {
-  actionNotice.value = `${panelName} panel will be connected in future administrative milestones.`
+  actionNotice.value = `[COMMAND ACKNOWLEDGED] ${panelName} module interface ready for connection.`
 }
 </script>
 
 <template>
   <div class="role-dashboard">
     <div class="welcome-banner">
-      <h3>System Administration & Control Center</h3>
-      <p class="subtitle">
-        Signed in as Administrator: {{ authStore.user?.username || authStore.user?.email || 'Admin' }}
-      </p>
+      <div class="banner-text">
+        <h3 class="title">System Administration & Control Center</h3>
+        <p class="subtitle">
+          Signed in as Administrator: <strong>{{ authStore.user?.username || authStore.user?.email || 'Admin' }}</strong> (Level 0 Authority)
+        </p>
+      </div>
     </div>
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-value">{{ adminStats.total_users }}</div>
-        <div class="stat-label">Total Users</div>
+        <div class="stat-value highlight-purple">{{ adminStats.total_users }}</div>
+        <div class="stat-label">Total Agents</div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-value highlight-blue">{{ adminStats.active_sessions }}</div>
-        <div class="stat-label">Active Sessions</div>
+        <div class="stat-value highlight-secondary">{{ adminStats.active_sessions }}</div>
+        <div class="stat-label">Active Uplinks</div>
       </div>
 
       <div class="stat-card">
         <div class="stat-value highlight-amber">{{ adminStats.pending_approvals }}</div>
-        <div class="stat-label">Pending Approvals</div>
+        <div class="stat-label">Pending Verifications</div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-value highlight-red">{{ adminStats.threats_detected }}</div>
-        <div class="stat-label">Threats Detected</div>
+        <div class="stat-value highlight-danger">{{ adminStats.threats_detected }}</div>
+        <div class="stat-label">Threats Neutralized</div>
       </div>
     </div>
 
     <div v-if="actionNotice" class="notice-box">
-      {{ actionNotice }}
+      ⚡ {{ actionNotice }}
     </div>
 
-    <div class="section-container">
-      <h4>Administrative Quick Actions</h4>
+    <div class="content-section">
+      <h4>System Operations & Administration</h4>
       <div class="actions-grid">
-        <button class="action-btn" @click="handleAdminAction('User Management')">
-          <span class="btn-title">User Management</span>
-          <span class="btn-desc">Manage accounts, permissions & roles</span>
+        <button class="action-tile" @click="handleAdminAction('Agent Management')">
+          <div class="tile-icon">👥</div>
+          <span class="tile-title">Agent Management</span>
+          <span class="tile-desc">Manage identities, RBAC scopes & security credentials</span>
         </button>
 
-        <button class="action-btn" @click="handleAdminAction('Educator Approvals')">
-          <span class="btn-title">Approval Queue ({{ adminStats.pending_approvals }})</span>
-          <span class="btn-desc">Review pending educator registrations</span>
+        <button class="action-tile highlight-tile" @click="handleAdminAction('Educator Approvals')">
+          <div class="tile-icon">🛡️</div>
+          <span class="tile-title">Verification Queue ({{ adminStats.pending_approvals }})</span>
+          <span class="tile-desc">Review and authorize institutional instructor requests</span>
         </button>
 
-        <button class="action-btn" @click="handleAdminAction('System Logs')">
-          <span class="btn-title">Activity & Audit Logs</span>
-          <span class="btn-desc">View platform-wide security audit trails</span>
+        <button class="action-tile" @click="handleAdminAction('System Logs')">
+          <div class="tile-icon">📜</div>
+          <span class="tile-title">Audit Log Stream</span>
+          <span class="tile-desc">Inspect real-time security events & sync transactions</span>
         </button>
       </div>
     </div>
 
-    <div class="section-container">
-      <h4>Recent System Activity</h4>
+    <div class="content-section">
+      <h4>Real-time Telemetry & Event Stream</h4>
       <ul class="log-list">
         <li v-for="log in adminStats.recent_logs" :key="log.id" class="log-item">
-          <div>
-            <strong>{{ log.action }}</strong> — <span class="log-user">{{ log.user }}</span>
+          <div class="log-meta">
+            <span class="log-action">{{ log.action }}</span>
+            <span class="log-user">{{ log.user }}</span>
           </div>
-          <span :class="['status-badge', log.status.toLowerCase()]">{{ log.status }}</span>
+          <span :class="['status-tag', log.status.toLowerCase()]">{{ log.status }}</span>
         </li>
       </ul>
     </div>
@@ -115,103 +121,147 @@ const handleAdminAction = (panelName) => {
   gap: 1.5rem;
 }
 
-.welcome-banner h3 {
+.welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
   margin: 0 0 0.25rem 0;
-  color: #111827;
-  font-size: 1.35rem;
+  color: var(--color-text-main);
+  font-size: 1.5rem;
 }
 
 .subtitle {
   margin: 0;
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.subtitle strong {
+  color: var(--color-primary);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem;
 }
 
 .stat-card {
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.25rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
   text-align: center;
+  box-shadow: var(--shadow-purple);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-purple-hover);
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
   font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.35rem;
 }
 
-.stat-value.highlight-blue {
-  color: #2563eb;
+.stat-value.highlight-purple {
+  color: var(--color-primary);
+}
+
+.stat-value.highlight-secondary {
+  color: var(--color-secondary);
 }
 
 .stat-value.highlight-amber {
-  color: #d97706;
+  color: var(--color-warning);
 }
 
-.stat-value.highlight-red {
-  color: #dc2626;
+.stat-value.highlight-danger {
+  color: var(--color-danger);
 }
 
 .stat-label {
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.section-container {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.25rem;
+.content-section {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.75rem;
+  box-shadow: var(--shadow-purple);
 }
 
-.section-container h4 {
-  margin: 0 0 1rem 0;
-  color: #111827;
+.content-section h4 {
+  margin: 0 0 1.25rem 0;
+  color: var(--color-text-main);
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
 }
 
 .actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
 }
 
-.action-btn {
+.action-tile {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 1rem;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  padding: 1.35rem;
+  background-color: var(--color-bg-subtle);
+  border: 1.5px solid var(--color-border);
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.2s, background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
-.action-btn:hover {
-  background-color: #f3f4f6;
-  border-color: #d1d5db;
+.action-tile:hover {
+  background-color: #ede9fe;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-purple);
+  transform: translateY(-2px);
 }
 
-.btn-title {
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 0.25rem;
+.highlight-tile {
+  border-color: #fde68a;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
 }
 
-.btn-desc {
-  font-size: 0.8rem;
-  color: #6b7280;
+.highlight-tile:hover {
+  border-color: var(--color-warning);
+  background: #fef3c7;
+}
+
+.tile-icon {
+  font-size: 1.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.tile-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin-bottom: 0.35rem;
+}
+
+.tile-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
 }
 
 .log-list {
@@ -220,50 +270,66 @@ const handleAdminAction = (panelName) => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 
 .log-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 0.85rem 1.15rem;
+  background-color: var(--color-bg-subtle);
+  border-radius: 8px;
+  border-left: 3.5px solid var(--color-secondary);
   font-size: 0.9rem;
 }
 
-.log-item:last-child {
-  border-bottom: none;
+.log-meta {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.log-action {
+  font-weight: 600;
+  color: var(--color-text-main);
 }
 
 .log-user {
-  color: #4b5563;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--color-primary);
 }
 
-.status-badge {
+.status-tag {
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
   border-radius: 4px;
   text-transform: uppercase;
 }
 
-.status-badge.success {
-  background-color: #d1fae5;
-  color: #065f46;
+.status-tag.success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
-.status-badge.pending {
-  background-color: #fef3c7;
-  color: #92400e;
+.status-tag.pending {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .notice-box {
-  padding: 0.75rem 1rem;
-  background-color: #eff6ff;
-  border: 1px solid #3b82f6;
-  color: #1e40af;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  padding: 0.85rem 1.25rem;
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-primary);
+  border-radius: 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 </style>
