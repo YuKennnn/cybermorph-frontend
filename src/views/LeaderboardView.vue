@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchLeaderboardData } from '../api/leaderboard'
@@ -19,6 +19,7 @@ const errorMessage = ref('')
 const mapOptions = ['All', 'Home', 'Office', 'Internet Cafe', 'Public Park']
 
 let debounceTimer = null
+let isMounted = true
 
 const fetchLeaderboard = async () => {
   isLoading.value = true
@@ -40,12 +41,17 @@ const fetchLeaderboard = async () => {
 
     const data = await fetchLeaderboardData(params)
 
+    if (!isMounted) return
+
     leaderboardItems.value = data.items || []
     totalCount.value = data.total_count || 0
   } catch {
+    if (!isMounted) return
     errorMessage.value = 'Unable to load leaderboard telemetry. Please try again.'
   } finally {
-    isLoading.value = false
+    if (isMounted) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -89,7 +95,16 @@ const handleNavAction = () => {
 }
 
 onMounted(() => {
+  isMounted = true
   fetchLeaderboard()
+})
+
+onUnmounted(() => {
+  isMounted = false
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
 })
 </script>
 
