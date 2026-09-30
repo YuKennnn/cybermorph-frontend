@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import apiClient from '../api/client'
+import { fetchMyClassrooms } from '../api/classroom'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -17,12 +17,19 @@ const isLoading = ref(true)
 
 onMounted(async () => {
   try {
-    const response = await apiClient.get('/educator/classrooms')
-    if (response.data) {
-      classroomData.value = { ...classroomData.value, ...response.data }
+    const data = await fetchMyClassrooms()
+    if (data) {
+      classroomData.value.classrooms = data.classrooms || []
+      classroomData.value.total_students =
+        data.total_students ??
+        classroomData.value.classrooms.reduce(
+          (sum, c) => sum + (c.student_count || 0),
+          0,
+        )
+      classroomData.value.recent_activity = data.recent_activity || []
     }
-  } catch (error) {
-    console.warn('Could not fetch classrooms:', error)
+  } catch {
+    // Keep local default state on failure
   } finally {
     isLoading.value = false
   }

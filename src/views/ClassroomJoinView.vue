@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import apiClient from '../api/client'
+import { joinClassroom } from '../api/classroom'
 
 const router = useRouter()
 
@@ -22,14 +22,17 @@ const handleJoinClassroom = async () => {
   successData.value = null
 
   try {
-    const response = await apiClient.post('/classroom/join', { code })
-    successData.value = response.data
+    const data = await joinClassroom(code)
+    successData.value = data
     classroomCode.value = ''
   } catch (error) {
-    if (error.response && error.response.data && error.response.data.detail) {
-      errorMessage.value = error.response.data.detail
+    const status = error.response?.status
+    if (status === 404) {
+      errorMessage.value = 'Classroom access code not found. Please verify the code with your instructor.'
+    } else if (status === 409) {
+      errorMessage.value = 'You are already enrolled in this classroom or the code has expired.'
     } else {
-      errorMessage.value = 'Failed to join classroom. Please check your connection and try again.'
+      errorMessage.value = 'Failed to join classroom. Please verify your network uplink.'
     }
   } finally {
     isLoading.value = false
@@ -45,7 +48,7 @@ const handleBack = () => {
   <div class="join-page">
     <div class="join-card">
       <div class="card-header">
-        <button class="back-link" @click="handleBack">← Return to Dashboard</button>
+        <button class="back-link" @click="handleBack">Return to Dashboard</button>
         <div class="card-badge">
           <span class="badge-dot"></span>
           <span>SECTOR UPLINK // ENROLLMENT</span>
@@ -57,7 +60,7 @@ const handleBack = () => {
       </div>
 
       <div v-if="successData" class="success-banner">
-        <h4>🎉 Enrollment Confirmed!</h4>
+        <h4>Enrollment Confirmed</h4>
         <p>
           You are now linked to sector <strong>{{ successData.name }}</strong> (Access Code:
           <span class="code-highlight">{{ successData.code }}</span>).
@@ -66,7 +69,7 @@ const handleBack = () => {
       </div>
 
       <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+        {{ errorMessage }}
       </div>
 
       <form v-if="!successData" @submit.prevent="handleJoinClassroom">

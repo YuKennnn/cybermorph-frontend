@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import apiClient from '../api/client'
+import { fetchClassroomStudents } from '../api/classroom'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,11 +17,10 @@ const fetchStudents = async () => {
   errorMessage.value = ''
 
   try {
-    const response = await apiClient.get(`/classroom/${codeId}/students`)
-    classroomInfo.value = response.data.classroom
-    students.value = response.data.students || []
-  } catch (error) {
-    console.error('Failed to load student roster:', error)
+    const data = await fetchClassroomStudents(codeId)
+    classroomInfo.value = data.classroom
+    students.value = data.students || []
+  } catch {
     errorMessage.value = 'Could not load student roster telemetry for this classroom.'
   } finally {
     isLoading.value = false
@@ -52,7 +51,7 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <button class="back-link" @click="handleBack">← Return to Classrooms</button>
+          <button class="back-link" @click="handleBack">Return to Classrooms</button>
           <h2 class="title">{{ classroomInfo?.name || 'Classroom Roster' }}</h2>
           <p v-if="classroomInfo?.code" class="subtitle">
             Sector Access Code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>

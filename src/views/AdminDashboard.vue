@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
-import apiClient from '../api/client'
+import { fetchAdminStats } from '../api/admin'
 
 const authStore = useAuthStore()
 
@@ -23,12 +23,12 @@ const actionNotice = ref('')
 
 onMounted(async () => {
   try {
-    const response = await apiClient.get('/admin/stats')
-    if (response.data) {
-      adminStats.value = { ...adminStats.value, ...response.data }
+    const data = await fetchAdminStats()
+    if (data) {
+      adminStats.value = { ...adminStats.value, ...data }
     }
-  } catch (error) {
-    console.warn('Could not fetch admin stats, using mock defaults:', error)
+  } catch {
+    // Keep mock defaults on network error
   } finally {
     isLoading.value = false
   }
@@ -73,26 +73,26 @@ const handleAdminAction = (panelName) => {
     </div>
 
     <div v-if="actionNotice" class="notice-box">
-      ⚡ {{ actionNotice }}
+      [ NOTICE ] {{ actionNotice }}
     </div>
 
     <div class="content-section">
       <h4>System Operations & Administration</h4>
       <div class="actions-grid">
         <button class="action-tile" @click="handleAdminAction('Agent Management')">
-          <div class="tile-icon">👥</div>
+          <span class="tile-tag">OPS 01</span>
           <span class="tile-title">Agent Management</span>
           <span class="tile-desc">Manage identities, RBAC scopes & security credentials</span>
         </button>
 
         <button class="action-tile highlight-tile" @click="handleAdminAction('Educator Approvals')">
-          <div class="tile-icon">🛡️</div>
+          <span class="tile-tag">QUEUE 02</span>
           <span class="tile-title">Verification Queue ({{ adminStats.pending_approvals }})</span>
           <span class="tile-desc">Review and authorize institutional instructor requests</span>
         </button>
 
         <button class="action-tile" @click="handleAdminAction('System Logs')">
-          <div class="tile-icon">📜</div>
+          <span class="tile-tag">AUDIT 03</span>
           <span class="tile-title">Audit Log Stream</span>
           <span class="tile-desc">Inspect real-time security events & sync transactions</span>
         </button>
@@ -230,25 +230,37 @@ const handleAdminAction = (panelName) => {
 }
 
 .action-tile:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-muted);
   border-color: var(--color-primary);
   box-shadow: var(--shadow-purple);
   transform: translateY(-2px);
 }
 
 .highlight-tile {
-  border-color: #fde68a;
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-bg);
 }
 
 .highlight-tile:hover {
   border-color: var(--color-warning);
-  background: #fef3c7;
+  background: var(--color-warning-bg);
 }
 
-.tile-icon {
-  font-size: 1.6rem;
-  margin-bottom: 0.6rem;
+.tile-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.65rem;
+  letter-spacing: 0.05em;
+}
+
+.highlight-tile .tile-tag {
+  color: var(--color-warning);
+  background-color: var(--color-bg-subtle);
 }
 
 .tile-title {

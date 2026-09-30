@@ -1,7 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import apiClient from '../api/client'
+import {
+  fetchMyClassrooms,
+  generateClassroomCode,
+  updateClassroom,
+  deleteClassroom,
+} from '../api/classroom'
 
 const router = useRouter()
 
@@ -33,10 +38,9 @@ const fetchClassrooms = async () => {
   errorMessage.value = ''
 
   try {
-    const response = await apiClient.get('/classroom/my-codes')
-    classrooms.value = response.data.classrooms || []
-  } catch (error) {
-    console.error('Failed to load classrooms:', error)
+    const data = await fetchMyClassrooms()
+    classrooms.value = data.classrooms || []
+  } catch {
     errorMessage.value = 'Failed to load classroom roster. Please try again.'
   } finally {
     isLoading.value = false
@@ -56,14 +60,13 @@ const handleCreateClassroom = async () => {
   successMessage.value = ''
 
   try {
-    const response = await apiClient.post('/classroom/generate', {
+    const data = await generateClassroomCode({
       name: newName.value.trim(),
     })
-    successMessage.value = `Classroom "${response.data.name}" generated with access code: ${response.data.code}`
+    successMessage.value = `Classroom "${data.name}" generated with access code: ${data.code}`
     isCreateModalOpen.value = false
     await fetchClassrooms()
-  } catch (error) {
-    console.error('Failed to create classroom:', error)
+  } catch {
     errorMessage.value = 'Failed to generate classroom. Please try again.'
   } finally {
     isCreating.value = false
@@ -83,15 +86,14 @@ const handleUpdateClassroom = async () => {
   successMessage.value = ''
 
   try {
-    await apiClient.patch(`/classroom/${editId.value}`, {
+    await updateClassroom(editId.value, {
       name: editName.value.trim(),
       is_active: editIsActive.value,
     })
     successMessage.value = 'Classroom configurations updated successfully.'
     isEditModalOpen.value = false
     await fetchClassrooms()
-  } catch (error) {
-    console.error('Failed to update classroom:', error)
+  } catch {
     errorMessage.value = 'Failed to update classroom details.'
   } finally {
     isUpdating.value = false
@@ -110,12 +112,11 @@ const handleDeleteClassroom = async () => {
   successMessage.value = ''
 
   try {
-    await apiClient.delete(`/classroom/${deleteTargetId.value}`)
+    await deleteClassroom(deleteTargetId.value)
     successMessage.value = `Classroom "${deleteTargetName.value}" was soft-deleted.`
     isDeleteModalOpen.value = false
     await fetchClassrooms()
-  } catch (error) {
-    console.error('Failed to delete classroom:', error)
+  } catch {
     errorMessage.value = 'Failed to delete classroom.'
   } finally {
     isDeleting.value = false

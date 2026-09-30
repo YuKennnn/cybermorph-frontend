@@ -26,58 +26,40 @@ export const useAuthStore = defineStore('auth', () => {
   // 2. ACTIONS (The Functions that change the Data)
   // ==========================================
   const login = async (credentials) => {
-    try {
-      const response = await apiClient.post('/auth/login', credentials)
-      const data = response.data
+    const response = await apiClient.post('/auth/login', credentials)
+    const data = response.data
 
-      const authToken = data.access_token || data.token
-      token.value = authToken
-      localStorage.setItem('cyber_token', authToken)
+    const authToken = data.access_token || data.token
+    token.value = authToken
+    localStorage.setItem('cyber_token', authToken)
 
-      const extractedUser = data.user || {
-        email: credentials.email,
-        username: credentials.email?.split('@')[0] || 'User',
-      }
-      const extractedRole =
-        data.user?.role ||
-        data.role ||
-        (credentials.email?.includes('admin')
-          ? 'admin'
-          : credentials.email?.includes('educator')
-            ? 'educator'
-            : 'player')
-
-      user.value = extractedUser
-      userRole.value = extractedRole
-
-      localStorage.setItem('cyber_user', JSON.stringify(extractedUser))
-      localStorage.setItem('cyber_role', extractedRole)
-
-      return data
-    } catch (error) {
-      console.error('Login failed:', error)
-      throw error
+    const extractedUser = data.user || {
+      email: credentials.email,
+      username: credentials.email?.split('@')[0] || 'User',
     }
+    const rawRole = data.user?.role || data.role || 'player'
+    const validRoles = ['player', 'educator', 'admin']
+    const extractedRole = validRoles.includes(rawRole.toLowerCase())
+      ? rawRole.toLowerCase()
+      : 'player'
+
+    user.value = extractedUser
+    userRole.value = extractedRole
+
+    localStorage.setItem('cyber_user', JSON.stringify(extractedUser))
+    localStorage.setItem('cyber_role', extractedRole)
+
+    return data
   }
 
   const registerPlayer = async (playerData) => {
-    try {
-      const response = await apiClient.post('/auth/register', playerData)
-      return response.data
-    } catch (error) {
-      console.error('Player registration failed:', error)
-      throw error
-    }
+    const response = await apiClient.post('/auth/register', playerData)
+    return response.data
   }
 
   const registerWeb = async (webUserData) => {
-    try {
-      const response = await apiClient.post('/auth/register-web', webUserData)
-      return response.data
-    } catch (error) {
-      console.error('Web registration failed:', error)
-      throw error
-    }
+    const response = await apiClient.post('/auth/register-web', webUserData)
+    return response.data
   }
 
   const logout = () => {

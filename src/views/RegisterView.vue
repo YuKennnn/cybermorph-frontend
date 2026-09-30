@@ -34,10 +34,13 @@ const handleRegister = async () => {
     }
     router.push('/login')
   } catch (error) {
-    if (error.response && error.response.data && error.response.data.detail) {
-      errorMessage.value = error.response.data.detail
+    const status = error.response?.status
+    if (status === 409) {
+      errorMessage.value = 'An account with this email or codename is already registered.'
+    } else if (status === 400 || status === 422) {
+      errorMessage.value = 'Registration rejected: please verify that all fields meet requirements.'
     } else {
-      errorMessage.value = 'Registration failed. Please check your details.'
+      errorMessage.value = 'Registration request failed. Please check your connection and try again.'
     }
   } finally {
     isLoading.value = false
@@ -57,7 +60,7 @@ const handleRegister = async () => {
       <p class="subtitle">Enroll a new player or educator profile in CyberMorph</p>
 
       <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+        {{ errorMessage }}
       </div>
 
       <form @submit.prevent="handleRegister">

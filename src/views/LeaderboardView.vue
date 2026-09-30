@@ -2,7 +2,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import apiClient from '../api/client'
+import { fetchLeaderboardData } from '../api/leaderboard'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -38,13 +38,11 @@ const fetchLeaderboard = async () => {
       params.search = searchQuery.value.trim()
     }
 
-    const response = await apiClient.get('/leaderboard', { params })
-    const data = response.data
+    const data = await fetchLeaderboardData(params)
 
     leaderboardItems.value = data.items || []
     totalCount.value = data.total_count || 0
-  } catch (error) {
-    console.error('Failed to load leaderboard:', error)
+  } catch {
     errorMessage.value = 'Unable to load leaderboard telemetry. Please try again.'
   } finally {
     isLoading.value = false

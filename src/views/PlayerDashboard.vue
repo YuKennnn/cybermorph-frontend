@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import apiClient from '../api/client'
+import { fetchPlayerProfile } from '../api/player'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -19,12 +19,12 @@ const gameLaunchMessage = ref('')
 
 onMounted(async () => {
   try {
-    const response = await apiClient.get('/players/me')
-    if (response.data) {
-      stats.value = { ...stats.value, ...response.data }
+    const data = await fetchPlayerProfile()
+    if (data) {
+      stats.value = { ...stats.value, ...data }
     }
-  } catch (error) {
-    console.warn('Could not fetch player profile, using local state defaults:', error)
+  } catch {
+    // Keep local state defaults on network failure
   } finally {
     isLoading.value = false
   }

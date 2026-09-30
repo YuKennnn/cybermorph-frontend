@@ -22,10 +22,13 @@ const handleLogin = async () => {
     })
     router.push('/dashboard')
   } catch (error) {
-    if (error.response && error.response.data && error.response.data.detail) {
-      errorMessage.value = error.response.data.detail
+    const status = error.response?.status
+    if (status === 401) {
+      errorMessage.value = 'Invalid agent credentials. Please verify your email and passcode.'
+    } else if (status === 403) {
+      errorMessage.value = 'Account is pending administrative approval.'
     } else {
-      errorMessage.value = 'Login failed. Please check your credentials.'
+      errorMessage.value = 'Sign-in failed. Please check your connection and try again.'
     }
   } finally {
     isLoading.value = false
@@ -45,7 +48,7 @@ const handleLogin = async () => {
       <p class="subtitle">Access your gamified security training portal</p>
 
       <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+        {{ errorMessage }}
       </div>
 
       <form @submit.prevent="handleLogin">
