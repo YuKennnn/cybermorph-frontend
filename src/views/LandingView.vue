@@ -615,9 +615,7 @@ const threats = [
     <header class="landing-header">
       <div class="header-inner">
         <div class="brand-logo">
-          <span class="logo-bracket">[</span>
           <span class="logo-text">CYBERMORPH</span>
-          <span class="logo-bracket">]</span>
         </div>
 
         <nav class="nav-links">

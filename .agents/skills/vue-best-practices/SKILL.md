@@ -74,3 +74,16 @@ This skill outlines the architectural standards, code quality rules, and securit
    npm run lint
    ```
 4. **Follow Learning Rule**: When introducing or refactoring components, explain the component interface, props, and architectural role.
+
+## References
+
+Detailed guidelines and code examples for specific improvement areas are available in the `references/` directory:
+
+- [Component Decomposition & Monolithic Views](file:///.agents/skills/vue-best-practices/references/component-decomposition.md)
+- [Lifecycle Cleanup & Memory Leak Prevention](file:///.agents/skills/vue-best-practices/references/lifecycle-cleanup-memory-leaks.md)
+- [Pinia State Architecture & API Decoupling](file:///.agents/skills/vue-best-practices/references/pinia-store-api-decoupling.md)
+- [Reactivity & Computed Properties Optimization](file:///.agents/skills/vue-best-practices/references/reactivity-computed-optimization.md)
+- [Vue Router Code Splitting & Navigation Architecture](file:///.agents/skills/vue-best-practices/references/router-code-splitting-navigation.md)
+- [Design System Tokens & Style Hygiene](file:///.agents/skills/vue-best-practices/references/design-tokens-style-hygiene.md)
+- [Accessibility (a11y) & Modal Dialog Standards](file:///.agents/skills/vue-best-practices/references/accessibility-modal-ux.md)
+
