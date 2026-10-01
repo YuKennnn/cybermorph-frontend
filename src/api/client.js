@@ -32,4 +32,48 @@ apiClient.interceptors.response.use(
   },
 )
 
+/**
+ * Extracts a safe, user-friendly error message from FastAPI and network errors.
+ * Handles flat detail strings (401, 403, 404), nested 409 conflict objects,
+ * and 422 validation error arrays.
+ */
+export const extractErrorMessage = (error, defaultMessage = 'An unexpected error occurred.') => {
+  if (!error) return defaultMessage
+
+  // Network or server wake-up/timeout failure
+  if (!error.response) {
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      return 'Connection timed out. The server may still be waking up — please try again.'
+    }
+    if (error.message === 'Network Error') {
+      return 'Unable to reach backend server. Please verify your connection or CORS settings.'
+    }
+    return error.message || 'Unable to connect to the server.'
+  }
+
+  const data = error.response.data
+  if (!data) return defaultMessage
+
+  // Flat detail string (401, 403, 404)
+  if (typeof data.detail === 'string') {
+    return data.detail
+  }
+
+  // Nested detail object (409 conflict: { detail: { field, message } })
+  if (data.detail && typeof data.detail === 'object') {
+    if (data.detail.message) {
+      return data.detail.message
+    }
+    // Validation error array (422: [{ loc, msg, type }])
+    if (Array.isArray(data.detail) && data.detail.length > 0) {
+      const firstError = data.detail[0]
+      if (firstError?.msg) {
+        return firstError.msg
+      }
+    }
+  }
+
+  return defaultMessage
+}
+
 export default apiClient

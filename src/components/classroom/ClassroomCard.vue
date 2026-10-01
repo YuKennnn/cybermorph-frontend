@@ -12,7 +12,7 @@ defineEmits(['view-students', 'view-analytics', 'edit', 'delete'])
 <template>
   <div class="classroom-card">
     <div class="card-top">
-      <div class="code-tag">CODE: {{ classroom.code }}</div>
+      <div class="code-tag">CODE: {{ classroom.code_value || classroom.code }}</div>
       <span :class="['status-pill', classroom.is_active ? 'active' : 'inactive']">
         {{ classroom.is_active ? 'ACTIVE' : 'INACTIVE' }}
       </span>
@@ -25,10 +25,10 @@ defineEmits(['view-students', 'view-analytics', 'edit', 'delete'])
 
     <div class="card-actions">
       <div class="primary-actions">
-        <button class="btn-roster" @click="$emit('view-students', classroom.id)">
+        <button class="btn-roster" @click="$emit('view-students', classroom.code_id || classroom.id)">
           Students
         </button>
-        <button class="btn-analytics" @click="$emit('view-analytics', classroom.id || classroom.code)">
+        <button class="btn-analytics" @click="$emit('view-analytics', classroom.code_id || classroom.id || classroom.code_value)">
           Analytics
         </button>
       </div>

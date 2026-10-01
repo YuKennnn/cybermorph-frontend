@@ -2,16 +2,19 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import { fetchPlayerProfile } from '../api/player'
+import { fetchPlayerProfile, fetchThreatIndex } from '../api/player'
+import { fetchSessionHistory } from '../api/session'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+const mapNames = ['Home', 'Office', 'Internet Cafe', 'Public Park']
+
 const stats = ref({
-  games_played: 14,
-  best_score: 9200,
-  threat_index_progress: '5/8 unlocked',
-  current_map: 'Industrial Control Station',
+  games_played: 0,
+  best_score: 0,
+  threat_index_progress: '0/8 unlocked',
+  current_map: 'Home',
 })
 
 const isLoading = ref(true)
@@ -19,12 +22,33 @@ const gameLaunchMessage = ref('')
 
 onMounted(async () => {
   try {
-    const data = await fetchPlayerProfile()
-    if (data) {
-      stats.value = { ...stats.value, ...data }
+    const [profileRes, threatRes, sessionRes] = await Promise.allSettled([
+      fetchPlayerProfile(),
+      fetchThreatIndex(),
+      fetchSessionHistory({ page_size: 20 }),
+    ])
+
+    if (profileRes.status === 'fulfilled' && profileRes.value) {
+      const p = profileRes.value
+      const progressIdx = Math.max(0, (p.map_progress || 1) - 1)
+      stats.value.current_map = mapNames[Math.min(progressIdx, mapNames.length - 1)]
+    }
+
+    if (threatRes.status === 'fulfilled' && Array.isArray(threatRes.value)) {
+      const unlockedCount = threatRes.value.filter((t) => t.is_unlocked).length
+      stats.value.threat_index_progress = `${unlockedCount}/${threatRes.value.length || 8} unlocked`
+    }
+
+    if (sessionRes.status === 'fulfilled' && sessionRes.value) {
+      const s = sessionRes.value
+      stats.value.games_played = s.total_count ?? s.items?.length ?? 0
+      if (s.items && s.items.length > 0) {
+        const scores = s.items.map((item) => (item.credits_earned || 0) - (item.credits_lost || 0))
+        stats.value.best_score = Math.max(0, ...scores)
+      }
     }
   } catch {
-    // Keep local state defaults on network failure
+    // Keep baseline default telemetry on failure
   } finally {
     isLoading.value = false
   }

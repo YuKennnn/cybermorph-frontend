@@ -86,4 +86,7 @@ Detailed guidelines and code examples for specific improvement areas are availab
 - [Vue Router Code Splitting & Navigation Architecture](file:///.agents/skills/vue-best-practices/references/router-code-splitting-navigation.md)
 - [Design System Tokens & Style Hygiene](file:///.agents/skills/vue-best-practices/references/design-tokens-style-hygiene.md)
 - [Accessibility (a11y) & Modal Dialog Standards](file:///.agents/skills/vue-best-practices/references/accessibility-modal-ux.md)
+- [Defensive API Contract Parsing & Schema Drift Resilience](file:///.agents/skills/vue-best-practices/references/backend-contract-defensive-parsing.md)
+- [Environment Configuration, CORS, & Network Latency Resilience](file:///.agents/skills/vue-best-practices/references/environment-and-network-resilience.md)
+- [Client-Side Form Validation & Input Security Guidelines](file:///.agents/skills/vue-best-practices/references/form-validation-and-input-security.md)
 

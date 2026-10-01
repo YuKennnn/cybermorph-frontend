@@ -60,10 +60,10 @@ const handleLogout = () => {
       <!-- User Profile Snippet -->
       <div class="user-profile-card">
         <div class="user-avatar">
-          {{ (authStore.user?.username || authStore.user?.email || 'A').charAt(0).toUpperCase() }}
+          {{ authStore.displayName.charAt(0).toUpperCase() }}
         </div>
         <div class="user-details">
-          <span class="user-name">{{ authStore.user?.username || authStore.user?.email || 'Agent' }}</span>
+          <span class="user-name">{{ authStore.displayName }}</span>
           <span v-if="authStore.userRole" :class="['role-pill', authStore.userRole]">
             {{ authStore.userRole }}
           </span>
@@ -84,7 +84,7 @@ const handleLogout = () => {
 
         <!-- Player Specific Link -->
         <router-link
-          v-if="authStore.userRole === 'player'"
+          v-if="authStore.isPlayer"
           to="/classroom/join"
           class="nav-item"
           @click="closeMobileMenu"
@@ -94,7 +94,7 @@ const handleLogout = () => {
 
         <!-- Educator Specific Links -->
         <router-link
-          v-if="authStore.userRole === 'educator'"
+          v-if="authStore.isEducator"
           to="/classroom/manage"
           class="nav-item"
           @click="closeMobileMenu"
@@ -103,7 +103,7 @@ const handleLogout = () => {
         </router-link>
 
         <router-link
-          v-if="authStore.userRole === 'educator'"
+          v-if="authStore.isEducator"
           to="/analytics"
           class="nav-item"
           @click="closeMobileMenu"

@@ -1,65 +1,62 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import LandingView from '../views/LandingView.vue'
-import LoginView from '../views/LoginView.vue'
-import RegisterView from '../views/RegisterView.vue'
-import DashboardView from '../views/DashboardView.vue'
-import LeaderboardView from '../views/LeaderboardView.vue'
-import ClassroomManagementView from '../views/ClassroomManagementView.vue'
-import ClassroomStudentsView from '../views/ClassroomStudentsView.vue'
-import ClassroomJoinView from '../views/ClassroomJoinView.vue'
-import EducatorAnalyticsView from '../views/EducatorAnalyticsView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'landing',
-    component: LandingView,
+    component: () => import('../views/LandingView.vue'),
   },
   {
     path: '/login',
     name: 'login',
-    component: LoginView,
+    component: () => import('../views/LoginView.vue'),
   },
   {
     path: '/register',
     name: 'register',
-    component: RegisterView,
+    component: () => import('../views/RegisterView.vue'),
   },
   {
     path: '/dashboard',
     name: 'dashboard',
-    component: DashboardView,
+    component: () => import('../views/DashboardView.vue'),
     meta: { requiresAuth: true },
   },
   {
     path: '/leaderboard',
     name: 'leaderboard',
-    component: LeaderboardView,
+    component: () => import('../views/LeaderboardView.vue'),
   },
   {
     path: '/classroom/manage',
     name: 'classroom-manage',
-    component: ClassroomManagementView,
+    component: () => import('../views/ClassroomManagementView.vue'),
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
     path: '/classroom/students/:code_id',
     name: 'classroom-students',
-    component: ClassroomStudentsView,
+    component: () => import('../views/ClassroomStudentsView.vue'),
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
     path: '/classroom/join',
     name: 'classroom-join',
-    component: ClassroomJoinView,
+    component: () => import('../views/ClassroomJoinView.vue'),
     meta: { requiresAuth: true, roles: ['player'] },
   },
   {
     path: '/analytics/:code_id?',
     name: 'educator-analytics',
-    component: EducatorAnalyticsView,
+    component: () => import('../views/EducatorAnalyticsView.vue'),
     meta: { requiresAuth: true, roles: ['educator'] },
+  },
+  // Catch-all route for unrecognized paths
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    redirect: '/',
   },
 ]
 
@@ -70,11 +67,10 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
-  const isAuthenticated = !!authStore.token
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
-  } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+  } else if ((to.path === '/login' || to.path === '/register') && authStore.isAuthenticated) {
     next('/dashboard')
   } else if (
     to.meta.roles &&

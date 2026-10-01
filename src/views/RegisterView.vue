@@ -1,7 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { extractErrorMessage } from '../api/client'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -11,41 +12,72 @@ const username = ref('')
 const password = ref('')
 const role = ref('player')
 const errorMessage = ref('')
+const successMessage = ref('')
 const isLoading = ref(false)
+const isServerWakingUp = ref(false)
+let wakeUpTimer = null
 
 const handleRegister = async () => {
   errorMessage.value = ''
+  successMessage.value = ''
+
+  const trimmedEmail = email.value.trim()
+
+  // Educator institutional domain validation per API contract
+  if (role.value === 'educator' && !trimmedEmail.toLowerCase().endsWith('@dnsc.edu.ph')) {
+    errorMessage.value = 'Educator registration requires a verified institutional email ending in @dnsc.edu.ph.'
+    return
+  }
+
+  // Password length validation (backend requires >= 12 chars, upper, lower, digit, special)
+  if (password.value.length < 12) {
+    errorMessage.value = 'Passcode must be at least 12 characters and contain uppercase, lowercase, number, and special character.'
+    return
+  }
+
   isLoading.value = true
+  isServerWakingUp.value = false
+
+  wakeUpTimer = setTimeout(() => {
+    if (isLoading.value) {
+      isServerWakingUp.value = true
+    }
+  }, 4000)
 
   try {
     if (role.value === 'player') {
       await authStore.registerPlayer({
-        email: email.value,
-        username: username.value,
+        email: trimmedEmail,
+        username: username.value.trim(),
         password: password.value,
       })
+      router.push('/login')
     } else {
+      // Educator accounts send only email and password to /auth/register-web
       await authStore.registerWeb({
-        email: email.value,
-        username: username.value,
+        email: trimmedEmail,
         password: password.value,
-        role: role.value,
       })
+      successMessage.value = 'Educator profile submitted! Account is pending administrative approval before portal activation.'
+      setTimeout(() => {
+        router.push('/login')
+      }, 3500)
     }
-    router.push('/login')
   } catch (error) {
-    const status = error.response?.status
-    if (status === 409) {
-      errorMessage.value = 'An account with this email or codename is already registered.'
-    } else if (status === 400 || status === 422) {
-      errorMessage.value = 'Registration rejected: please verify that all fields meet requirements.'
-    } else {
-      errorMessage.value = 'Registration request failed. Please check your connection and try again.'
-    }
+    errorMessage.value = extractErrorMessage(
+      error,
+      'Registration request failed. Please check your connection and try again.',
+    )
   } finally {
+    if (wakeUpTimer) clearTimeout(wakeUpTimer)
     isLoading.value = false
+    isServerWakingUp.value = false
   }
 }
+
+onUnmounted(() => {
+  if (wakeUpTimer) clearTimeout(wakeUpTimer)
+})
 </script>
 
 <template>
@@ -63,13 +95,24 @@ const handleRegister = async () => {
         {{ errorMessage }}
       </div>
 
+      <div v-if="successMessage" class="success-banner">
+        {{ successMessage }}
+      </div>
+
+      <div v-if="isServerWakingUp" class="info-banner">
+        Waking up backend server on Render... This may take up to 45 seconds after idle.
+      </div>
+
       <form @submit.prevent="handleRegister">
         <div class="form-group">
           <label for="role">Account Type</label>
           <select id="role" v-model="role" class="select-input">
             <option value="player">Player (Student / Operative)</option>
-            <option value="educator">Educator (Instructor / Admin)</option>
+            <option value="educator">Educator (Instructor / Portal)</option>
           </select>
+          <small v-if="role === 'educator'" class="field-hint">
+            Requires institutional @dnsc.edu.ph address. Subject to admin approval.
+          </small>
         </div>
 
         <div class="form-group">
@@ -78,13 +121,13 @@ const handleRegister = async () => {
             id="email"
             v-model="email"
             type="email"
-            :placeholder="role === 'educator' ? 'instructor@school.edu' : 'player@example.com'"
+            :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
             required
             autocomplete="email"
           />
         </div>
 
-        <div class="form-group">
+        <div v-if="role === 'player'" class="form-group">
           <label for="username">Agent Codename (Username)</label>
           <input
             id="username"
@@ -92,6 +135,8 @@ const handleRegister = async () => {
             type="text"
             placeholder="AgentZero"
             required
+            minlength="3"
+            maxlength="50"
             autocomplete="username"
           />
         </div>
@@ -102,10 +147,14 @@ const handleRegister = async () => {
             id="password"
             v-model="password"
             type="password"
-            placeholder="••••••••"
+            placeholder="Minimum 12 characters"
             required
+            minlength="12"
             autocomplete="new-password"
           />
+          <small class="field-hint">
+            Must be at least 12 chars with upper, lower, number & special char.
+          </small>
         </div>
 
         <button type="submit" class="btn-primary" :disabled="isLoading">
@@ -247,6 +296,33 @@ input:focus,
   border-radius: 8px;
   margin-bottom: 1.25rem;
   font-size: 0.88rem;
+}
+
+.success-banner {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+}
+
+.info-banner {
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.35rem;
+  line-height: 1.3;
 }
 
 .footer-text {

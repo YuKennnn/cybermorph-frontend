@@ -1,7 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { extractErrorMessage } from '../api/client'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -10,30 +11,42 @@ const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
 const isLoading = ref(false)
+const isServerWakingUp = ref(false)
+let wakeUpTimer = null
 
 const handleLogin = async () => {
   errorMessage.value = ''
   isLoading.value = true
+  isServerWakingUp.value = false
+
+  // Inform user if request takes longer than 4s due to Render cold start
+  wakeUpTimer = setTimeout(() => {
+    if (isLoading.value) {
+      isServerWakingUp.value = true
+    }
+  }, 4000)
 
   try {
     await authStore.login({
-      email: email.value,
+      email: email.value.trim(),
       password: password.value,
     })
     router.push('/dashboard')
   } catch (error) {
-    const status = error.response?.status
-    if (status === 401) {
-      errorMessage.value = 'Invalid agent credentials. Please verify your email and passcode.'
-    } else if (status === 403) {
-      errorMessage.value = 'Account is pending administrative approval.'
-    } else {
-      errorMessage.value = 'Sign-in failed. Please check your connection and try again.'
-    }
+    errorMessage.value = extractErrorMessage(
+      error,
+      'Sign-in failed. Please verify your credentials or server connection.',
+    )
   } finally {
+    if (wakeUpTimer) clearTimeout(wakeUpTimer)
     isLoading.value = false
+    isServerWakingUp.value = false
   }
 }
+
+onUnmounted(() => {
+  if (wakeUpTimer) clearTimeout(wakeUpTimer)
+})
 </script>
 
 <template>
@@ -49,6 +62,10 @@ const handleLogin = async () => {
 
       <div v-if="errorMessage" class="error-banner">
         {{ errorMessage }}
+      </div>
+
+      <div v-if="isServerWakingUp" class="info-banner">
+        Waking up backend server on Render... This may take up to 45 seconds after idle.
       </div>
 
       <form @submit.prevent="handleLogin">
@@ -209,6 +226,16 @@ input:focus {
   background-color: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   color: var(--color-danger);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+}
+
+.info-banner {
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
   padding: 0.75rem 1rem;
   border-radius: 8px;
   margin-bottom: 1.25rem;

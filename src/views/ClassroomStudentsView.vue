@@ -18,8 +18,9 @@ const fetchStudents = async () => {
 
   try {
     const data = await fetchClassroomStudents(codeId)
-    classroomInfo.value = data.classroom
-    students.value = data.students || []
+    // Support paginated { items: [...] }, { students: [...] }, or raw array
+    students.value = Array.isArray(data) ? data : data.items || data.students || []
+    classroomInfo.value = data.classroom || null
   } catch {
     errorMessage.value = 'Could not load student roster telemetry for this classroom.'
   } finally {
@@ -94,7 +95,7 @@ onMounted(() => {
               <td>
                 <span class="progress-badge">{{ student.map_progress || 'Not Started' }}</span>
               </td>
-              <td class="date-cell">{{ formatDate(student.joined_at) }}</td>
+              <td class="date-cell">{{ formatDate(student.last_synced_at || student.joined_at) }}</td>
               <td class="text-right">
                 <router-link :to="'/analytics/' + codeId" class="btn-inspect-link">
                   Inspect Telemetry

@@ -19,13 +19,11 @@ onMounted(async () => {
   try {
     const data = await fetchMyClassrooms()
     if (data) {
-      classroomData.value.classrooms = data.classrooms || []
+      const list = Array.isArray(data) ? data : data.classrooms || []
+      classroomData.value.classrooms = list
       classroomData.value.total_students =
         data.total_students ??
-        classroomData.value.classrooms.reduce(
-          (sum, c) => sum + (c.student_count || 0),
-          0,
-        )
+        list.reduce((sum, c) => sum + (c.student_count || 0), 0)
       classroomData.value.recent_activity = data.recent_activity || []
     }
   } catch {
@@ -80,14 +78,14 @@ const handleViewAnalytics = () => {
       <div v-else-if="classroomData.classrooms.length > 0" class="classrooms-list">
         <div
           v-for="classroom in classroomData.classrooms"
-          :key="classroom.id"
+          :key="classroom.code_id || classroom.id"
           class="classroom-card"
         >
           <div class="classroom-info">
             <h5>{{ classroom.name }}</h5>
-            <span class="code-badge">CODE: {{ classroom.code }}</span>
+            <span class="code-badge">CODE: {{ classroom.code_value || classroom.code }}</span>
           </div>
-          <div class="student-count">{{ classroom.student_count }} Enrolled</div>
+          <div class="student-count">{{ classroom.student_count || 0 }} Enrolled</div>
         </div>
       </div>
 

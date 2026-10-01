@@ -161,6 +161,20 @@ mock.onGet('/players/me').reply(200, {
 })
 
 // ==========================================
+// Web Users Profile Endpoint
+// ==========================================
+mock.onGet('/web-users/me').reply(200, {
+  web_profile_id: 'wp-001',
+  user_id: 'u-001',
+  email: 'educator@cybermorph.local',
+  role: 'educator',
+  display_name: 'Prof. CyberMorph',
+  portal_access: true,
+  approval_status: 'approved',
+  last_login_at: '2026-10-01T06:00:00Z',
+})
+
+// ==========================================
 // Admin Dashboard Data Endpoint
 // ==========================================
 mock.onGet('/admin/stats').reply(200, {
@@ -238,7 +252,7 @@ mock.onPost('/classroom/generate').reply((config) => {
 
 mock.onPost('/classroom/join').reply((config) => {
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const rawCode = (data.code || '').trim().toUpperCase()
+  const rawCode = (data.code_value || data.code || '').trim().toUpperCase()
 
   if (!rawCode) {
     return [400, { detail: 'Classroom code is required.' }]

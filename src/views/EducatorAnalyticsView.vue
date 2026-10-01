@@ -68,8 +68,14 @@ const sessionErrorMessage = ref('')
 const currentClassroom = computed(() => {
   return (
     classrooms.value.find(
-      (c) => c.id === selectedClassroomId.value || c.code === selectedClassroomId.value,
-    ) || classrooms.value[0] || null
+      (c) =>
+        (c.code_id && c.code_id === selectedClassroomId.value) ||
+        (c.id && c.id === selectedClassroomId.value) ||
+        (c.code_value && c.code_value === selectedClassroomId.value) ||
+        (c.code && c.code === selectedClassroomId.value),
+    ) ||
+    classrooms.value[0] ||
+    null
   )
 })
 
@@ -86,12 +92,12 @@ const loadClassrooms = async () => {
 
     if (list.length > 0) {
       if (!selectedClassroomId.value) {
-        selectedClassroomId.value = list[0].id || list[0].code
+        selectedClassroomId.value =
+          list[0].code_id || list[0].id || list[0].code_value || list[0].code
       }
       await loadClassroomData(selectedClassroomId.value)
     }
-  } catch (err) {
-    console.error('Failed to load classrooms:', err)
+  } catch {
     errorMessage.value = 'Failed to load classroom deployments. Please verify your connection.'
   } finally {
     isClassroomsLoading.value = false
@@ -234,10 +240,10 @@ onMounted(() => {
         >
           <option
             v-for="c in classrooms"
-            :key="c.id || c.code"
-            :value="c.id || c.code"
+            :key="c.code_id || c.id || c.code_value || c.code"
+            :value="c.code_id || c.id || c.code_value || c.code"
           >
-            {{ c.name }} (Code: {{ c.code }})
+            {{ c.name }} (Code: {{ c.code_value || c.code }})
           </option>
         </select>
       </div>

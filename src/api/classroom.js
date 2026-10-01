@@ -30,9 +30,12 @@ export const generateClassroomCode = async (data) => {
 /**
  * Join a classroom using a code.
  * Endpoint: POST /classroom/join
+ * @param {string|{ code_value: string }} codeOrPayload - 6-character classroom code
+ * @returns {Promise<{ profile_id: string, code_id: string, name: string, joined_at: string }>}
  */
-export const joinClassroom = async (code) => {
-  const response = await apiClient.post('/classroom/join', { code })
+export const joinClassroom = async (codeOrPayload) => {
+  const codeValue = typeof codeOrPayload === 'string' ? codeOrPayload : codeOrPayload?.code_value || codeOrPayload?.code
+  const response = await apiClient.post('/classroom/join', { code_value: codeValue })
   return response.data
 }
 

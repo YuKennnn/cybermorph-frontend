@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import apiClient from '../api/client'
+import { ref, computed } from 'vue'
+import {
+  loginUser,
+  registerPlayerAccount,
+  registerWebAccount,
+  fetchWebUserProfile,
+  fetchPlayerProfile,
+} from '../api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   // ==========================================
@@ -16,52 +22,113 @@ export const useAuthStore = defineStore('auth', () => {
       return null
     }
   }
-  const initialUser = getInitialUser()
-  const user = ref(initialUser)
 
-  const storedRole = localStorage.getItem('cyber_role') || initialUser?.role || null
-  const userRole = ref(storedRole)
+  const user = ref(getInitialUser())
+  const userRole = ref(localStorage.getItem('cyber_role') || user.value?.role || null)
+  const isProfileLoading = ref(false)
 
   // ==========================================
-  // 2. ACTIONS (The Functions that change the Data)
+  // 2. GETTERS (Computed Properties)
   // ==========================================
+  const isAuthenticated = computed(() => !!token.value)
+  const isEducator = computed(() => userRole.value === 'educator')
+  const isAdmin = computed(() => userRole.value === 'admin')
+  const isPlayer = computed(() => userRole.value === 'player')
+  const displayName = computed(
+    () => user.value?.username || user.value?.display_name || user.value?.email || 'Agent',
+  )
+
+  // ==========================================
+  // 3. ACTIONS
+  // ==========================================
+
+  /**
+   * Resolve user profile and verified role after authentication.
+   * Checks /web-users/me first (educator/admin), then /players/me (player).
+   */
+  const resolveProfile = async (fallbackEmail = '') => {
+    isProfileLoading.value = true
+    try {
+      // 1. First test if token belongs to a web user (educator or admin)
+      try {
+        const webProfile = await fetchWebUserProfile()
+        user.value = {
+          ...webProfile,
+          username: webProfile.display_name || webProfile.email?.split('@')[0] || 'Web Agent',
+        }
+        userRole.value = webProfile.role
+        localStorage.setItem('cyber_user', JSON.stringify(user.value))
+        localStorage.setItem('cyber_role', userRole.value)
+        return user.value
+      } catch (webErr) {
+        // If 403 / "Not a web portal account", fall through to player profile
+        const isNotWeb = webErr.response?.status === 403 || webErr.response?.status === 404
+        if (!isNotWeb) throw webErr
+      }
+
+      // 2. Test if token belongs to a game player
+      const playerProfile = await fetchPlayerProfile()
+      user.value = {
+        ...playerProfile,
+        email: fallbackEmail || user.value?.email || '',
+        role: 'player',
+      }
+      userRole.value = 'player'
+      localStorage.setItem('cyber_user', JSON.stringify(user.value))
+      localStorage.setItem('cyber_role', 'player')
+      return user.value
+    } finally {
+      isProfileLoading.value = false
+    }
+  }
+
+  /**
+   * Log in user, store token, and resolve verified role from backend.
+   */
   const login = async (credentials) => {
-    const response = await apiClient.post('/auth/login', credentials)
-    const data = response.data
-
+    const data = await loginUser(credentials)
     const authToken = data.access_token || data.token
     token.value = authToken
     localStorage.setItem('cyber_token', authToken)
 
-    const extractedUser = data.user || {
-      email: credentials.email,
-      username: credentials.email?.split('@')[0] || 'User',
+    // If backend or mock provided user info directly:
+    if (data.user?.role) {
+      user.value = data.user
+      userRole.value = data.user.role
+      localStorage.setItem('cyber_user', JSON.stringify(data.user))
+      localStorage.setItem('cyber_role', data.user.role)
+      return data
     }
-    const rawRole = data.user?.role || data.role || 'player'
-    const validRoles = ['player', 'educator', 'admin']
-    const extractedRole = validRoles.includes(rawRole.toLowerCase())
-      ? rawRole.toLowerCase()
-      : 'player'
 
-    user.value = extractedUser
-    userRole.value = extractedRole
-
-    localStorage.setItem('cyber_user', JSON.stringify(extractedUser))
-    localStorage.setItem('cyber_role', extractedRole)
+    // Otherwise resolve profile from authoritative endpoints
+    try {
+      await resolveProfile(credentials.email)
+    } catch (profileError) {
+      // If profile resolution fails completely, revoke session to avoid inconsistent state
+      logout()
+      throw profileError
+    }
 
     return data
   }
 
+  /**
+   * Register a new player account.
+   */
   const registerPlayer = async (playerData) => {
-    const response = await apiClient.post('/auth/register', playerData)
-    return response.data
+    return await registerPlayerAccount(playerData)
   }
 
+  /**
+   * Register a new educator web account.
+   */
   const registerWeb = async (webUserData) => {
-    const response = await apiClient.post('/auth/register-web', webUserData)
-    return response.data
+    return await registerWebAccount(webUserData)
   }
 
+  /**
+   * Clear all auth session data and tokens.
+   */
   const logout = () => {
     token.value = null
     user.value = null
@@ -71,8 +138,23 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('cyber_role')
   }
 
-  // ==========================================
-  // 3. RETURN (Make them usable)
-  // ==========================================
-  return { token, user, userRole, login, logout, registerPlayer, registerWeb }
-})
+  return {
+    // State
+    token,
+    user,
+    userRole,
+    isProfileLoading,
+    // Getters
+    isAuthenticated,
+    isEducator,
+    isAdmin,
+    isPlayer,
+    displayName,
+    // Actions
+    login,
+    logout,
+    resolveProfile,
+    registerPlayer,
+    registerWeb,
+  }
+})

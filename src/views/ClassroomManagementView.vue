@@ -26,7 +26,7 @@ const fetchClassrooms = async () => {
 
   try {
     const data = await fetchMyClassrooms()
-    classrooms.value = data.classrooms || []
+    classrooms.value = Array.isArray(data) ? data : data.classrooms || []
   } catch {
     errorMessage.value = 'Failed to load classroom roster. Please try again.'
   } finally {
@@ -35,7 +35,8 @@ const fetchClassrooms = async () => {
 }
 
 const handleCreated = (newClassroom) => {
-  successMessage.value = `Classroom "${newClassroom.name}" generated with access code: ${newClassroom.code}`
+  const code = newClassroom.code_value || newClassroom.code || 'GENERATED'
+  successMessage.value = `Classroom "${newClassroom.name}" generated with access code: ${code}`
   fetchClassrooms()
 }
 
@@ -107,7 +108,7 @@ onMounted(() => {
       <div v-else-if="classrooms.length > 0" class="classroom-grid">
         <ClassroomCard
           v-for="c in classrooms"
-          :key="c.id"
+          :key="c.code_id || c.id"
           :classroom="c"
           @view-students="handleViewStudents"
           @view-analytics="handleViewAnalytics"

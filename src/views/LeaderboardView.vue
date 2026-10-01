@@ -172,7 +172,7 @@ onUnmounted(() => {
           <tbody>
             <tr
               v-for="entry in leaderboardItems"
-              :key="entry.id || entry.rank"
+              :key="entry.score_id || entry.id || entry.rank"
               :class="{ 'top-entry': entry.rank <= 3 }"
             >
               <td class="rank-col">
@@ -187,7 +187,7 @@ onUnmounted(() => {
                 <span class="map-badge">{{ entry.map_name }}</span>
               </td>
               <td class="score-col">
-                <span class="score-value">{{ entry.score.toLocaleString() }} PTS</span>
+                <span class="score-value">{{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }} PTS</span>
               </td>
             </tr>
           </tbody>
