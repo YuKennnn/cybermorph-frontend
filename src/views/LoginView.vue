@@ -1,8 +1,9 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { extractErrorMessage } from '../api/client'
+import PublicHeader from '../components/common/PublicHeader.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -50,58 +51,61 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="auth-container">
-    <div class="auth-card">
-      <div class="card-badge">
-        <span class="badge-dot"></span>
-        <span>PORTAL AUTHENTICATION</span>
-      </div>
-
-      <h2 class="title">CyberMorph Login</h2>
-      <p class="subtitle">Access your gamified security training portal</p>
-
-      <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
-      </div>
-
-      <div v-if="isServerWakingUp" class="info-banner">
-        Waking up backend server on Render... This may take up to 45 seconds after idle.
-      </div>
-
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="email">Agent Identifier (Email)</label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            placeholder="agent@cybermorph.edu"
-            required
-            autocomplete="email"
-          />
+  <div class="auth-page-wrapper">
+    <PublicHeader />
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="card-badge">
+          <span class="badge-dot"></span>
+          <span>PORTAL SIGN IN</span>
         </div>
 
-        <div class="form-group">
-          <label for="password">Security Passcode</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            placeholder="••••••••"
-            required
-            autocomplete="current-password"
-          />
+        <h2 class="title">Sign In</h2>
+        <p class="subtitle">Sign in to your CyberMorph account</p>
+
+        <div v-if="errorMessage" class="error-banner">
+          {{ errorMessage }}
         </div>
 
-        <button type="submit" class="btn-primary" :disabled="isLoading">
-          {{ isLoading ? 'Signing In...' : 'Sign In to Portal' }}
-        </button>
-      </form>
+        <div v-if="isServerWakingUp" class="info-banner">
+          Connecting to backend server... This may take up to 45 seconds after idle.
+        </div>
 
-      <p class="footer-text">
-        Need an agent account?
-        <router-link to="/register" class="link-primary">Initialize Registration</router-link>
-      </p>
+        <form @submit.prevent="handleLogin">
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              placeholder="your-email@example.com"
+              required
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              placeholder="Enter your password"
+              required
+              autocomplete="current-password"
+            />
+          </div>
+
+          <button type="submit" class="btn-primary" :disabled="isLoading">
+            {{ isLoading ? 'Signing In...' : 'Sign In to Portal' }}
+          </button>
+        </form>
+
+        <p class="footer-text">
+          Don't have an account?
+          <RouterLink to="/register" class="link-primary">Create an account</RouterLink>
+        </p>
+      </div>
     </div>
   </div>
 </template>

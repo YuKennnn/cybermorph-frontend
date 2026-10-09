@@ -1,8 +1,9 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { extractErrorMessage } from '../api/client'
+import PublicHeader from '../components/common/PublicHeader.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -81,91 +82,94 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="auth-container">
-    <div class="auth-card">
-      <div class="card-badge">
-        <span class="badge-dot"></span>
-        <span>AGENT REGISTRATION</span>
-      </div>
-
-      <h2 class="title">Create Account</h2>
-      <p class="subtitle">Enroll a new player or educator profile in CyberMorph</p>
-
-      <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
-      </div>
-
-      <div v-if="successMessage" class="success-banner">
-        {{ successMessage }}
-      </div>
-
-      <div v-if="isServerWakingUp" class="info-banner">
-        Waking up backend server on Render... This may take up to 45 seconds after idle.
-      </div>
-
-      <form @submit.prevent="handleRegister">
-        <div class="form-group">
-          <label for="role">Account Type</label>
-          <select id="role" v-model="role" class="select-input">
-            <option value="player">Player (Student / Operative)</option>
-            <option value="educator">Educator (Instructor / Portal)</option>
-          </select>
-          <small v-if="role === 'educator'" class="field-hint">
-            Requires institutional @dnsc.edu.ph address. Subject to admin approval.
-          </small>
+  <div class="auth-page-wrapper">
+    <PublicHeader />
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="card-badge">
+          <span class="badge-dot"></span>
+          <span>ACCOUNT REGISTRATION</span>
         </div>
 
-        <div class="form-group">
-          <label for="email">Institutional / Personal Email</label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
-            required
-            autocomplete="email"
-          />
+        <h2 class="title">Create Account</h2>
+        <p class="subtitle">Register a player or educator account for CyberMorph</p>
+
+        <div v-if="errorMessage" class="error-banner">
+          {{ errorMessage }}
         </div>
 
-        <div v-if="role === 'player'" class="form-group">
-          <label for="username">Agent Codename (Username)</label>
-          <input
-            id="username"
-            v-model="username"
-            type="text"
-            placeholder="AgentZero"
-            required
-            minlength="3"
-            maxlength="50"
-            autocomplete="username"
-          />
+        <div v-if="successMessage" class="success-banner">
+          {{ successMessage }}
         </div>
 
-        <div class="form-group">
-          <label for="password">Security Passcode</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            placeholder="Minimum 12 characters"
-            required
-            minlength="12"
-            autocomplete="new-password"
-          />
-          <small class="field-hint">
-            Must be at least 12 chars with upper, lower, number & special char.
-          </small>
+        <div v-if="isServerWakingUp" class="info-banner">
+          Connecting to backend server... This may take up to 45 seconds after idle.
         </div>
 
-        <button type="submit" class="btn-primary" :disabled="isLoading">
-          {{ isLoading ? 'Initializing Identity...' : 'Complete Registration' }}
-        </button>
-      </form>
+        <form @submit.prevent="handleRegister">
+          <div class="form-group">
+            <label for="role">Account Type</label>
+            <select id="role" v-model="role" class="select-input">
+              <option value="player">Player</option>
+              <option value="educator">Educator</option>
+            </select>
+            <small v-if="role === 'educator'" class="field-hint">
+              Requires institutional @dnsc.edu.ph address. Subject to admin approval.
+            </small>
+          </div>
 
-      <p class="footer-text">
-        Already registered?
-        <router-link to="/login" class="link-primary">Sign in here</router-link>
-      </p>
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
+              required
+              autocomplete="email"
+            />
+          </div>
+
+          <div v-if="role === 'player'" class="form-group">
+            <label for="username">Username</label>
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              placeholder="Choose a username"
+              required
+              minlength="3"
+              maxlength="50"
+              autocomplete="username"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              placeholder="Minimum 12 characters"
+              required
+              minlength="12"
+              autocomplete="new-password"
+            />
+            <small class="field-hint">
+              Must be at least 12 characters with uppercase, lowercase, number, and special character.
+            </small>
+          </div>
+
+          <button type="submit" class="btn-primary" :disabled="isLoading">
+            {{ isLoading ? 'Creating Account...' : 'Create Account' }}
+          </button>
+        </form>
+
+        <p class="footer-text">
+          Already registered?
+          <RouterLink to="/login" class="link-primary">Sign in here</RouterLink>
+        </p>
+      </div>
     </div>
   </div>
 </template>

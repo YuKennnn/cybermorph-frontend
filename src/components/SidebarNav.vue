@@ -48,9 +48,7 @@ const formatRole = (role) => {
     <!-- Mobile Top Navigation Header -->
     <header class="mobile-header">
       <div class="brand-logo font-brand">
-        <span class="logo-bracket">[</span>
         <span class="logo-text">CYBERMORPH</span>
-        <span class="logo-bracket">]</span>
       </div>
       <button
         class="hamburger-btn"
@@ -77,9 +75,7 @@ const formatRole = (role) => {
     >
       <div class="sidebar-header">
         <div class="brand-logo font-brand">
-          <span class="logo-bracket">[</span>
           <span class="logo-text">CYBERMORPH</span>
-          <span class="logo-bracket">]</span>
         </div>
         <button
           class="mobile-close-btn"

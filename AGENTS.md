@@ -76,4 +76,10 @@ Do not replace understanding with large unexplained code dumps.
   - Use "classroom management" (not "classroom oversight")
   - Use "common mistakes" (not "failure frequencies")
   - Use "student progress" or "player progress" (not "threat telemetry")
-- Only describe capabilities supported by the actual game and backend API. Do not invent release details, hardware requirements, pricing, or analytics features.
+- In registration forms and account options, use "Player" (never "Student (Player)").
+- Only describe capabilities supported by the actual game and backend API. Do not invent release details, hardware requirements, pricing, or analytics features.
+- Preserve the meaning of API fields:
+  - Sessions in the past 24 hours are recent sessions, not active sessions.
+  - Threats detected (`threats_detected`) are threats detected, not threats completed or neutralized.
+  - Do not present a score from recent session history as an all-time best score.
+

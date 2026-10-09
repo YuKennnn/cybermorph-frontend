@@ -7,13 +7,20 @@ import SidebarNav from './components/SidebarNav.vue'
 const route = useRoute()
 const authStore = useAuthStore()
 
-const showSidebar = computed(() => {
+const isPublicLayout = computed(() => {
   return (
-    !!authStore.token &&
-    route.name !== 'landing' &&
-    route.name !== 'login' &&
-    route.name !== 'register'
+    !!route.meta?.isPublic ||
+    route.name === 'landing' ||
+    route.name === 'about' ||
+    route.name === 'gameplay' ||
+    route.name === 'download' ||
+    route.name === 'login' ||
+    route.name === 'register'
   )
+})
+
+const showSidebar = computed(() => {
+  return !!authStore.token && !isPublicLayout.value
 })
 </script>
 
@@ -23,10 +30,10 @@ const showSidebar = computed(() => {
     <main
       :class="[
         'main-content',
-        { 'with-sidebar': showSidebar, 'landing-mode': route.name === 'landing' },
+        { 'with-sidebar': showSidebar, 'landing-mode': isPublicLayout },
       ]"
     >
-      <div :class="['content-wrapper', { 'full-width': route.name === 'landing' }]">
+      <div :class="['content-wrapper', { 'full-width': isPublicLayout }]">
         <RouterView />
       </div>
     </main>
