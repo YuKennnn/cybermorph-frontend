@@ -204,8 +204,9 @@ const closeSessionModal = () => {
 
 // Helper: Format Date
 const formatDate = (isoString) => {
-  if (!isoString) return 'N/A'
+  if (!isoString) return 'Not synced yet'
   const date = new Date(isoString)
+  if (isNaN(date.getTime())) return 'Not synced yet'
   return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -357,11 +358,11 @@ onMounted(() => {
       </section>
 
       <!-- LEVEL 2: ENROLLED AGENT ROSTER & DRILL-DOWN -->
-      <section class="section-card">
+      <section class="section-card student-progress-card">
         <div class="card-header">
           <div class="header-titles">
-            <h3>Student Defense Proficiency Roster</h3>
-            <span class="meta-tag">Select an agent codename to inspect deep threat telemetry</span>
+            <h3>Student progress</h3>
+            <p class="section-desc">View each student’s progress and performance.</p>
           </div>
         </div>
 
@@ -374,35 +375,35 @@ onMounted(() => {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Agent Codename</th>
-                <th>Map Progression</th>
-                <th>Enrolled / Synced</th>
-                <th class="text-right">Threat Telemetry</th>
+                <th scope="col">Student</th>
+                <th scope="col">Map progress</th>
+                <th scope="col">Last synced</th>
+                <th scope="col" class="text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="student in students" :key="student.profile_id">
-                <td class="agent-cell">
-                  <span class="agent-avatar">{{ student.username?.charAt(0).toUpperCase() || 'A' }}</span>
-                  <div>
-                    <span class="agent-name">{{ student.username }}</span>
-                    <span class="agent-id">ID: {{ student.profile_id }}</span>
-                  </div>
+                <td class="student-cell">
+                  <span class="student-avatar" aria-hidden="true">
+                    {{ student.username?.charAt(0).toUpperCase() || 'A' }}
+                  </span>
+                  <span class="student-name">{{ student.username }}</span>
                 </td>
-                <td>
+                <td class="progress-cell">
                   <span class="badge-progression">
                     {{ student.map_progress || 'Map 1: Home Baseline' }}
                   </span>
                 </td>
                 <td class="date-cell">
-                  {{ formatDate(student.last_synced_at || student.joined_at) }}
+                  {{ formatDate(student.last_synced_at) }}
                 </td>
-                <td class="text-right">
+                <td class="action-cell text-right">
                   <button
-                    class="btn-inspect"
+                    class="btn-view-performance"
+                    type="button"
                     @click="openStudentAnalytics(student)"
                   >
-                    Inspect Telemetry
+                    View performance
                   </button>
                 </td>
               </tr>
@@ -763,5 +764,138 @@ onMounted(() => {
 .btn-primary:hover {
   background: var(--btn-gradient-hover);
   transform: translateY(-1px);
+}
+
+/* Student Progress Table */
+.section-desc {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.data-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.875rem 1rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-main);
+  font-size: 0.875rem;
+}
+
+.data-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.data-table tbody tr:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.student-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.student-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #ede9fe;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.student-name {
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.badge-progression {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-main);
+  white-space: nowrap;
+}
+
+.date-cell {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.action-cell {
+  white-space: nowrap;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.btn-view-performance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--color-primary);
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-view-performance:hover {
+  background-color: #ede9fe;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-view-performance:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 </style>

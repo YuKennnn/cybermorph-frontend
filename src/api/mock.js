@@ -75,12 +75,56 @@ const mockLeaderboardEntries = [
 // ==========================================
 // Authentication Endpoints
 // ==========================================
+const MOCK_CREDENTIALS = {
+  'admin@cybermorph.local': {
+    password: 'AdminPassword123!',
+    role: 'admin',
+    username: 'admin',
+  },
+  'educator@cybermorph.local': {
+    password: 'EducatorPassword123!',
+    role: 'educator',
+    username: 'educator',
+  },
+  'player2@gmail.com': {
+    password: 'PlayerPassword123!',
+    role: 'player',
+    username: 'player2',
+  },
+}
+
 mock.onPost('/auth/login').reply((config) => {
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
   const { email, password } = data
 
-  if (!email || !password || password === 'wrongpassword') {
+  if (!email || !password) {
     return [401, { detail: 'Invalid credentials' }]
+  }
+
+  const normalizedEmail = (email || '').toLowerCase().trim()
+  const account = MOCK_CREDENTIALS[normalizedEmail]
+
+  if (account) {
+    if (account.password !== password) {
+      return [401, { detail: 'Incorrect username or password' }]
+    }
+    return [
+      200,
+      {
+        access_token: 'mock-jwt-token-cybermorph-12345',
+        token_type: 'bearer',
+        user: {
+          id: 1,
+          email,
+          username: account.username,
+          role: account.role,
+        },
+      },
+    ]
+  }
+
+  if (password === 'wrongpassword' || password === 'wrong' || password.length < 6) {
+    return [401, { detail: 'Incorrect username or password' }]
   }
 
   const role = email.includes('admin') ? 'admin' : email.includes('educator') ? 'educator' : 'player'
@@ -158,6 +202,35 @@ mock.onGet('/players/me').reply(200, {
   best_score: 9200,
   threat_index_progress: '5/8 unlocked',
   current_map: 'Industrial Control Station',
+})
+
+mock.onGet('/players/threat-index').reply(200, [
+  { threat_name: 'Phishing', is_unlocked: true, unlocked_at: '2026-08-20T10:00:00Z' },
+  { threat_name: 'Smishing', is_unlocked: true, unlocked_at: '2026-08-21T10:00:00Z' },
+  { threat_name: 'Vishing', is_unlocked: false, unlocked_at: null },
+  { threat_name: 'Social Engineering', is_unlocked: false, unlocked_at: null },
+  { threat_name: 'Credential Theft / Weak Password Attack', is_unlocked: false, unlocked_at: null },
+  { threat_name: 'Public Wi-Fi Attack', is_unlocked: false, unlocked_at: null },
+  { threat_name: 'Malware Infection', is_unlocked: false, unlocked_at: null },
+  { threat_name: 'Ransomware', is_unlocked: false, unlocked_at: null },
+])
+
+mock.onGet(new RegExp('/sessions/history')).reply(200, {
+  items: [
+    {
+      session_id: 'sess-001',
+      map_name: 'Home',
+      duration_seconds: 140,
+      credits_earned: 450,
+      credits_lost: 50,
+      false_positives: 0,
+      result: 'win',
+      played_at: '2026-08-21T09:15:00Z',
+    },
+  ],
+  total_count: 1,
+  page: 1,
+  page_size: 20,
 })
 
 // ==========================================
