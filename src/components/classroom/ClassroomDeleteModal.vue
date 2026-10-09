@@ -48,7 +48,8 @@ const handleDelete = async () => {
   errorMessage.value = ''
 
   try {
-    await deleteClassroom(props.classroom.id)
+    const targetId = props.classroom.code_id || props.classroom.id
+    await deleteClassroom(targetId)
     emit('deleted', props.classroom)
     emit('close')
   } catch {

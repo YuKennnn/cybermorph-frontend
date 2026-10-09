@@ -23,7 +23,7 @@ const handleJoinClassroom = async () => {
 
   try {
     const data = await joinClassroom(code)
-    successData.value = data
+    successData.value = { ...data, code }
     classroomCode.value = ''
   } catch (error) {
     const status = error.response?.status

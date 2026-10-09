@@ -61,7 +61,8 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    await updateClassroom(props.classroom.id, {
+    const targetId = props.classroom.code_id || props.classroom.id
+    await updateClassroom(targetId, {
       name: editName.value.trim(),
       is_active: editIsActive.value,
     })

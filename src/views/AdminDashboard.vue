@@ -25,7 +25,11 @@ onMounted(async () => {
   try {
     const data = await fetchAdminStats()
     if (data) {
-      adminStats.value = { ...adminStats.value, ...data }
+      adminStats.value = {
+        ...adminStats.value,
+        ...data,
+        active_sessions: data.sessions_last_24h ?? adminStats.value.active_sessions,
+      }
     }
   } catch {
     // Keep mock defaults on network error

@@ -277,7 +277,7 @@ onMounted(() => {
           <div class="header-titles">
             <h3>Classroom Performance Overview</h3>
             <span v-if="currentClassroom" class="meta-tag">
-              Sector: {{ currentClassroom.name }} [{{ currentClassroom.code }}]
+              Sector: {{ currentClassroom.name }} [{{ currentClassroom.code_value || currentClassroom.code }}]
             </span>
           </div>
           <button
@@ -412,7 +412,7 @@ onMounted(() => {
 
         <div v-else class="empty-note">
           No students currently enrolled in this sector code. Share code
-          <strong>{{ currentClassroom?.code }}</strong> to begin tracking student gameplay.
+          <strong>{{ currentClassroom?.code_value || currentClassroom?.code }}</strong> to begin tracking student gameplay.
         </div>
       </section>
     </div>

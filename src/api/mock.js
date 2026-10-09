@@ -9,7 +9,9 @@ const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 let mockClassrooms = [
   {
     id: 'c1',
+    code_id: 'c1',
     code: 'CYB101',
+    code_value: 'CYB101',
     name: 'BSIT 4A',
     is_active: true,
     created_at: '2026-08-20T10:00:00Z',
@@ -17,7 +19,9 @@ let mockClassrooms = [
   },
   {
     id: 'c2',
+    code_id: 'c2',
     code: 'NET202',
+    code_value: 'NET202',
     name: 'BSIT 3C',
     is_active: true,
     created_at: '2026-08-22T14:30:00Z',
@@ -125,23 +129,22 @@ mock.onPost('/auth/register').reply((config) => {
 
 mock.onPost('/auth/register-web').reply((config) => {
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const { email, username, password, role } = data
+  const { email, password } = data
 
-  if (!email || !username || !password) {
+  if (!email || !password) {
     return [400, { detail: 'Missing required registration fields' }]
   }
 
-  if (role === 'educator' && !email.includes('.')) {
+  if (!email.toLowerCase().endsWith('@dnsc.edu.ph')) {
     return [400, { detail: 'Invalid institutional email domain' }]
   }
 
   return [
     201,
     {
-      id: 102,
+      user_id: '102',
       email,
-      username,
-      role: role || 'educator',
+      approval_status: 'pending',
     },
   ]
 })
@@ -238,7 +241,9 @@ mock.onPost('/classroom/generate').reply((config) => {
   const newId = 'c' + (mockClassrooms.length + 1)
   const newClassroom = {
     id: newId,
+    code_id: newId,
     code: newCode,
+    code_value: newCode,
     name: name || 'Untitled Classroom',
     is_active: true,
     created_at: new Date().toISOString(),
@@ -320,11 +325,16 @@ mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply((config) => {
     {
       classroom: {
         id: classroom.id,
+        code_id: classroom.code_id || classroom.id,
         code: classroom.code,
+        code_value: classroom.code_value || classroom.code,
         name: classroom.name,
       },
+      items: students,
       students,
       total_count: students.length,
+      page: 1,
+      page_size: 10,
     },
   ]
 })
