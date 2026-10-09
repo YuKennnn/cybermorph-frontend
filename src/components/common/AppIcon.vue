@@ -127,6 +127,24 @@ const sizePixels = computed(() => {
       <line x1="5" y1="12" x2="19" y2="12" />
       <polyline points="12 5 19 12 12 19" />
     </template>
+
+    <!-- Download -->
+    <template v-else-if="name === 'download'">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </template>
+
+    <!-- Smartphone / Mobile -->
+    <template v-else-if="name === 'smartphone' || name === 'mobile'">
+      <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+      <path d="M12 18h.01" />
+    </template>
+
+    <!-- Shield / Security -->
+    <template v-else-if="name === 'shield'">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </template>
   </svg>
 </template>
 
