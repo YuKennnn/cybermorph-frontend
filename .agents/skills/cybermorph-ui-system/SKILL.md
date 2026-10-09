@@ -1,99 +1,57 @@
 ---
 name: cybermorph-ui-system
-description: Load when creating or modifying CyberMorph Vue views, components, or styles — any file under src/views/, src/components/, or touching markup and CSS. Enforces the centralized design system in src/assets/main.css (design tokens, shared classes, text-only minimalist presentation) and prevents hardcoded hex codes, emojis, and layout drift.
+description: Load when creating or modifying CyberMorph Vue views, components, or styles — any file under src/views/, src/components/, or touching markup and CSS. Enforces the centralized design system in src/assets/main.css (Direction 1 Modern Academic Cybersecurity: clean sans-serif typography, neutral slate surfaces, quiet borders, functional SVG icons, sentence case, and restrained purple accents).
 metadata:
   category: frontend-design
 ---
 
 # CyberMorph UI System Builder
 
-`src/assets/main.css` is the declared single source of truth for design
-tokens and shared UI classes. Past polish cycles repeatedly removed hardcoded
-hex codes and emojis by hand — do not reintroduce them. Reach for tokens and
-shared classes first; add new ones only when genuinely reusable.
+`src/assets/main.css` is the single source of truth for design tokens, typography, and shared UI classes. Follow **Direction 1: Modern Academic Cybersecurity** for all authenticated portal interfaces: clean readability, neutral slate surfaces, quiet borders, and functional SVG icons with visible labels. Reach for existing tokens and shared classes first.
 
 ## Knowledge
 
-### Design tokens (from src/assets/main.css)
-- **Brand**: `--color-primary` (#7c3aed), `--color-primary-hover` (#6d28d9),
-  `--color-secondary` (#8b5cf6), `--color-accent` (#c084fc).
-- **Surfaces**: `--color-bg`, `--color-bg-subtle`, `--color-bg-muted`,
-  `--color-card`, `--color-card-hover`.
-- **Borders**: `--color-border`, `--color-border-subtle`.
-- **Text tiers**: `--color-text-main`, `--color-text-muted`,
-  `--color-text-dim`.
-- **Semantic alerts** (each with `-bg` and `-border` companions):
-  `--color-success`, `--color-danger`, `--color-warning`.
-- **Elevation**: `--shadow-purple`, `--shadow-purple-hover`,
-  `--shadow-purple-sm`.
-- **Gradients**: `--btn-gradient`, `--btn-gradient-hover`.
-- **Fonts**: `--font-display` (Pixelify Sans — headings, buttons, display),
-  `--font-sans` (Inter — body), `--font-mono` (JetBrains Mono — badges, tags,
-  data).
+### Design Tokens (from `src/assets/main.css`)
+- **Brand Accents**: `--color-primary` (#7c3aed), `--color-primary-hover` (#6d28d9), `--color-secondary` (#8b5cf6), `--color-violet-subtle` (#f5f3ff).
+- **Surfaces**: `--color-bg` (#f8fafc), `--color-bg-subtle` (#f1f5f9), `--color-bg-muted` (#e2e8f0), `--color-card` (#ffffff).
+- **Borders**: `--color-border` (#e2e8f0), `--color-border-subtle` (#f1f5f9), `--color-border-hover` (#cbd5e1).
+- **Typography Colors**: `--color-text-main` (#0f172a), `--color-text-muted` (#475569), `--color-text-dim` (#94a3b8).
+- **Semantic Alerts**:
+  - Success: `--color-success` (#059669), `--color-success-bg` (#ecfdf5), `--color-success-border` (#a7f3d0).
+  - Danger: `--color-danger` (#dc2626), `--color-danger-bg` (#fef2f2), `--color-danger-border` (#fecaca).
+  - Warning: `--color-warning` (#d97706), `--color-warning-bg` (#fffbeb), `--color-warning-border` (#fde68a).
+- **Elevation**: `--shadow-card`, `--shadow-card-hover`, `--shadow-sm`.
+- **Fonts**:
+  - `--font-display`: 'Inter' (portal headings, metrics, button text).
+  - `--font-sans`: 'Inter' (body text, inputs, labels).
+  - `--font-brand`: 'Pixelify Sans' (reserved for `[ CYBERMORPH ]` branding and game marketing).
+  - `--font-mono`: 'JetBrains Mono' (6-char access keys, session UUIDs, telemetry data).
 
-### Shared component classes (reuse; do not re-declare)
-- Buttons: `.btn-primary`, `.btn-outline` (both inline-flex, disabled states
-  included).
-- Status/badges: `.status-pill` with `.active` / `.inactive` variants;
-  `.risk-badge` with `.risk-low` / `.risk-moderate` / `.risk-high` /
-  `.no-data`; `.badge-dot` indicator.
-- Feedback: `.error-banner`, `.success-banner`, `.spinner` (+ `@keyframes
-  spin` already defined globally).
+### Icon System
+- Shared functional SVG icons live in `src/components/common/AppIcon.vue` (zero external dependencies).
+- Icons render with `aria-hidden="true"`, sized dynamically, inheriting `currentColor`.
+- All icon-bearing interactive controls must provide visible text labels or explicit `aria-label` attributes.
+- Decorative emojis are strictly prohibited across all portal views.
 
-### Style conventions
-- Views live in `src/views/*.vue`, components in `src/components/`, using
-  `<script setup>`.
-- Scoped `<style scoped>` per component; when using `@apply` inside scoped
-  styles, first add `@reference "../../assets/main.css";` (see the pattern in
-  `src/views/LandingView.vue`). Avoid raw `@apply` with undefined utilities.
-- `App.vue` styles contain layout scaffolding only (`.app-layout`,
-  `.main-content`, `.content-wrapper`); keep it that way.
-- Headings automatically use `--font-display` via global `h1..h6` rules; body
-  text inherits `--font-sans`. Monospace `font-family: var(--font-mono)` is
-  the idiom for tags and data.
+### Shared Component Classes (Reuse; Do Not Re-Declare)
+- Buttons: `.btn-primary` (gradient purple, white text), `.btn-outline` (white card, subtle border), `.btn-subtle` (borderless hoverable).
+- Status/badges: `.status-pill` (`.active` / `.inactive`), `.risk-badge` (`.risk-low` / `.risk-moderate` / `.risk-high` / `.no-data`), `.badge-dot`.
+- Feedback: `.error-banner`, `.success-banner`, `.spinner`.
 
-### Presentation rules
-- **Strictly text-only**: no emojis, no icon fonts, no decorative glyphs in
-  public or authenticated UI. This is a deliberate minimalist convention.
-- Visual markers use the monospace uppercase eyebrow/tag idiom: `SECTOR 01`,
-  `THREAT 01`, `PILLAR 01` (see LandingView).
-- Use semantic status colors only through `.status-pill` / `.risk-badge`
-  variants; success/danger/warning token pairs for banners and alerts.
-- Map showcase cards use a retro 4:3 aspect ratio with sector badges and
-  UNLOCKED/LOCKED pills.
+### Copy & Presentation Conventions
+- **Sentence case & plain language**: Use standard sentence case for page titles, section headings, navigation links, and button labels (e.g., *"Create classroom"*, *"Threat analytics"*, *"Enrolled students"*).
+- Avoid decorative uppercase monospace tags in the portal. Monospace is reserved for actual codes and data identifiers.
+- Headings use `--font-display` ('Inter') with `font-weight: 600`.
+- Forms and interactive elements include visible `:focus-visible` outlines.
 
-### Layout and responsiveness patterns
-- Card containment (from ClassroomManagementView): two-tier action layout —
-  `.primary-actions` (equal-width grid, `min-width: 0`, ellipsis protection)
-  for main actions, `.utility-actions` (subtle secondary row) for Edit/Delete.
-- Apply `overflow: hidden; box-sizing: border-box` on cards; stack actions
-  vertically at `<= 480px`.
-- Page feedback pattern: `isLoading` + `errorMessage`/`successMessage` refs
-  bound to `.spinner` / `.error-banner` / `.success-banner`.
+### State Integrity
+- Never render failed network requests as `0` counts. Render explicit loading states (`.spinner`) and error states (`.error-banner`) with a retry action.
+- When an API response does not contain a field (e.g. unattempted threat category is `null`), render an honest empty indicator (e.g. *"No attempts recorded"*), never *"0% fail rate"*.
 
 ## Instructions
 
-1. **Tokens before hex.** Check `src/assets/main.css` first; reuse existing
-   tokens and classes. Never hardcode hex codes or re-declare shared classes.
-   Add a new token/class to `main.css` only if genuinely reusable, and
-   document it in place with a comment.
-2. **Match existing structure.** Follow current view/component organization;
-   keep `<script setup>`; make small focused diffs; do not modify unrelated
-   files (per AGENTS.md).
-3. **Text-only presentation.** No emojis or icons in any new markup. Prefer a
-   monospace tag (e.g., `SECTION 01`) when a visual marker helps.
-4. **Consistent states.** Every data view gets loading (`.spinner`), error
-   (`.error-banner`), success (`.success-banner`), and empty states using the
-   shared classes — same pattern as existing views.
-5. **Responsive containment.** New cards/lists must not overflow at narrow
-   widths: use the two-tier action layout, clipping, and `<= 480px` stacking.
-6. **Semantic colors.** Status/risk indication only via `.status-pill` /
-   `.risk-badge` variants — never ad-hoc colored inline styles.
-7. **Verify.** Run `npm run lint` (0 errors, 0 warnings) and `npm run build`.
-   If the change alters a visible screen, note in the summary which states
-   (loading/error/success/empty) should be eyeballed and at which viewport
-   widths.
-
-For non-trivial changes, follow the AGENTS.md learning rule: explain the
-problem, approach, files changed, implementation, what changed, and verification
-steps.
+1. **Tokens before hex**: Check `src/assets/main.css` first; reuse existing tokens and classes. Never hardcode hex codes.
+2. **Component reuse**: Reuse existing components (such as `ClassroomCard.vue` and `ClassroomCreateModal.vue`) before creating new ones.
+3. **Responsive containment**: Cards stack actions cleanly on mobile (`<= 480px`) and touch targets meet the 44px minimum requirement.
+4. **Accessible controls**: Decorative icons must use `aria-hidden="true"`; buttons must have accessible names.
+5. **Verify**: Run `npm run lint` (0 errors, 0 warnings) and `npm run build`.

@@ -1,28 +1,32 @@
 /* ==========================================================================
-   CyberMorph Purple / White Design System - Central Design System
+   CyberMorph Modern Academic Cybersecurity Design System
+   Direction 1: Clean, readable educational portal with restrained violet accents
    ========================================================================== */
 
 :root {
-  /* Brand Palette */
+  /* Brand Palette (Restrained Purple / Indigo) */
   --color-primary: #7c3aed;
   --color-primary-hover: #6d28d9;
   --color-secondary: #8b5cf6;
-  --color-accent: #c084fc;
+  --color-accent: #a855f7;
+  --color-violet-subtle: #f5f3ff;
+  --color-violet-border: #ddd6fe;
 
-  /* Surfaces & Backgrounds */
-  --color-bg: #fafafa;
-  --color-bg-subtle: #f5f3ff;
-  --color-bg-muted: #ede9fe;
+  /* Surfaces & Backgrounds (Neutral Slate / Gray) */
+  --color-bg: #f8fafc;
+  --color-bg-subtle: #f1f5f9;
+  --color-bg-muted: #e2e8f0;
   --color-card: #ffffff;
-  --color-card-hover: #faf8ff;
+  --color-card-hover: #ffffff;
 
-  /* Borders */
-  --color-border: #e9d5ff;
-  --color-border-subtle: #f3e8ff;
+  /* Borders (Quiet Neutral Slate) */
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-border-hover: #cbd5e1;
 
-  /* Typography Colors */
-  --color-text-main: #1e1b4b;
-  --color-text-muted: #6d6b7a;
+  /* Typography Colors (High-Contrast Slate) */
+  --color-text-main: #0f172a;
+  --color-text-muted: #475569;
   --color-text-dim: #94a3b8;
 
   /* Semantic Alerts */
@@ -38,17 +42,24 @@
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
 
-  /* Elevation & Shadows */
-  --shadow-purple: 0 4px 20px rgba(124, 58, 237, 0.08);
-  --shadow-purple-hover: 0 8px 28px rgba(124, 58, 237, 0.16);
-  --shadow-purple-sm: 0 2px 10px rgba(124, 58, 237, 0.06);
+  /* Elevation & Diffuse Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+
+  /* Legacy shadow tokens for backward compatibility */
+  --shadow-purple: var(--shadow-card);
+  --shadow-purple-hover: var(--shadow-card-hover);
+  --shadow-purple-sm: var(--shadow-sm);
 
   /* Gradients */
   --btn-gradient: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
   --btn-gradient-hover: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
 
   /* Typography Families */
-  --font-display: 'Pixelify Sans', system-ui, sans-serif;
+  --font-brand: 'Pixelify Sans', system-ui, sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
 }
@@ -66,9 +77,6 @@ body {
   margin: 0;
   padding: 0;
   background-color: var(--color-bg);
-  background-image:
-    radial-gradient(ellipse at 50% 0%, rgba(139, 92, 246, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 85% 90%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
   color: var(--color-text-main);
   font-family: var(--font-sans);
   min-height: 100vh;
@@ -76,82 +84,142 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Accessible Focus Indicator */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Portal Heading Defaults */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
-  letter-spacing: 0.02em;
   color: var(--color-text-main);
+  font-weight: 600;
+  line-height: 1.25;
+  margin-top: 0;
+}
+
+/* Brand Display Typography Utility */
+.font-brand {
+  font-family: var(--font-brand);
+}
+
+/* Reduced Motion Compliance */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ==========================================================================
    Shared Component Utilities
    ========================================================================== */
 
-/* Primary Button */
+/* Primary Action Button */
 .btn-primary {
-  padding: 0.65rem 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.25rem;
+  min-height: 40px;
   background: var(--btn-gradient);
   color: #ffffff;
   border: none;
   border-radius: 8px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.92rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.88rem;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.25);
+  transition: all 0.15s ease-in-out;
   white-space: nowrap;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--btn-gradient-hover);
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
   transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 /* Secondary / Outline Button */
 .btn-outline {
-  padding: 0.55rem 1.2rem;
-  background-color: #ffffff;
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-purple-sm);
-  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.15rem;
+  min-height: 40px;
+  background-color: #ffffff;
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
 }
 
 .btn-outline:hover:not(:disabled) {
   background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
-  transform: translateY(-1px);
+  border-color: var(--color-border-hover);
+  color: var(--color-primary);
+}
+
+.btn-outline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Subtle Action Button */
+.btn-subtle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-subtle:hover:not(:disabled) {
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-main);
 }
 
 /* Status & Risk Badges */
 .status-pill {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
   padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  display: inline-block;
+  border-radius: 6px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .status-pill.active {
@@ -162,19 +230,19 @@ h1, h2, h3, h4, h5, h6 {
 
 .status-pill.inactive {
   background-color: var(--color-bg-subtle);
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
 }
 
 .risk-badge {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
   border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .risk-badge.risk-low {
@@ -197,7 +265,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .risk-badge.no-data {
   background-color: var(--color-bg-subtle);
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
 }
 
@@ -206,7 +274,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--color-primary);
+  background-color: currentColor;
 }
 
 /* Notification Banners */
@@ -216,8 +284,9 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-danger);
   padding: 0.85rem 1.25rem;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
+  line-height: 1.45;
 }
 
 .success-banner {
@@ -226,14 +295,15 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-success);
   padding: 0.85rem 1.25rem;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 500;
+  line-height: 1.45;
 }
 
 /* Loading Spinner */
 .spinner {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   margin: 0 auto 1rem auto;
   border: 3px solid var(--color-border);
   border-top-color: var(--color-primary);

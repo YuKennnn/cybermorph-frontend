@@ -19,19 +19,25 @@ The backend rewrite is designed as a feature-based asynchronous FastAPI applicat
 
 ## 2. API Base URL
 
-### Development
+### Hosted Production Environment
 
-The backend plan defines the frontend development origin as:
+The official FastAPI backend is deployed at:
 
-http://localhost:5173
+```
+https://cybermorph-backend.onrender.com
+```
 
-However, the final FastAPI API base URL is not established by the backend plan alone.
+- **Interactive API Documentation**: Swagger UI is available at `/docs` on the host.
+- **Cold Starts**: Render free-tier hosting spins down after ~15 minutes of idle time. The first request after idle requires 30–50 seconds to wake up. Frontend clients must handle this delay gracefully.
+- **CORS Allowlist**: Cross-origin requests are governed by the server-side `CORS_ORIGINS` environment variable on Render (e.g. `http://localhost:5173`). Dev servers must be explicitly added to this allowlist on the server.
 
-Status: TO BE VERIFIED
-
-The frontend must obtain the actual API base URL from the backend/deployment configuration rather than assuming it.
+Status: CONFIRMED
 
 ## 3. Authentication
+
+Authentication uses JWT bearer tokens. Tokens are valid for 30 days. There is no refresh token endpoint; users re-authenticate upon expiration.
+
+Password complexity requirements (both roles): At least 12 characters, containing at least one uppercase letter, one lowercase letter, one digit, one special character, and maximum 72 bytes.
 
 ### POST /auth/register
 
@@ -41,48 +47,86 @@ Register a Player account.
 Authentication:
 None.
 
+Request body:
+```json
+{
+  "email": "player@example.com",
+  "username": "AgentZero",
+  "password": "Password123!#"
+}
+```
+
+Response:
+`201 { "user_id": "...", "email": "...", "username": "..." }`
+
 Backend behavior:
-Creates the required user, player profile, and role records atomically and writes an activity log.
+Creates the user, player profile, and role atomically.
 
 Status:
-PLANNED / BACKEND-DEFINED
+CONFIRMED
 
 ### POST /auth/register-web
 
 Purpose:
-Register a web-portal user.
+Register an Educator web-portal account. (Admin accounts are never self-service).
 
 Authentication:
 None.
 
+Constraint:
+**Email must strictly end with `@dnsc.edu.ph`**.
+
+Request body:
+```json
+{
+  "email": "instructor@dnsc.edu.ph",
+  "password": "Password123!#"
+}
+```
+
+Response:
+`201 { "user_id": "...", "email": "...", "approval_status": "pending" }`
+
 Backend behavior:
-- Validates the permitted email domain.
-- Creates the appropriate web-user profile.
-- Educator accounts are initially inactive and pending approval.
-- Admin accounts are active immediately according to the backend plan.
+- Validates institutional domain (`@dnsc.edu.ph`).
+- Account starts with `is_active: false` and `approval_status: "pending"`.
+- Cannot log in until administrative approval is granted.
 
 Status:
-PLANNED / BACKEND-DEFINED
+CONFIRMED
 
 ### POST /auth/login
 
 Purpose:
-Authenticate a user and issue an access token.
+Authenticate user and issue access token for both players and web users.
 
 Authentication:
 None.
 
+Request body:
+```json
+{
+  "email": "user@example.com",
+  "password": "Password123!#"
+}
+```
+
+Response:
+`200 { "access_token": "<jwt>", "token_type": "bearer" }`
+
 Backend behavior:
-- Invalid credentials return a generic 401 response.
-- Inactive accounts are rejected with 403.
-- Login activity is logged.
-- JWT-based authentication is used.
+- Missing/invalid credentials return `401 { "detail": "Incorrect email or password" }` or `401 { "detail": "Could not validate credentials" }`.
+- Inactive/pending accounts return `403 { "detail": "Account is not active" }`.
+- Token must be sent in subsequent requests via `Authorization: Bearer <access_token>`.
+
+### Seeded Test Accounts
+
+For local and testing environments:
+- Admin: `admin@cybermorph.local` (Pre-approved: `approval_status: "approved"`, `portal_access: true`)
+- Educator: `educator@cybermorph.local` (Pre-approved: `approval_status: "approved"`, `portal_access: true`)
 
 Status:
-PLANNED / BACKEND-DEFINED
-
-Exact request and response JSON fields:
-TO BE VERIFIED against the actual FastAPI implementation/OpenAPI schema.
+CONFIRMED
 
 ## 4. Player Endpoints
 
@@ -121,75 +165,97 @@ PLANNED / BACKEND-DEFINED
 
 ## 5. Session Endpoints
 
-### POST /sessions/start
+### POST /sessions
 
 Purpose:
-Start a player game session.
+Submit or finalize a player game session.
 
 Authentication:
-Player.
+Player token required.
 
-Backend behavior includes:
+Request body:
+```json
+{
+  "session_id": "a3bb189e-8bf9-3888-9912-ace4e6543002",
+  "map_name": "Office",
+  "duration_seconds": 120,
+  "credits_earned": 50,
+  "credits_lost": 10,
+  "false_positives": 0,
+  "result": "win",
+  "played_at": "2026-09-28T14:00:00+08:00"
+}
+```
 
-- Map validation
-- Map progression/unlock checking
-- Session creation
+Response:
+`200 { "session": { ... }, "map_progress": 2 }`
 
-### PATCH /sessions/{id}/end
+Backend behavior & requirements:
+- `session_id` must be a client-generated UUID. Resubmitting an identical UUID is a quiet, idempotent no-op (safe for offline retry).
+- `map_name` must be one of `"Home"`, `"Office"`, `"Internet Cafe"`, `"Public Park"`. If the submitted map is not unlocked yet for the player, the session is stored but does not increment `map_progress` or the leaderboard.
+- `result` must be `"win"`, `"lose"`, or `"timeout"`.
+- `played_at` must include a timezone offset or `'Z'` suffix (naive datetimes return 422).
 
-Purpose:
-Finalize a game session.
-
-Authentication:
-Player.
-
-Backend behavior includes:
-
-- Session ownership verification
-- Prevention of duplicate finalization
-- Score calculation
-- Leaderboard best-score update
-- Player progression update
-- Synchronization logging
-- Atomic database writes
-
-The backend preserves a rule that player progression must never decrease.
+Status:
+CONFIRMED
 
 ### GET /sessions/history
 
 Purpose:
-Retrieve the authenticated player's session history.
+Retrieve paginated session history for the authenticated player (newest first).
 
 Authentication:
-Player.
+Player token required.
 
-Backend behavior:
-Returns the player's non-deleted sessions ordered by creation date.
+Query parameters:
+- `page` (default: 1, range 1–10000)
+- `page_size` (default: 20, range 1–100)
+
+Response:
+`{ "items": [ ... ], "total_count": 42, "page": 1, "page_size": 20 }`
+
+Status:
+CONFIRMED
 
 ## 6. Leaderboard
 
 ### GET /leaderboard
 
 Purpose:
-Retrieve leaderboard information.
+Retrieve paginated leaderboard scores. Capped at top 50 per map.
 
 Authentication:
 None.
 
 Supported query parameters:
+- `map_name` (optional: "Home", "Office", "Internet Cafe", "Public Park")
+- `page` (default 1)
+- `page_size` (default 10)
 
-- map_name
-- search
-- page
-- page_size
-
-Default page size:
-10
+*Note: The backend does not accept a `search` query parameter.*
 
 Response:
-Includes `total_count` so the frontend can determine pagination.
+Paginated envelope:
+```json
+{
+  "items": [
+    {
+      "rank": 1,
+      "score_id": "...",
+      "username": "...",
+      "total_score": 850,
+      "map_name": "Office",
+      "recorded_at": "..."
+    }
+  ],
+  "total_count": 50,
+  "page": 1,
+  "page_size": 10
+}
+```
 
-The leaderboard represents a player's best score per map rather than every session result.
+Status:
+CONFIRMED
 
 ## 7. Classroom
 
@@ -282,298 +348,206 @@ The backend records the deletion through the shared soft-delete mechanism and de
 ### GET /web-users/me
 
 Purpose:
-Retrieve the authenticated web user's profile.
+Retrieve the authenticated web user's profile (Educator or Admin).
 
 Authentication:
-Web user.
+Web user token required (`Authorization: Bearer <access_token>`).
 
-The response includes the user's role.
+Response:
+```json
+{
+  "web_profile_id": "...",
+  "user_id": "...",
+  "email": "educator@dnsc.edu.ph",
+  "role": "educator",
+  "display_name": null,
+  "portal_access": true,
+  "approval_status": "approved",
+  "last_login_at": "2026-09-28T14:00:00+08:00"
+}
+```
 
-### PATCH /web-users/me/last-login
+*Note: `display_name` is currently always `null` on the backend. No endpoints currently exist for updating `display_name`, uploading avatars, or password reset.*
 
-Purpose:
-Update the authenticated web user's last-login timestamp.
-
-Authentication:
-Web user.
+Status:
+CONFIRMED
 
 ## 9. Educator Analytics
 
 ### GET /analytics/classroom
 
 Purpose:
-Retrieve analytics for an educator-owned classroom.
+Retrieve class-wide analytics summary for an educator-owned classroom.
 
 Authentication:
-Educator.
+Educator token required.
 
 Query:
-`code_id`
+`code_id` (must be owned by authenticated educator)
 
-Analytics include information such as:
+Response:
+```json
+{
+  "code_id": "...",
+  "student_count": 3,
+  "avg_map_progress": 1.33,
+  "avg_best_score_by_map": { "Home": 723.3, "Office": 750.0 },
+  "category_fail_rates": { "Phishing": 0.15, "Ransomware": null }
+}
+```
 
-- Student count
-- Average map progression
-- Best-score statistics
-- Per-category threat performance
+*Data nuances*:
+- Unplayed maps are **absent** from `avg_best_score_by_map`.
+- Unattempted threat categories are `null`, not `0`. The UI must render `null` as "no data recorded", never "0% fail rate".
 
-The backend determines threat performance from synchronized `threat_attack_log` events.
+Status:
+CONFIRMED
 
 ### GET /analytics/player
 
 Purpose:
-Retrieve analytics for a specific student belonging to the educator.
+Retrieve individual proficiency breakdown for a student enrolled in the educator's classroom.
 
 Authentication:
-Educator.
+Educator token required.
 
 Query:
-`profile_id`
+`profile_id` (must belong to educator's classroom)
 
-Analytics include:
+Response:
+```json
+{
+  "profile_id": "...",
+  "wins": 4,
+  "losses": 3,
+  "avg_duration_seconds": 132.5,
+  "best_score_by_map": { "Home": 800, "Office": 610 },
+  "category_breakdown": { "Phishing": 0.10 },
+  "recent_sessions": [
+    {
+      "session_id": "...",
+      "map_name": "Office",
+      "duration_seconds": 120,
+      "credits_earned": 50,
+      "credits_lost": 10,
+      "false_positives": 0,
+      "result": "win",
+      "played_at": "2026-09-28T14:00:00+08:00"
+    }
+  ]
+}
+```
 
-- Session history summary
-- Wins and losses
-- Average duration
-- Best score per map
-- Per-category threat performance
-- Proficiency classification based on threat performance
+Status:
+CONFIRMED
 
 ### GET /analytics/session
 
 Purpose:
-Retrieve details for a particular game session.
+Retrieve detailed attack event telemetry for a specific session.
 
 Authentication:
-Educator with appropriate access.
+Educator token required.
 
 Query:
-`session_id`
+`session_id` (must belong to one of educator's students)
 
-The response includes the individual threat events associated with the session.
+Response:
+```json
+{
+  "session_id": "...",
+  "profile_id": "...",
+  "username": "AgentZero",
+  "map_name": "Office",
+  "result": "lose",
+  "threat_events": []
+}
+```
+
+*Note: `threat_events` currently returns an empty list `[]` as backend write operations to this table are pending implementation.*
+
+Status:
+CONFIRMED
 
 ## 10. Admin Endpoints
 
-All `/admin/*` endpoints require explicit administrator authorization.
+> [!WARNING]
+> **Status: PLANNED / NOT YET BUILT ON LIVE BACKEND**
+> As documented in `API_GUIDE.md`, all `/admin/*` endpoints (user management, educator approval, classroom oversight, system logs/stats) do NOT exist yet on the hosted server. Frontend code must not assume live server support for them.
 
-### GET /admin/users
-
-Purpose:
-Retrieve system users.
-
-Supported query parameters:
-
-- role
-- search
-- page
-
-### PATCH /admin/users/{id}
-
-Purpose:
-Modify basic user information.
-
-### DELETE /admin/users/{id}
-
-Purpose:
-Soft-delete a user.
-
-### GET /admin/deleted-records
-
-Purpose:
-Retrieve soft-deleted records for administrative reclamation.
-
-### POST /admin/deleted-records/{id}/restore
-
-Purpose:
-Restore a previously soft-deleted record.
-
-### GET /admin/approvals
-
-Purpose:
-Retrieve pending educator approvals.
-
-### POST /admin/approvals/{id}/approve
-
-Purpose:
-Approve an educator account.
-
-Approval changes include:
-
-- activating the user
-- granting portal access
-- setting approval status to approved
-
-### POST /admin/approvals/{id}/reject
-
-Purpose:
-Reject an educator registration.
-
-### GET /admin/classrooms
-
-Purpose:
-Retrieve classroom information across the system.
-
-### PATCH /admin/classrooms/{id}
-
-Purpose:
-Modify administrative classroom settings, including activation state or ownership.
-
-### DELETE /admin/classrooms/{id}
-
-Purpose:
-Soft-delete a classroom code.
-
-### GET /admin/logs
-
-Purpose:
-Retrieve activity logs.
-
-Supported query parameters include:
-
-- action_type
-- user_id
-- page
-
-### GET /admin/stats
-
-Purpose:
-Retrieve system-level statistics.
-
-The planned statistics include:
-
-- total_users
-- active_sessions
-- threats_detected
-- server uptime
+The planned endpoints include:
+- `GET /admin/users`
+- `PATCH /admin/users/{id}`
+- `DELETE /admin/users/{id}`
+- `GET /admin/deleted-records`
+- `POST /admin/deleted-records/{id}/restore`
+- `GET /admin/approvals`
+- `POST /admin/approvals/{id}/approve`
+- `POST /admin/approvals/{id}/reject`
+- `GET /admin/classrooms`
+- `PATCH /admin/classrooms/{id}`
+- `DELETE /admin/classrooms/{id}`
+- `GET /admin/logs`
+- `GET /admin/stats`
 
 ## 11. Synchronization Endpoints
 
-Synchronization endpoints are intended for the Godot offline-first client.
+> [!NOTE]
+> **Status: PLANNED / GODOT CLIENT EXCLUSIVE**
+> `/sync/*` endpoints are designed exclusively for the Godot offline-first game client and are not built or utilized by the web portal.
 
-### GET /sync/player-state
-
-Purpose:
-Retrieve the latest cloud player state for reconciliation with the local Godot database.
-
-Authentication:
-Player.
-
-Planned response:
-
-- map_progress
-- threat_index
-- updated_at
-
-The endpoint no longer returns a persistent security-credit balance.
-
-### POST /sync/session
-
-Purpose:
-Upload an offline game session to the cloud.
-
-Authentication:
-Player.
-
-The client supplies a UUID-based session identifier.
-
-The backend uses idempotent insertion so repeated synchronization attempts do not create duplicate session records.
-
-### POST /sync/threat-index
-
-Purpose:
-Synchronize local Threat Index unlock records.
-
-Authentication:
-Player.
-
-Synchronization is idempotent.
-
-### POST /sync/threat-events
-
-Purpose:
-Synchronize threat attack events generated during offline gameplay.
-
-Authentication:
-Player.
-
-The endpoint accepts multiple threat events associated with a game session.
-
-Each event uses a client-generated identifier to support idempotent retries.
-
-Synchronization records are tracked using the `sync_log`.
+Planned endpoints:
+- `GET /sync/player-state`
+- `POST /sync/session`
+- `POST /sync/threat-index`
+- `POST /sync/threat-events`
 
 ## 12. Authentication and Authorization Rules
 
-The backend uses JWT-based authentication and role-aware authorization dependencies.
-
-The backend distinguishes:
-
-- authenticated user
-- player
-- web user
-- admin
-
-The planned authorization dependencies include:
-
+The backend uses JWT-based authentication and role-aware authorization dependencies:
 - `get_current_user`
 - `get_current_player`
 - `get_current_web_user`
 - `get_current_admin`
 
-Frontend route guards must not be treated as a security boundary. Actual authorization is enforced by FastAPI.
+Frontend route guards are strictly for UX navigation and must not be treated as a security boundary. Actual authorization is enforced by FastAPI.
 
 ## 13. Error Conventions
 
-The backend plan specifies standardized HTTP error responses using the `detail` response shape.
+Every error response returns a JSON object with a top-level `"detail"` key:
 
-Important status codes used throughout the API include:
+| HTTP Status | Payload Shape | Meaning |
+|---|---|---|
+| `401` | `{"detail": "<plain string>"}` | Invalid credentials or missing/expired token |
+| `403` | `{"detail": "<plain string>"}` | Authenticated but lacks permissions (e.g. `"Not a player account"`, `"Account is not active"`) |
+| `404` | `{"detail": "<plain string>"}` | Resource not found (e.g. unknown classroom code) |
+| `409` | `{"detail": {"field": "<field>", "message": "<msg>"}}` | **Nested object** tied to a specific field conflict (duplicate registration, already joined) |
+| `422` | FastAPI validation array `[{ "loc": [...], "msg": "...", "type": "..." }]` | Request body or query parameters failed Pydantic validation |
 
-- 400 — invalid request data
-- 401 — unauthenticated / invalid credentials
-- 403 — authenticated but unauthorized
-- 404 — requested resource not found
-- 409 — conflict with current resource state
+## 14. Data Invariants
 
-The backend's error response structure must remain compatible with the Godot client's existing error extraction behavior.
+- **User Roles**: `player`, `educator`, `admin`
+- **Canonical Threats**: Phishing, Smishing, Vishing, Social Engineering, Credential Theft / Weak Password Attack, Public Wi-Fi Attack, Malware Infection, Ransomware
+- **Canonical Maps**: Home, Office, Internet Cafe, Public Park
+- **Session Results**: `win`, `lose`, `timeout`
 
-Exact response schemas:
-TO BE VERIFIED against the implemented FastAPI application.
+## 15. Confirmed vs. Pending
 
-## 14. Data and Synchronization Rules
+### Confirmed by Actual Backend Implementation
+- API Base URL: `https://cybermorph-backend.onrender.com`
+- Swagger UI at `/docs`
+- 30-day JWT authentication via `POST /auth/login`
+- Player registration (`POST /auth/register`) & Educator registration (`POST /auth/register-web` with `@dnsc.edu.ph`)
+- Seeded test accounts (`admin@cybermorph.local`, `educator@cybermorph.local`)
+- Player profile & Threat Index (`GET /players/me`, `GET /players/threat-index`)
+- Unified session submission (`POST /sessions`) and history (`GET /sessions/history`)
+- Leaderboard scores (`GET /leaderboard` with `map_name`, `page`, `page_size`)
+- Classroom operations (`POST /classroom/generate`, `GET /classroom/my-codes`, `POST /classroom/join`, `GET /classroom/{code_id}/students`, `PATCH /classroom/{code_id}`, `DELETE /classroom/{code_id}`)
+- Educator analytics (`GET /analytics/classroom`, `GET /analytics/player`, `GET /analytics/session`)
+- Error shapes including nested 409 and 422 arrays
 
-The backend and frontend must follow the Data Dictionary as the source of truth for field names and database structures.
-
-The backend plan specifically identifies several cross-system contracts that must remain consistent:
-
-- User roles
-- Threat taxonomy
-- Map progression
-- API request/response structures
-- Synchronization payloads
-
-The current backend plan identifies a map-order discrepancy between the backend and Godot client that must be resolved before synchronization is finalized.
-
-## 15. Confirmed vs. To Be Verified
-
-### Confirmed by Backend Plan
-
-- Endpoint paths
-- HTTP methods
-- General endpoint purpose
-- Authentication role requirements
-- JWT-based backend authentication
-- Player / educator / admin authorization model
-- Synchronization endpoints
-- Main API feature groups
-
-### To Be Verified from Actual FastAPI Implementation
-
-- Final API base URL
-- Exact request schemas
-- Exact response schemas
-- Exact JWT payload fields
-- Token expiration behavior
-- Token transport/storage expectations
-- Production CORS configuration
-- Final deployed API URL
-- Any endpoint behavior changed after this plan
+### Pending Backend Implementation
+- Admin endpoints (`/admin/*`)
+- Godot offline synchronization (`/sync/*`)
+- Profile mutations (`display_name` editing, avatar uploading, password reset)
+- Threat events logging into the `threat_events` table for session analytics

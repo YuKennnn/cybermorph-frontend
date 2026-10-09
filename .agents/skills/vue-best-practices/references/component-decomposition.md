@@ -1,50 +1,36 @@
-# Component Decomposition & Monolithic Views
+# Component Architecture & Decomposition Standards
 
-## Context & Problem Statement
+## Context & Component Hierarchy
 
-In the CyberMorph frontend codebase, `src/components/` currently contains only a single shared component (`SidebarNav.vue`). In contrast, several view components have grown into massive monoliths exceeding several hundred to over a thousand lines of code:
-
-1. **`src/views/EducatorAnalyticsView.vue` (1,686 lines)**:
-   - Contains 3 levels of analytics drill-downs:
-     - Level 1: Aggregate classroom overview, performance cards, and student roster table.
-     - Level 2: Student proficiency breakdown modal with inline progress meters.
-     - Level 3: Session telemetry detail modal with threat event lists and attack breakdowns.
-   - Embeds complex inline SVG dial gauges and custom chart elements.
-2. **`src/views/LandingView.vue` (1,501 lines)**:
-   - Inlines approximately 450 lines of an interactive 2D HTML5 canvas procedural game engine (operative tracking, server rack breach collisions, crosshairs).
-   - Inlines hero section, 3 core pillars, 8 threat curriculum cards, and 4-sector map showcase cards.
-3. **`src/views/ClassroomManagementView.vue` (775 lines)**:
-   - Inlines three modal dialogs (Create Classroom, Edit Configuration, Delete Confirmation) directly inside the main view markup.
-
-### Architectural Risks
-- **Poor Maintainability**: Difficult to isolate and test logic when state for three distinct user journeys lives in one file.
-- **Merge Conflicts**: Multiple developers working on different modals or cards in the same file risk continuous merge conflicts.
-- **No Reusability**: Gauges, cards, and modal shells cannot be reused in student or admin views.
-- **Testing & Verification Complexity**: Impossible to mount and unit-test a modal dialog or dial gauge in isolation.
-
----
-
-## Recommended Decomposition Plan
+The CyberMorph frontend follows a domain-driven component structure under `src/components/`, separating reusable UI building blocks from page-level routing views (`src/views/`):
 
 ```
 src/
 ├── components/
 │   ├── analytics/
-│   │   ├── ThreatPerformanceGauge.vue      # Reusable SVG telemetry dial
-│   │   ├── StudentProficiencyModal.vue     # Level 2 drilldown modal
-│   │   └── SessionTelemetryModal.vue       # Level 3 session event modal
+│   │   ├── ThreatPerformanceGauge.vue      # Reusable SVG telemetry dial gauge
+│   │   ├── StudentProficiencyModal.vue     # Level 2 student telemetry breakdown modal
+│   │   └── SessionTelemetryModal.vue       # Level 3 session attack event telemetry modal
 │   ├── classroom/
-│   │   ├── ClassroomCard.vue               # Roster card with 2-tier action buttons
-│   │   ├── ClassroomCreateModal.vue        # Modal to generate new classroom code
-│   │   ├── ClassroomEditModal.vue          # Modal to update name/active status
-│   │   └── ClassroomDeleteModal.vue        # Modal for soft-delete confirmation
+│   │   ├── ClassroomCard.vue               # Reusable classroom deployment card with code copy
+│   │   ├── ClassroomCreateModal.vue        # Generation flow modal for new classroom access codes
+│   │   ├── ClassroomEditModal.vue          # Modal to update classroom metadata and active state
+│   │   └── ClassroomDeleteModal.vue        # Soft-delete confirmation modal
+│   ├── common/
+│   │   └── AppIcon.vue                     # Zero-dependency accessible functional SVG icons
 │   ├── landing/
-│   │   ├── HeroSimulationCanvas.vue        # 2D canvas mini-game simulation
-│   │   ├── ThreatCurriculumCard.vue        # Monospace threat card (THREAT 01-08)
-│   │   └── MapShowcaseCard.vue             # Retro 4:3 simulation sector card
-│   └── common/
-│       └── BaseModal.vue                   # Reusable accessible dialog backdrop & shell
+│   │   ├── HeroSimulationCanvas.vue        # 2D procedural HTML5 canvas mini-game
+│   │   ├── ThreatCurriculumCard.vue        # Modular threat category showcase card
+│   │   └── MapShowcaseCard.vue             # Retro 4:3 simulation sector showcase card
+│   └── SidebarNav.vue                      # Primary authenticated navigation sidebar with mobile drawer
 ```
+
+### Component Principles
+- **Maintainability First**: Keep Vue single-file components with `<script setup>`, `<template>`, and `<style scoped>`. Do not split single components into separate files solely to meet arbitrary line counts.
+- **Component Reuse**: Reuse existing components (such as `ClassroomCard.vue` on both the dashboard and management views) with conditional props to avoid duplicating presentation logic.
+- **Props and Emits**: Explicitly define interface contracts with `defineProps` and `defineEmits`.
+- **API & State Boundaries**: Keep network communication in `src/api/` and global authentication in Pinia stores.
+
 
 ---
 

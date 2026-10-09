@@ -35,58 +35,44 @@ implement only what the docs confirm.
   credentials — never reveal whether an email exists).
 
 ### Error conventions
-All errors use the `{ "detail": "..." }` shape (must stay Godot-compatible):
+All errors return a top-level `"detail"` key, but their exact structure depends on status:
 
-| Status | Meaning in CyberMorph |
-| ------ | --------------------- |
-| 400    | Invalid request data |
-| 401    | Bad credentials or invalid/tampered token |
-| 403    | Authenticated but unauthorized (wrong role, inactive/pending educator) |
-| 404    | Resource not found (e.g., unknown classroom code) |
-| 409    | Conflict (already joined classroom, inactive code, duplicate registration, duplicate session finalization) |
+| Status | Backend Shape | Meaning in CyberMorph |
+| ------ | ------------- | --------------------- |
+| 401    | `{"detail": "<string>"}` | Invalid credentials or expired/missing token |
+| 403    | `{"detail": "<string>"}` | Wrong role, inactive/pending educator, or unowned resource |
+| 404    | `{"detail": "<string>"}` | Resource not found (e.g., unknown classroom code) |
+| 409    | `{"detail": {"field": "<field>", "message": "<msg>"}}` | **Nested object** conflict (duplicate registration, already joined) |
+| 422    | FastAPI validation array `[{loc, msg, type}]` | Request body or query params failed validation |
 
-Show friendly user-facing messages; never render raw backend errors.
+Show friendly user-facing messages; never render raw backend error payloads.
 
 ### Endpoint groups (summary — details in docs/api.md)
-- **Players**: `GET /players/me`, `GET /players/threat-index` (creates the 8
-  canonical threat entries on first call).
-- **Sessions**: `POST /sessions/start` (map validation/unlock checks),
-  `PATCH /sessions/{id}/end` (atomic; best-score + progression updates;
-  progression never decreases), `GET /sessions/history`.
-- **Leaderboard**: `GET /leaderboard` with `map_name`, `search`, `page`,
-  `page_size` (default 10); response includes `total_count`.
-- **Classroom**: `POST /classroom/generate` (6-char code),
-  `GET /classroom/my-codes`, `POST /classroom/join` (404 unknown / 409 inactive
-  / 409 already joined), `GET /classroom/{code_id}/students` (owner-only),
-  `PATCH /classroom/{code_id}` (name, description, is_active),
-  `DELETE /classroom/{code_id}` (soft delete).
-- **Web users**: `GET /web-users/me`, `PATCH /web-users/me/last-login`.
-- **Analytics**: `GET /analytics/classroom?code_id=`, `GET
-  /analytics/player?profile_id=`, `GET /analytics/session?session_id=`.
-- **Admin**: users list/patch/soft-delete, deleted-records + restore, educator
-  approvals, classrooms, activity logs (`action_type`, `user_id`, `page`),
-  system stats.
-- **Sync** (Godot client): `GET /sync/player-state`, `POST /sync/session`,
-  `POST /sync/threat-index`, `POST /sync/threat-events` — all idempotent via
-  client-generated UUIDs; repeated uploads must not duplicate records.
+- **Base URL**: `https://cybermorph-backend.onrender.com` (Swagger UI at `/docs`). 30–50s cold start on idle wake-up.
+- **Auth**: `POST /auth/register` (player), `POST /auth/register-web` (educator, `@dnsc.edu.ph` required, pending admin approval), `POST /auth/login` (30-day Bearer token, no refresh endpoint).
+- **Players**: `GET /players/me`, `GET /players/threat-index` (creates 8 canonical entries on first call).
+- **Sessions**: `POST /sessions` (submits completed session; requires client-generated UUID `session_id`, timezone-aware `played_at`, returns `{session, map_progress}`), `GET /sessions/history` (paginated).
+- **Leaderboard**: `GET /leaderboard` with `map_name`, `page`, `page_size` (default 10; capped at top 50 per map; returns `items` and `total_count`).
+- **Classroom**: `POST /classroom/generate` (6-char code), `GET /classroom/my-codes` (flat array of `ClassroomResponse`), `POST /classroom/join` (player), `GET /classroom/{code_id}/students` (owner-only, paginated), `PATCH /classroom/{code_id}` (name, description, is_active), `DELETE /classroom/{code_id}` (soft delete).
+- **Web users**: `GET /web-users/me` (`display_name` is currently null; no avatar or profile update endpoint exists).
+- **Analytics**: `GET /analytics/classroom?code_id=`, `GET /analytics/player?profile_id=`, `GET /analytics/session?session_id=` (`threat_events` currently returns `[]`).
+- **Not yet built in backend**: Admin endpoints (`/admin/*`) and offline sync (`/sync/*`) do NOT exist yet. Do not assume live server support for them.
 
 ### Cross-repository invariants (shared with Godot + FastAPI — never drift)
 - Threat taxonomy, canonical order: Phishing, Smishing, Vishing, Social
   Engineering, Credential Theft / Weak Password Attack, Public Wi-Fi Attack,
   Malware Infection, Ransomware.
-- Map ordering and the meaning of `map_progress` (known cross-repo discrepancy
-  flagged in docs — do not resolve unilaterally).
-- Soft deletion uses `deleted_at` / `deleted_by`; important actions are written
-  to `activity_log`.
+- Map ordering: Home, Office, Internet Cafe, Public Park.
+- Session outcomes: `win`, `lose`, `timeout`.
+- Soft deletion uses `deleted_at` / `deleted_by`.
 
 ### Dev mode and configuration
 - `src/main.js` dynamically imports `src/api/mock.js` in DEV only. The mock
   uses `axios-mock-adapter` with `onAny().passThrough()` last, so unmatched
   requests hit the real base URL.
-- `src/api/client.js` currently hardcodes the Render deployment URL with the
-  env-based line commented out. `.env.example` defines
-  `VITE_API_BASE_URL`. New code must read the base URL from env, never add new
-  hardcoded deployment URLs.
+- `src/api/client.js` defaults to `https://cybermorph-backend.onrender.com` or
+  reads `import.meta.env.VITE_API_BASE_URL`.
+- CORS must be configured on Render via `CORS_ORIGINS`, not in frontend code.
 
 ## Instructions
 

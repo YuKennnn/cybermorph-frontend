@@ -63,7 +63,7 @@ This skill outlines the architectural standards, code quality rules, and securit
 - Use `<style scoped>` for all component-specific styling.
 - Rely on global CSS variables from `src/assets/main.css` (`var(--color-primary)`, `var(--color-bg)`, `var(--shadow-purple)`, etc.).
 - Never hardcode hex colors or arbitrary colors.
-- Maintain the text-only convention: avoid decorative emojis or icons; use uppercase monospace tags (`SECTOR 01`, `STATUS: ACTIVE`).
+- Follow the design system conventions in cybermorph-ui-system: use functional SVG icons from `src/components/common/AppIcon.vue` with accessible labels, avoid decorative emojis, and use clean sentence case for portal UI.
 
 ## Instructions
 

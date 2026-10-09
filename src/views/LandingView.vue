@@ -170,13 +170,9 @@ const threats = [
 
       <!-- Foreground Content -->
       <div class="hero-content">
-        <div class="hero-badge">
-          <span class="badge-dot"></span>
-          <span>CYBERSECURITY GAMIFIED LEARNING PORTAL</span>
-        </div>
 
         <h1 class="hero-title">
-          Master cybersecurity through <span class="highlight-text">immersive 2D simulation.</span>
+          Play through real-world cyber threats, <span class="highlight-text">learn how to avoid them.</span>
         </h1>
 
         <p class="hero-subtitle">
@@ -291,6 +287,7 @@ const threats = [
 
 <style scoped>
 .landing-container {
+  --font-display: var(--font-brand);
   width: 100%;
   overflow-x: hidden;
   background-color: var(--color-bg);

@@ -3,141 +3,314 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchMyClassrooms } from '../api/classroom'
+import { extractErrorMessage } from '../api/client'
+import ClassroomCard from '../components/classroom/ClassroomCard.vue'
+import ClassroomCreateModal from '../components/classroom/ClassroomCreateModal.vue'
+import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const classroomData = ref({
-  classrooms: [],
-  total_students: 0,
-  recent_activity: [],
-})
-
+const classrooms = ref([])
+const totalStudents = ref(0)
 const isLoading = ref(true)
+const errorMessage = ref('')
+const successMessage = ref('')
+const isCreateModalOpen = ref(false)
 
-onMounted(async () => {
+const loadDashboardData = async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+
   try {
     const data = await fetchMyClassrooms()
-    if (data) {
-      const list = Array.isArray(data) ? data : data.classrooms || []
-      classroomData.value.classrooms = list
-      classroomData.value.total_students =
-        data.total_students ??
-        list.reduce((sum, c) => sum + (c.student_count || 0), 0)
-      classroomData.value.recent_activity = data.recent_activity || []
-    }
-  } catch {
-    // Keep local default state on failure
+    const list = Array.isArray(data) ? data : data?.classrooms || []
+    classrooms.value = list
+    totalStudents.value =
+      data?.total_students ?? list.reduce((sum, c) => sum + (c.student_count || 0), 0)
+  } catch (error) {
+    errorMessage.value = extractErrorMessage(
+      error,
+      'Failed to load classroom overview. Please verify your connection or try again.',
+    )
   } finally {
     isLoading.value = false
   }
-})
+}
+
+const handleClassroomCreated = (newClassroom) => {
+  const code = newClassroom.code_value || newClassroom.code || 'GENERATED'
+  successMessage.value = `Classroom "${newClassroom.name}" created with access code: ${code}`
+  setTimeout(() => {
+    successMessage.value = ''
+  }, 4500)
+  loadDashboardData()
+}
+
+const handleViewStudents = (codeId) => {
+  router.push(`/classroom/students/${codeId}`)
+}
+
+const handleViewAnalytics = (codeId) => {
+  if (codeId) {
+    router.push(`/analytics/${codeId}`)
+  } else {
+    router.push('/analytics')
+  }
+}
 
 const handleManageClassrooms = () => {
   router.push('/classroom/manage')
 }
 
-const handleViewAnalytics = () => {
-  router.push('/analytics')
-}
+onMounted(() => {
+  loadDashboardData()
+})
 </script>
 
 <template>
-  <div class="role-dashboard">
-    <div class="welcome-banner">
-      <div class="banner-text">
-        <h3 class="title">Instructor Console: {{ authStore.user?.username || authStore.user?.email || 'Educator' }}</h3>
-        <p class="subtitle">Classroom rosters, security analytics, and student threat performance</p>
+  <div class="educator-dashboard">
+    <!-- Header Section -->
+    <header class="dashboard-header">
+      <div class="header-text">
+        <h2 class="title">Educator overview</h2>
+        <p class="subtitle">
+          Signed in as <strong>{{ authStore.displayName }}</strong>. Manage classroom access keys and inspect student progression.
+        </p>
       </div>
-      <div class="banner-actions">
-        <button class="btn-primary" @click="handleViewAnalytics">Threat Analytics</button>
-        <button class="btn-outline-banner" @click="handleManageClassrooms">Manage Classrooms</button>
-      </div>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-value highlight-purple">{{ classroomData.classrooms.length }}</div>
-        <div class="stat-label">Active Classrooms</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-value highlight-secondary">{{ classroomData.total_students }}</div>
-        <div class="stat-label">Total Enrolled Agents</div>
-      </div>
-    </div>
-
-    <div class="content-section">
-      <div class="section-header">
-        <h4>Classroom Deployments</h4>
-        <button class="btn-outline-sm" @click="handleManageClassrooms">+ Create / Configure</button>
-      </div>
-
-      <div v-if="isLoading" class="loading-text">Loading classroom overview...</div>
-
-      <div v-else-if="classroomData.classrooms.length > 0" class="classrooms-list">
-        <div
-          v-for="classroom in classroomData.classrooms"
-          :key="classroom.code_id || classroom.id"
-          class="classroom-card"
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-primary"
+          @click="isCreateModalOpen = true"
         >
-          <div class="classroom-info">
-            <h5>{{ classroom.name }}</h5>
-            <span class="code-badge">CODE: {{ classroom.code_value || classroom.code }}</span>
+          <AppIcon name="plus" :size="16" />
+          <span>Create classroom</span>
+        </button>
+        <button
+          type="button"
+          class="btn-outline"
+          @click="() => handleViewAnalytics()"
+        >
+          <AppIcon name="analytics" :size="16" />
+          <span>Threat analytics</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Success Feedback Banner -->
+    <div v-if="successMessage" class="success-banner" role="status">
+      <AppIcon name="check" :size="18" class="banner-icon" />
+      <span>{{ successMessage }}</span>
+    </div>
+
+    <!-- Error State (Truthful fallback with Retry action) -->
+    <div v-if="errorMessage" class="error-banner" role="alert">
+      <div class="error-content">
+        <AppIcon name="alert" :size="18" class="banner-icon" />
+        <span>{{ errorMessage }}</span>
+      </div>
+      <button
+        type="button"
+        class="btn-retry"
+        :disabled="isLoading"
+        @click="loadDashboardData"
+      >
+        <AppIcon name="refresh" :size="14" />
+        <span>Try again</span>
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="isLoading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading classroom overview...</p>
+    </div>
+
+    <!-- Populated / Valid State -->
+    <div v-else-if="!errorMessage" class="dashboard-body">
+      <!-- KPI Stats Grid -->
+      <section class="stats-grid" aria-label="Classroom metrics">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Active classrooms</span>
+            <AppIcon name="classrooms" :size="20" class="stat-icon" />
           </div>
-          <div class="student-count">{{ classroom.student_count || 0 }} Enrolled</div>
+          <div class="stat-value">{{ classrooms.length }}</div>
+          <p class="stat-desc">Curriculum deployments currently active</p>
         </div>
-      </div>
 
-      <div v-else class="empty-note">
-        No active classrooms found. Click "Manage Classrooms" to generate your first access code.
-      </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Enrolled students</span>
+            <AppIcon name="users" :size="20" class="stat-icon" />
+          </div>
+          <div class="stat-value">{{ totalStudents }}</div>
+          <p class="stat-desc">Total agents linked across all classrooms</p>
+        </div>
+
+        <div class="stat-card stat-action-card">
+          <div class="stat-header">
+            <span class="stat-label">Classroom management</span>
+            <AppIcon name="join" :size="20" class="stat-icon" />
+          </div>
+          <p class="stat-desc full">Configure sector names, review status, or archive inactive codes.</p>
+          <button
+            type="button"
+            class="btn-subtle-link"
+            @click="handleManageClassrooms"
+          >
+            <span>Manage all classrooms</span>
+            <AppIcon name="arrow-right" :size="14" />
+          </button>
+        </div>
+      </section>
+
+      <!-- Classroom Deployments Section -->
+      <section class="classrooms-section">
+        <div class="section-header">
+          <div>
+            <h3 class="section-title">Your classrooms</h3>
+            <p class="section-subtitle">
+              Distribute access codes to students to connect their devices to your roster.
+            </p>
+          </div>
+          <button
+            v-if="classrooms.length > 0"
+            type="button"
+            class="btn-outline-sm"
+            @click="isCreateModalOpen = true"
+          >
+            <AppIcon name="plus" :size="14" />
+            <span>New classroom</span>
+          </button>
+        </div>
+
+        <!-- Classrooms Grid (Reusing ClassroomCard with utility actions hidden) -->
+        <div v-if="classrooms.length > 0" class="classrooms-grid">
+          <ClassroomCard
+            v-for="classroom in classrooms"
+            :key="classroom.code_id || classroom.id"
+            :classroom="classroom"
+            :show-utility-actions="false"
+            @view-students="handleViewStudents"
+            @view-analytics="handleViewAnalytics"
+          />
+        </div>
+
+        <!-- Empty State -->
+        <div v-else class="empty-state">
+          <div class="empty-icon-box" aria-hidden="true">
+            <AppIcon name="classrooms" :size="32" />
+          </div>
+          <h4 class="empty-title">No classrooms created yet</h4>
+          <p class="empty-desc">
+            Generate your first 6-character access code to allow students to link their simulation profiles and start tracking telemetry.
+          </p>
+          <button
+            type="button"
+            class="btn-primary"
+            @click="isCreateModalOpen = true"
+          >
+            <AppIcon name="plus" :size="16" />
+            <span>Create classroom</span>
+          </button>
+        </div>
+      </section>
     </div>
 
-    <div class="content-section">
-      <h4>Recent Simulation Events</h4>
-      <ul v-if="classroomData.recent_activity.length > 0" class="activity-list">
-        <li v-for="item in classroomData.recent_activity" :key="item.id" class="activity-item">
-          <span class="activity-text">{{ item.text }}</span>
-          <span class="activity-time">{{ item.time }}</span>
-        </li>
-      </ul>
-      <div v-else class="empty-note">No recent student telemetry recorded.</div>
-    </div>
+    <!-- Reused Existing Creation Dialog -->
+    <ClassroomCreateModal
+      :is-open="isCreateModalOpen"
+      @close="isCreateModalOpen = false"
+      @created="handleClassroomCreated"
+    />
   </div>
 </template>
 
 <style scoped>
-.role-dashboard {
+.educator-dashboard {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
+  width: 100%;
 }
 
-.welcome-banner {
+.dashboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .title {
   margin: 0 0 0.25rem 0;
   color: var(--color-text-main);
-  font-size: 1.5rem;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.banner-icon {
+  flex-shrink: 0;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background-color: #ffffff;
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.25rem;
+  margin-bottom: 2rem;
 }
 
 .stat-card {
@@ -145,210 +318,189 @@ const handleViewAnalytics = () => {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 1.5rem;
-  text-align: center;
-  box-shadow: var(--shadow-purple);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
 }
 
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-purple-hover);
-}
-
-.stat-value {
-  font-family: var(--font-display);
-  font-size: 2.2rem;
-  font-weight: 700;
-  margin-bottom: 0.35rem;
-}
-
-.stat-value.highlight-purple {
-  color: var(--color-primary);
-}
-
-.stat-value.highlight-secondary {
-  color: var(--color-secondary);
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .stat-label {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.content-section {
-  background-color: var(--color-card);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1.75rem;
-  box-shadow: var(--shadow-purple);
+.stat-icon {
+  color: var(--color-primary);
+}
+
+.stat-value {
+  font-family: var(--font-sans);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  line-height: 1.15;
+  margin-bottom: 0.35rem;
+  font-feature-settings: 'tnum';
+}
+
+.stat-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-dim);
+  line-height: 1.4;
+}
+
+.stat-desc.full {
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.stat-action-card {
+  justify-content: space-between;
+}
+
+.btn-subtle-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: auto;
+  transition: gap 0.15s ease;
+}
+
+.btn-subtle-link:hover {
+  text-decoration: underline;
+  gap: 0.6rem;
+}
+
+.classrooms-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
+  align-items: flex-end;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
-.section-header h4,
-.content-section h4 {
-  margin: 0;
+.section-title {
+  margin: 0 0 0.25rem 0;
   color: var(--color-text-main);
-  font-size: 1.15rem;
-  letter-spacing: 0.02em;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
-.btn-primary {
-  padding: 0.65rem 1.35rem;
-  background: var(--btn-gradient);
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.92rem;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-
-.btn-primary:hover {
-  background: var(--btn-gradient-hover);
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
-  transform: translateY(-1px);
-}
-
-.banner-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.btn-outline-banner {
-  padding: 0.65rem 1.25rem;
-  background-color: #ffffff;
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.92rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-purple-sm);
-}
-
-.btn-outline-banner:hover {
-  background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
-  transform: translateY(-1px);
+.section-subtitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
 }
 
 .btn-outline-sm {
-  padding: 0.45rem 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
   background-color: #ffffff;
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-border);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .btn-outline-sm:hover {
   background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
+  border-color: var(--color-border-hover);
+  color: var(--color-primary);
 }
 
-.classrooms-list {
+.classrooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.25rem;
+}
+
+.empty-state {
+  background-color: var(--color-card);
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 3.5rem 1.5rem;
+  text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
 }
 
-.classroom-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.25rem;
+.empty-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
   background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.classroom-card:hover {
-  background-color: #f1edff;
-  border-color: var(--color-secondary);
-}
-
-.classroom-info h5 {
-  margin: 0 0 0.35rem 0;
-  color: var(--color-text-main);
-  font-size: 1rem;
-}
-
-.code-badge {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  font-weight: 700;
-  background-color: var(--color-card);
   color: var(--color-primary);
-  border: 1px solid var(--color-border);
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
 }
 
-.student-count {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
+.empty-title {
+  margin: 0;
+  color: var(--color-text-main);
+  font-size: 1.15rem;
   font-weight: 600;
 }
 
-.activity-list {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.activity-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background-color: var(--color-bg-subtle);
-  border-radius: 6px;
-  border-left: 3.5px solid var(--color-primary);
-  font-size: 0.9rem;
-}
-
-.activity-text {
-  color: var(--color-text-main);
-  font-weight: 500;
-}
-
-.activity-time {
-  color: var(--color-text-dim);
-  font-size: 0.82rem;
-}
-
-.loading-text,
-.empty-note {
+.empty-desc {
+  margin: 0 0 1rem 0;
+  max-width: 440px;
   color: var(--color-text-muted);
   font-size: 0.9rem;
-  padding: 1.5rem 0;
+  line-height: 1.5;
+}
+
+.loading-state {
   text-align: center;
+  padding: 4rem 1.5rem;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn-primary,
+  .header-actions .btn-outline {
+    flex: 1;
+    min-width: 140px;
+  }
 }
 </style>
