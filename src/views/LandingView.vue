@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import AppIcon from '../components/common/AppIcon.vue'
+import InteractiveHeroPreview from '../components/landing/InteractiveHeroPreview.vue'
 
 import homeMapImg from '../assets/maps/home.png'
 import internetCafeMapImg from '../assets/maps/internet-cafe.png'
@@ -47,25 +48,25 @@ const gameplayEnvironments = [
     name: 'Home Network',
     image: homeMapImg,
     description:
-      'Practice securing personal Wi-Fi routers, managing connected smart devices, and avoiding basic social engineering tricks.',
+      'Practice securing home Wi-Fi routers, managing connected smart devices, and avoiding basic social engineering tricks.',
   },
   {
     name: 'Internet Cafe',
     image: internetCafeMapImg,
     description:
-      'Identify untrusted public access points, shared terminal risks, and network eavesdropping in communal computing spaces.',
+      'Identify untrusted public access points, shared computer risks, and wireless eavesdropping in public spaces.',
   },
   {
     name: 'Corporate Office',
     image: officeMapImg,
     description:
-      'Protect workplace workstations against spear-phishing messages, unauthorized physical access, and credential harvesting.',
+      'Protect workplace computers against deceptive messages, unauthorized physical access, and password theft.',
   },
   {
     name: 'Public Park',
     image: publicParkMapImg,
     description:
-      'Recognize shoulder surfing, deceptive public QR codes, and unsafe public charging stations in outdoor open areas.',
+      'Recognize shoulder surfing, suspicious public QR codes, and unsafe public charging stations in outdoor open areas.',
   },
 ]
 
@@ -78,37 +79,37 @@ const learningTopics = [
   {
     number: '02',
     name: 'Smishing',
-    summary: 'Identifying fraudulent SMS text messages and deceptive verification links on mobile devices.',
+    summary: 'Identifying fraudulent SMS text messages and deceptive verification links on mobile phones.',
   },
   {
     number: '03',
     name: 'Vishing',
-    summary: 'Spotting voice call deception, impersonated support representatives, and pressure tactics.',
+    summary: 'Spotting voice call deception, impersonated tech support agents, and pressure tactics.',
   },
   {
     number: '04',
     name: 'Social Engineering',
-    summary: 'Understanding cognitive manipulation, authority bias, and pretexting scenarios.',
+    summary: 'Understanding manipulation techniques that trick people into revealing sensitive information.',
   },
   {
     number: '05',
     name: 'Credential Theft',
-    summary: 'Defending against weak passwords, credential harvesting forms, and brute-force attacks.',
+    summary: 'Defending against weak passwords, fake login forms, and brute-force password guessing.',
   },
   {
     number: '06',
     name: 'Public Wi-Fi Attacks',
-    summary: 'Protecting network traffic against man-in-the-middle sniffing and rogue access points.',
+    summary: 'Protecting internet traffic against wireless eavesdropping and fake public access points.',
   },
   {
     number: '07',
     name: 'Malware Infection',
-    summary: 'Preventing malicious email attachments, suspicious download links, and trojan payloads.',
+    summary: 'Preventing dangerous email attachments, suspicious download links, and harmful programs.',
   },
   {
     number: '08',
     name: 'Ransomware',
-    summary: 'Recognizing extortion threats, unauthorized file encryption behaviors, and mitigation steps.',
+    summary: 'Recognizing malicious software that locks files, and learning preventative safety practices.',
   },
 ]
 </script>
@@ -214,7 +215,7 @@ const learningTopics = [
     <section id="hero" class="hero-section">
       <div class="hero-inner">
         <div class="hero-text-column">
-          <span class="badge-subtle">Educational Cybersecurity Simulation</span>
+          <span class="badge-subtle">Educational Cybersecurity Game</span>
           <h1 class="hero-headline">
             Learn to recognise cyber threats through play.
           </h1>
@@ -243,95 +244,79 @@ const learningTopics = [
 
           <div class="hero-status-note">
             <span class="status-indicator-dot"></span>
-            <span>Android APK Beta &bull; Free for education &bull; Offline-first gameplay</span>
+            <span>Free offline-first gameplay for everyone &bull; Optional classroom sync</span>
           </div>
         </div>
 
-        <!-- Featured Genuine Gameplay Preview -->
+        <!-- Bounded Interactive Pixel-Art Simulation Preview -->
         <div class="hero-visual-column">
-          <div class="gameplay-preview-frame">
-            <div class="frame-bar">
-              <span class="frame-dot"></span>
-              <span class="frame-dot"></span>
-              <span class="frame-dot"></span>
-              <span class="frame-title">CyberMorph Godot Client &bull; Home Network Simulation</span>
-            </div>
-            <img
-              :src="homeMapImg"
-              alt="CyberMorph 2D simulation map showing home network environment"
-              class="hero-map-image"
-            />
-            <div class="frame-caption">
-              <span>Map 1: Home Network Environment</span>
-              <span class="caption-tag">2D Top-Down Simulation</span>
-            </div>
-          </div>
+          <InteractiveHeroPreview />
         </div>
       </div>
     </section>
 
-    <!-- 2. About Section: How Students and Educators Use CyberMorph -->
+    <!-- 2. About Section: Play, learn, and track your progress -->
     <section id="about" class="content-section section-bg-alt">
       <div class="section-container">
         <div class="section-header">
           <span class="section-kicker">How It Works</span>
-          <h2 class="section-title">How students and educators use CyberMorph</h2>
+          <h2 class="section-title">Play, learn, and track your progress</h2>
           <p class="section-lead">
-            CyberMorph connects interactive mobile gameplay with online classroom oversight, providing hands-on defense training without complex lab setups.
+            Play independently at your own pace, or connect with a teacher through optional classroom features.
           </p>
         </div>
 
         <div class="editorial-split">
-          <!-- Student Column -->
+          <!-- Column 1: For players (Primary audience) -->
           <div class="audience-column">
             <div class="column-header">
               <div class="audience-icon-badge">
                 <AppIcon name="smartphone" :size="22" />
               </div>
               <div>
-                <h3 class="audience-title">For students</h3>
-                <span class="audience-subtitle">Interactive practice on Android</span>
+                <h3 class="audience-title">For players</h3>
+                <span class="audience-subtitle">Play independently anytime on Android</span>
               </div>
             </div>
             <ul class="audience-feature-list">
               <li>
-                <strong>Play offline anywhere:</strong> The Godot simulation runs locally on your mobile device, allowing complete offline practice without constant internet access.
+                <strong>Play offline anywhere:</strong> The game runs entirely on your Android device, allowing you to play through missions without requiring internet connectivity.
               </li>
               <li>
-                <strong>Encounter realistic scenarios:</strong> Identify phishing messages, test router configurations, spot rogue Wi-Fi hotspots, and avoid credential traps.
+                <strong>Practice real-world defense:</strong> Make interactive security choices to identify phishing messages, spot fake Wi-Fi networks, and protect personal accounts.
               </li>
               <li>
-                <strong>Track defense progress:</strong> When you reconnect online, completed missions sync back to your profile and unlock entries in your threat index.
+                <strong>Track your progress:</strong> When you connect online, your completed missions sync with your web account to record scores and unlock threat index entries.
               </li>
               <li>
-                <strong>Join class activities:</strong> Enter a 6-character code provided by your instructor to link your scores to your school classroom.
+                <strong>No classroom required:</strong> Anyone can download and complete the full game on their own. Joining a classroom is completely optional.
               </li>
             </ul>
           </div>
 
-          <!-- Educator Column -->
+          <!-- Column 2: Optional classroom features -->
           <div class="audience-column">
             <div class="column-header">
               <div class="audience-icon-badge">
                 <AppIcon name="classrooms" :size="22" />
               </div>
               <div>
-                <h3 class="audience-title">For educators</h3>
-                <span class="audience-subtitle">Web portal for classroom management</span>
+                <h3 class="audience-title">Optional classroom features</h3>
+                <span class="audience-subtitle">Connect with teachers and classmates</span>
               </div>
             </div>
             <ul class="audience-feature-list">
               <li>
-                <strong>Generate class codes:</strong> Create unique classroom sectors in seconds and distribute easy-to-read codes to your learners.
+                <strong>Join with a class code:</strong> If your teacher uses CyberMorph in class, you can enter their 6-character code to share your progress with them.
               </li>
               <li>
-                <strong>Review class analytics:</strong> Monitor class-wide completion rates, average map progress, and score distributions without manual grading.
+                <strong>Classroom management for teachers:</strong> Instructors can create classrooms in the web portal and give students simple access codes.
               </li>
               <li>
-                <strong>Identify learning gaps:</strong> Review specific failure frequencies across the 8 threat categories to see which attack vectors require review.
+                <strong>Identify common mistakes:</strong> Teachers can review overall completion rates and see which types of threats students find most challenging.
               </li>
               <li>
-                <strong>Institutional access:</strong> Instructors register with verified academic credentials (@dnsc.edu.ph) for administrative verification.
+                <strong>Academic teacher accounts:</strong> Instructors register with an institutional email address (@dnsc.edu.ph) for verified portal access.
               </li>
             </ul>
           </div>
@@ -380,7 +365,7 @@ const learningTopics = [
           <span class="section-kicker">Curriculum Coverage</span>
           <h2 class="section-title">The eight learning topics</h2>
           <p class="section-lead">
-            The CyberMorph curriculum covers eight common digital threat vectors aligned with core cybersecurity training competencies.
+            The CyberMorph curriculum covers eight common digital threats to help players build practical cybersecurity awareness.
           </p>
         </div>
 
@@ -407,7 +392,7 @@ const learningTopics = [
           <span class="section-kicker">Platform Availability</span>
           <h2 class="section-title">Android availability and requirements</h2>
           <p class="section-lead">
-            CyberMorph is developed as a mobile game client for Android and a web companion portal for classroom coordination.
+            CyberMorph is developed as an Android mobile game, supported by a companion web portal for accounts and optional classrooms.
           </p>
         </div>
 
@@ -435,7 +420,7 @@ const learningTopics = [
                 <span class="status-text-subtle">Beta release awaiting confirmation</span>
               </div>
               <p class="status-hint">
-                Direct download will be activated as soon as the official release link is confirmed. In the meantime, instructors and students can register for web portal access.
+                The download link will be added once the beta package is finalized. You can register your account now to save your username.
               </p>
             </div>
 
@@ -443,9 +428,9 @@ const learningTopics = [
               <h4 class="install-steps-title">How to install during beta:</h4>
               <ol class="steps-list">
                 <li>Download the CyberMorph APK package to your Android device once published.</li>
-                <li>When prompted by Android, permit installation from unknown sources for your browser or file manager.</li>
+                <li>When prompted by Android, allow installation from unknown sources in settings.</li>
                 <li>Tap the downloaded file and select <strong>Install</strong>.</li>
-                <li>Open CyberMorph, sign in with your player account, and begin Map 1.</li>
+                <li>Open CyberMorph, sign in with your player account, and start playing.</li>
               </ol>
             </div>
           </div>
@@ -454,7 +439,7 @@ const learningTopics = [
           <div id="requirements" class="requirements-card">
             <h3 class="card-title">System requirements</h3>
             <p class="requirements-lead">
-              Hardware and software requirements for running the Godot mobile simulation client:
+              Hardware and software requirements for running the Android mobile game:
             </p>
 
             <table class="req-table">
@@ -481,13 +466,13 @@ const learningTopics = [
                 </tr>
                 <tr>
                   <th scope="row">Internet connectivity</th>
-                  <td>Required for account login and classroom sync; gameplay is fully offline</td>
+                  <td>Required for account login and optional classroom sync; gameplay is fully offline</td>
                 </tr>
               </tbody>
             </table>
 
             <div class="requirements-notice">
-              <strong>Companion portal requirements:</strong> The web dashboard operates in any modern desktop or mobile browser (Chrome, Firefox, Safari, Edge) without downloads.
+              <strong>Companion portal requirements:</strong> The web dashboard operates in any modern browser (Chrome, Firefox, Safari, Edge) without downloads.
             </div>
           </div>
         </div>
@@ -500,7 +485,7 @@ const learningTopics = [
         <div class="footer-brand-column">
           <span class="footer-brand-name">CYBERMORPH</span>
           <p class="footer-tagline">
-            Offline-first educational cybersecurity game and classroom dashboard.
+            Offline-first educational cybersecurity game with optional classroom tools.
           </p>
         </div>
 
@@ -732,7 +717,7 @@ const learningTopics = [
   max-width: 1140px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: 1.05fr 0.95fr;
   gap: 3.5rem;
   align-items: center;
 }
@@ -827,66 +812,6 @@ const learningTopics = [
   height: 8px;
   border-radius: 50%;
   background-color: #10b981;
-}
-
-/* Genuine Gameplay Preview Frame */
-.gameplay-preview-frame {
-  background-color: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-purple);
-  overflow: hidden;
-}
-
-.frame-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.6rem 0.85rem;
-  background-color: var(--color-bg-subtle);
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.frame-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #cbd5e1;
-}
-
-.frame-title {
-  margin-left: 0.4rem;
-  font-weight: 500;
-}
-
-.hero-map-image {
-  width: 100%;
-  height: auto;
-  display: block;
-  object-fit: cover;
-}
-
-.frame-caption {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background-color: #ffffff;
-  font-size: 0.85rem;
-  color: var(--color-text-main);
-  font-weight: 600;
-  border-top: 1px solid var(--color-border-subtle);
-}
-
-.caption-tag {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-primary);
-  background-color: #ede9fe;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
 }
 
 /* =========================================================

@@ -62,3 +62,18 @@ For non-trivial changes:
 6. Provide verification steps.
 
 Do not replace understanding with large unexplained code dumps.
+
+
+## 6. Audience & Terminology Rules
+
+- CyberMorph is designed for general players / users. Independent play is the default and complete experience.
+- Students and educators are optional classroom users.
+- In UI copy and public pages, use "For players" and "Optional classroom features".
+- Do not imply that joining a classroom is required for gameplay or progress tracking.
+- Use clear, academic language suitable for beginners. Avoid sci-fi or military jargon:
+  - Use "classrooms" (not "classroom sectors")
+  - Use "types of threats" (not "attack vectors")
+  - Use "classroom management" (not "classroom oversight")
+  - Use "common mistakes" (not "failure frequencies")
+  - Use "student progress" or "player progress" (not "threat telemetry")
+- Only describe capabilities supported by the actual game and backend API. Do not invent release details, hardware requirements, pricing, or analytics features.
