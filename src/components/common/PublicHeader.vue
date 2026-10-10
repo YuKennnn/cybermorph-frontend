@@ -29,7 +29,6 @@ const closeMobileNav = () => {
         <RouterLink to="/about" class="nav-link" active-class="active">About</RouterLink>
         <RouterLink to="/gameplay" class="nav-link" active-class="active">Gameplay</RouterLink>
         <RouterLink to="/download" class="nav-link" active-class="active">Download</RouterLink>
-        <RouterLink to="/download#requirements" class="nav-link">System requirements</RouterLink>
       </nav>
 
       <!-- Auth Action Link -->
@@ -41,13 +40,20 @@ const closeMobileNav = () => {
         >
           Dashboard
         </RouterLink>
-        <RouterLink
-          v-else
-          to="/login"
-          class="btn-nav-secondary"
-        >
-          Sign in
-        </RouterLink>
+        <template v-else>
+          <RouterLink
+            to="/login"
+            class="btn-nav-secondary"
+          >
+            Sign in
+          </RouterLink>
+          <RouterLink
+            to="/register"
+            class="btn-nav-primary"
+          >
+            Register
+          </RouterLink>
+        </template>
 
         <!-- Mobile Hamburger Toggle -->
         <button
@@ -96,28 +102,33 @@ const closeMobileNav = () => {
           <RouterLink to="/download" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
             Download
           </RouterLink>
-          <RouterLink to="/download#requirements" class="mobile-nav-link" @click="closeMobileNav">
-            System requirements
-          </RouterLink>
         </nav>
 
         <div class="mobile-drawer-footer">
           <RouterLink
             v-if="authStore.isAuthenticated"
             to="/dashboard"
-            class="btn-mobile-auth"
+            class="btn-mobile-auth btn-mobile-primary"
             @click="closeMobileNav"
           >
             Go to Dashboard
           </RouterLink>
-          <RouterLink
-            v-else
-            to="/login"
-            class="btn-mobile-auth"
-            @click="closeMobileNav"
-          >
-            Sign in to Portal
-          </RouterLink>
+          <template v-else>
+            <RouterLink
+              to="/login"
+              class="btn-mobile-auth btn-mobile-secondary"
+              @click="closeMobileNav"
+            >
+              Sign in
+            </RouterLink>
+            <RouterLink
+              to="/register"
+              class="btn-mobile-auth btn-mobile-primary"
+              @click="closeMobileNav"
+            >
+              Register
+            </RouterLink>
+          </template>
         </div>
       </div>
     </div>
@@ -351,6 +362,9 @@ const closeMobileNav = () => {
 .mobile-drawer-footer {
   padding-top: 1.25rem;
   border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
 }
 
 .btn-mobile-auth {
@@ -360,14 +374,30 @@ const closeMobileNav = () => {
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #ffffff;
-  background-color: var(--color-purple);
   border-radius: 6px;
   text-decoration: none;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
-.btn-mobile-auth:hover {
-  background-color: var(--color-purple-hover);
+.btn-mobile-primary {
+  color: #ffffff;
+  background-color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-mobile-primary:hover {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.btn-mobile-secondary {
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+}
+
+.btn-mobile-secondary:hover {
+  background-color: #ede9fe;
 }
 </style>

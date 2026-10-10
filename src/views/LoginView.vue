@@ -4,12 +4,14 @@ import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { extractErrorMessage } from '../api/client'
 import PublicHeader from '../components/common/PublicHeader.vue'
+import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const errorMessage = ref('')
 const isLoading = ref(false)
 const isServerWakingUp = ref(false)
@@ -86,14 +88,25 @@ onUnmounted(() => {
 
           <div class="form-group">
             <label for="password">Password</label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              placeholder="Enter your password"
-              required
-              autocomplete="current-password"
-            />
+            <div class="password-input-wrapper">
+              <input
+                id="password"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="Enter your password"
+                required
+                autocomplete="current-password"
+              />
+              <button
+                type="button"
+                class="btn-toggle-password"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                :title="showPassword ? 'Hide password' : 'Show password'"
+                @click="showPassword = !showPassword"
+              >
+                <AppIcon :name="showPassword ? 'eye-off' : 'eye'" :size="18" />
+              </button>
+            </div>
           </div>
 
           <button type="submit" class="btn-primary" :disabled="isLoading">
@@ -196,6 +209,44 @@ input {
 input:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 2.75rem;
+}
+
+.btn-toggle-password {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.btn-toggle-password:hover {
+  color: var(--color-primary);
+}
+
+.btn-toggle-password:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .btn-primary {
