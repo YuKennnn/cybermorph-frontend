@@ -13,7 +13,7 @@ const adminStats = ref({
   server_uptime: '99.9%',
   recent_logs: [
     { id: 1, action: 'User Registration', user: 'educator_smith@school.edu', status: 'Pending' },
-    { id: 2, action: 'Threat Simulation Sync', user: 'AgentZero', status: 'Success' },
+    { id: 2, action: 'Player Session Sync', user: 'player_alex', status: 'Success' },
     { id: 3, action: 'Classroom Code Generated', user: 'prof_jones@univ.edu', status: 'Success' },
   ],
 })
@@ -39,7 +39,7 @@ onMounted(async () => {
 })
 
 const handleAdminAction = (panelName) => {
-  actionNotice.value = `[COMMAND ACKNOWLEDGED] ${panelName} module interface ready for connection.`
+  actionNotice.value = `${panelName} interface is not yet implemented. Admin integration is planned for a separate task.`
 }
 </script>
 
@@ -47,9 +47,9 @@ const handleAdminAction = (panelName) => {
   <div class="role-dashboard">
     <div class="welcome-banner">
       <div class="banner-text">
-        <h3 class="title">System Administration & Control Center</h3>
+        <h3 class="title">System Administration</h3>
         <p class="subtitle">
-          Signed in as Administrator: <strong>{{ authStore.user?.username || authStore.user?.email || 'Admin' }}</strong> (Level 0 Authority)
+          Signed in as Administrator: <strong>{{ authStore.user?.username || authStore.user?.email || 'Admin' }}</strong>
         </p>
       </div>
     </div>
@@ -57,54 +57,54 @@ const handleAdminAction = (panelName) => {
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value highlight-purple">{{ adminStats.total_users }}</div>
-        <div class="stat-label">Total Agents</div>
+        <div class="stat-label">Total Users</div>
       </div>
 
       <div class="stat-card">
         <div class="stat-value highlight-secondary">{{ adminStats.active_sessions }}</div>
-        <div class="stat-label">Active Uplinks</div>
+        <div class="stat-label">Recent Sessions (24h)</div>
       </div>
 
       <div class="stat-card">
         <div class="stat-value highlight-amber">{{ adminStats.pending_approvals }}</div>
-        <div class="stat-label">Pending Verifications</div>
+        <div class="stat-label">Pending Educator Approvals</div>
       </div>
 
       <div class="stat-card">
         <div class="stat-value highlight-danger">{{ adminStats.threats_detected }}</div>
-        <div class="stat-label">Threats Neutralized</div>
+        <div class="stat-label">Threats Detected</div>
       </div>
     </div>
 
     <div v-if="actionNotice" class="notice-box">
-      [ NOTICE ] {{ actionNotice }}
+      {{ actionNotice }}
     </div>
 
     <div class="content-section">
-      <h4>System Operations & Administration</h4>
+      <h4>Administrative Actions</h4>
       <div class="actions-grid">
-        <button class="action-tile" @click="handleAdminAction('Agent Management')">
+        <button class="action-tile" @click="handleAdminAction('User Management')">
           <span class="tile-tag">OPS 01</span>
-          <span class="tile-title">Agent Management</span>
-          <span class="tile-desc">Manage identities, RBAC scopes & security credentials</span>
+          <span class="tile-title">User Management</span>
+          <span class="tile-desc">Manage identities, user accounts and role scopes</span>
         </button>
 
         <button class="action-tile highlight-tile" @click="handleAdminAction('Educator Approvals')">
           <span class="tile-tag">QUEUE 02</span>
-          <span class="tile-title">Verification Queue ({{ adminStats.pending_approvals }})</span>
+          <span class="tile-title">Educator Approvals ({{ adminStats.pending_approvals }})</span>
           <span class="tile-desc">Review and authorize institutional instructor requests</span>
         </button>
 
         <button class="action-tile" @click="handleAdminAction('System Logs')">
           <span class="tile-tag">AUDIT 03</span>
-          <span class="tile-title">Audit Log Stream</span>
-          <span class="tile-desc">Inspect real-time security events & sync transactions</span>
+          <span class="tile-title">Audit Logs</span>
+          <span class="tile-desc">Inspect administrative activity and system event logs</span>
         </button>
       </div>
     </div>
 
     <div class="content-section">
-      <h4>Real-time Telemetry & Event Stream</h4>
+      <h4>Recent Activity Logs</h4>
       <ul class="log-list">
         <li v-for="log in adminStats.recent_logs" :key="log.id" class="log-item">
           <div class="log-meta">

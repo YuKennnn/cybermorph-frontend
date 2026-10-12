@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom'
 
@@ -12,19 +12,67 @@ const students = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
 
-const fetchStudents = async () => {
+const page = ref(1)
+const pageSize = ref(10)
+const totalCount = ref(0)
+
+const mapNames = ['Home', 'Office', 'Internet Cafe', 'Public Park']
+
+const totalPages = computed(() => {
+  if (totalCount.value <= 0) return 1
+  return Math.ceil(totalCount.value / pageSize.value)
+})
+
+const formatMapProgress = (progress) => {
+  if (typeof progress === 'number' && progress >= 1 && progress <= mapNames.length) {
+    return mapNames[progress - 1]
+  }
+  if (typeof progress === 'string' && progress.trim()) {
+    return progress
+  }
+  return 'Not Started'
+}
+
+const fetchStudents = async (targetPage = page.value) => {
   isLoading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await fetchClassroomStudents(codeId)
-    // Support paginated { items: [...] }, { students: [...] }, or raw array
-    students.value = Array.isArray(data) ? data : data.items || data.students || []
-    classroomInfo.value = data.classroom || null
+    const data = await fetchClassroomStudents(codeId, {
+      page: targetPage,
+      page_size: pageSize.value,
+    })
+
+    if (Array.isArray(data)) {
+      students.value = data
+      totalCount.value = data.length
+      page.value = 1
+    } else if (data && typeof data === 'object') {
+      students.value = data.items || data.students || []
+      totalCount.value = data.total_count ?? data.total ?? students.value.length
+      page.value = data.page ?? targetPage
+      pageSize.value = data.page_size ?? pageSize.value
+      classroomInfo.value = data.classroom || classroomInfo.value || null
+    } else {
+      students.value = []
+      totalCount.value = 0
+    }
   } catch {
-    errorMessage.value = 'Could not load student roster telemetry for this classroom.'
+    errorMessage.value = 'Could not load the student list for this classroom.'
   } finally {
     isLoading.value = false
+  }
+}
+
+const handlePrevPage = () => {
+  if (page.value > 1 && !isLoading.value) {
+    fetchStudents(page.value - 1)
+  }
+}
+
+const handleNextPage = () => {
+  if (page.value < totalPages.value && !isLoading.value) {
+    fetchStudents(page.value + 1)
   }
 }
 
@@ -32,14 +80,16 @@ const handleBack = () => {
   router.push('/classroom/manage')
 }
 
-const formatDate = (isoString) => {
-  if (!isoString) return 'N/A'
+const formatLastSynced = (isoString) => {
+  if (!isoString) return 'Not synced yet'
   const date = new Date(isoString)
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return isNaN(date.getTime())
+    ? 'Not synced yet'
+    : date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      })
 }
 
 onMounted(() => {
@@ -55,13 +105,13 @@ onMounted(() => {
           <button class="back-link" @click="handleBack">Return to Classrooms</button>
           <h2 class="title">{{ classroomInfo?.name || 'Classroom Roster' }}</h2>
           <p v-if="classroomInfo?.code" class="subtitle">
-            Sector Access Code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>
+            Classroom Code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>
           </p>
         </div>
         <div class="badge-container">
-          <span class="count-badge">Enrolled Agents: {{ students.length }}</span>
+          <span class="count-badge">Enrolled Students: {{ totalCount }}</span>
           <router-link :to="'/analytics/' + codeId" class="btn-analytics-header">
-            Sector Analytics
+            Classroom Analytics
           </router-link>
         </div>
       </div>
@@ -74,17 +124,17 @@ onMounted(() => {
 
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Loading student roster telemetry...</p>
+        <p>Loading enrolled students...</p>
       </div>
 
       <div v-else-if="students.length > 0" class="table-card">
         <table class="roster-table">
           <thead>
             <tr>
-              <th>Agent Codename</th>
-              <th>Simulation Map Progression</th>
-              <th>Enrollment Timestamp</th>
-              <th class="text-right">Threat Telemetry</th>
+              <th>Student Name</th>
+              <th>Map Progress</th>
+              <th>Last synced</th>
+              <th class="text-right">Student Analytics</th>
             </tr>
           </thead>
           <tbody>
@@ -93,23 +143,49 @@ onMounted(() => {
                 <span class="student-name">{{ student.username }}</span>
               </td>
               <td>
-                <span class="progress-badge">{{ student.map_progress || 'Not Started' }}</span>
+                <span class="progress-badge">{{ formatMapProgress(student.map_progress) }}</span>
               </td>
-              <td class="date-cell">{{ formatDate(student.last_synced_at || student.joined_at) }}</td>
+              <td class="date-cell">{{ formatLastSynced(student.last_synced_at) }}</td>
               <td class="text-right">
                 <router-link :to="'/analytics/' + codeId" class="btn-inspect-link">
-                  Inspect Telemetry
+                  View Analytics
                 </router-link>
               </td>
             </tr>
           </tbody>
         </table>
+
+        <!-- Pagination Controls -->
+        <div v-if="totalCount > 0" class="pagination-bar">
+          <div class="pagination-info">
+            Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
+            <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
+            <strong>{{ totalCount }}</strong> students
+          </div>
+          <div class="pagination-actions">
+            <button
+              class="page-btn"
+              :disabled="page <= 1 || isLoading"
+              @click="handlePrevPage"
+            >
+              ◀ Previous
+            </button>
+            <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
+            <button
+              class="page-btn"
+              :disabled="page >= totalPages || isLoading"
+              @click="handleNextPage"
+            >
+              Next ▶
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div v-else class="empty-state">
-        <h4>No Agents Enrolled Yet</h4>
+      <div v-else-if="!errorMessage" class="empty-state">
+        <h4>No Students Enrolled Yet</h4>
         <p>
-          Distribute your classroom access code <strong class="code-highlight">{{ classroomInfo?.code }}</strong> to students to begin telemetry tracking.
+          Distribute your classroom code <strong class="code-highlight">{{ classroomInfo?.code }}</strong> to students to have them join this classroom.
         </p>
         <button class="btn-outline" @click="handleBack">Return to Classrooms</button>
       </div>
@@ -358,5 +434,60 @@ tr:hover {
   border-radius: 8px;
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
+}
+
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-top: 1px solid var(--color-border);
+  gap: 1rem;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.pagination-info strong {
+  color: var(--color-primary);
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.page-btn {
+  padding: 0.45rem 0.9rem;
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--color-primary);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-purple-sm);
+}
+
+.page-btn:hover:not(:disabled) {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 </style>

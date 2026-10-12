@@ -48,14 +48,14 @@ onMounted(async () => {
       }
     }
   } catch {
-    // Keep baseline default telemetry on failure
+    // Keep baseline default stats on failure
   } finally {
     isLoading.value = false
   }
 })
 
 const handlePlayGame = () => {
-  gameLaunchMessage.value = 'Connecting to Godot game client... (Simulation mode)'
+  gameLaunchMessage.value = 'Open the CyberMorph game application on your device to play.'
 }
 
 const handleJoinClassroom = () => {
@@ -68,7 +68,7 @@ const handleJoinClassroom = () => {
     <div class="welcome-banner">
       <div class="banner-text">
         <h3 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}!</h3>
-        <p class="subtitle">Simulation threat telemetry and progression status</p>
+        <p class="subtitle">Your gameplay progress and threat training status</p>
       </div>
       <button class="btn-outline" @click="handleJoinClassroom">+ Join Classroom</button>
     </div>
@@ -76,12 +76,12 @@ const handleJoinClassroom = () => {
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">{{ stats.games_played }}</div>
-        <div class="stat-label">Simulations Completed</div>
+        <div class="stat-label">Games Played</div>
       </div>
 
       <div class="stat-card highlight-card">
         <div class="stat-value highlight-purple">{{ stats.best_score.toLocaleString() }}</div>
-        <div class="stat-label">Best Threat Score</div>
+        <div class="stat-label">Best score in your latest 20 sessions</div>
       </div>
 
       <div class="stat-card">
@@ -92,14 +92,14 @@ const handleJoinClassroom = () => {
 
     <div class="action-card">
       <div class="action-info">
-        <h4>SIMULATION STATUS: READY</h4>
-        <p>Active Sector: <strong>{{ stats.current_map }}</strong>. Launch Godot client to continue.</p>
+        <h4>Play CyberMorph</h4>
+        <p>Current Map: <strong>{{ stats.current_map }}</strong>. Open the CyberMorph game application on your device to play.</p>
       </div>
-      <button class="btn-play" @click="handlePlayGame">▶ Launch Simulation</button>
+      <button class="btn-play" @click="handlePlayGame">▶ How to play</button>
     </div>
 
     <div v-if="gameLaunchMessage" class="notice-box">
-      ⚡ {{ gameLaunchMessage }}
+      {{ gameLaunchMessage }}
     </div>
   </div>
 </template>
