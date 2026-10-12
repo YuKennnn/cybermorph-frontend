@@ -55,8 +55,10 @@ Show friendly user-facing messages; never render raw backend error payloads.
 - **Leaderboard**: `GET /leaderboard` with `map_name`, `page`, `page_size` (default 10; capped at top 50 per map; returns `items` and `total_count`).
 - **Classroom**: `POST /classroom/generate` (6-char code), `GET /classroom/my-codes` (flat array of `ClassroomResponse`), `POST /classroom/join` (player), `GET /classroom/{code_id}/students` (owner-only, paginated), `PATCH /classroom/{code_id}` (name, description, is_active), `DELETE /classroom/{code_id}` (soft delete).
 - **Web users**: `GET /web-users/me` (`display_name` is currently null; no avatar or profile update endpoint exists).
-- **Analytics**: `GET /analytics/classroom?code_id=`, `GET /analytics/player?profile_id=`, `GET /analytics/session?session_id=` (`threat_events` currently returns `[]`).
-- **Not yet built in backend**: Admin endpoints (`/admin/*`) and offline sync (`/sync/*`) do NOT exist yet. Do not assume live server support for them.
+- **Analytics**: `GET /analytics/classroom?code_id=`, `GET /analytics/player?profile_id=`, `GET /analytics/session?session_id=` (`threat_events` reflects decisions uploaded by the Godot client via `POST /sync/threat-events`; empty `[]` if unsynced).
+- **Admin (documented in API_GUIDE.md)**: 9 endpoints documented (`/admin/users`, `/admin/approvals`, `/admin/classrooms`, `/admin/logs`, `/admin/stats`). Live endpoint behavior has not been independently verified with live credentials.
+- **Offline sync (Godot exclusive)**: `GET /sync/player-state`, `POST /sync/threat-events`, `POST /sync/threat-index`. The web portal never calls these directly.
+- **Not yet built in backend**: Modifying or deleting users (`PATCH/DELETE /admin/users/{id}`), deleted-records restore screens (`/admin/deleted-records`), profile mutations (`display_name` editing, avatars, password reset).
 
 ### Cross-repository invariants (shared with Godot + FastAPI — never drift)
 - Threat taxonomy, canonical order: Phishing, Smishing, Vishing, Social

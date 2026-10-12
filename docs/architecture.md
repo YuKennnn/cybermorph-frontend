@@ -134,14 +134,13 @@ FastAPI Sync Endpoints
     v
 PostgreSQL
 
-The planned synchronization API includes:
+The documented synchronization API includes:
 
 - `GET /sync/player-state`
-- `POST /sync/session`
-- `POST /sync/threat-index`
 - `POST /sync/threat-events`
+- `POST /sync/threat-index`
 
-The backend plan specifies idempotent synchronization behavior because repeated submissions caused by unreliable mobile connectivity are expected. Client-generated UUIDs are used to prevent duplicate session and threat-event records during retries.
+Sessions themselves are submitted via `POST /sessions`. The backend integration guide specifies idempotent synchronization behavior using client-generated UUIDs to prevent duplicate session and threat-event records during mobile retries.
 
 The exact synchronization trigger used by the final Godot implementation is not established in this document. The backend plan indicates that cloud state may be pulled on login/lobby load and that session and related threat-event data may be pushed when synchronization is triggered.
 

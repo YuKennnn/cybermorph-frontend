@@ -464,43 +464,61 @@ Response:
 }
 ```
 
-*Note: `threat_events` currently returns an empty list `[]` as backend write operations to this table are pending implementation.*
+*Data nuances*:
+- `threat_events` contains individual decision events uploaded for that session by the Godot game client via `POST /sync/threat-events` (oldest first).
+- The list remains empty `[]` for older sessions or devices that have not synced events yet. The frontend must handle this as an expected empty state, not an error.
 
 Status:
-CONFIRMED
+DOCUMENTED IN BACKEND CONTRACT
 
 ## 10. Admin Endpoints
 
-> [!WARNING]
-> **Status: PLANNED / NOT YET BUILT ON LIVE BACKEND**
-> As documented in `API_GUIDE.md`, all `/admin/*` endpoints (user management, educator approval, classroom oversight, system logs/stats) do NOT exist yet on the hosted server. Frontend code must not assume live server support for them.
+The backend integration guide (`API_GUIDE.md`) documents 9 active administrative endpoints. All require an admin access token (`Authorization: Bearer <access_token>`).
 
-The planned endpoints include:
-- `GET /admin/users`
-- `PATCH /admin/users/{id}`
-- `DELETE /admin/users/{id}`
-- `GET /admin/deleted-records`
-- `POST /admin/deleted-records/{id}/restore`
-- `GET /admin/approvals`
-- `POST /admin/approvals/{id}/approve`
-- `POST /admin/approvals/{id}/reject`
-- `GET /admin/classrooms`
-- `PATCH /admin/classrooms/{id}`
-- `DELETE /admin/classrooms/{id}`
-- `GET /admin/logs`
-- `GET /admin/stats`
+> [!NOTE]
+> **Implementation Status**: These endpoints are documented in the backend integration contract (`API_GUIDE.md`). Live endpoint behavior has not been independently verified via live test credentials by the frontend team.
+
+### Documented Admin Routes
+
+| Method | Path | Parameters / Body | Returns |
+|---|---|---|---|
+| `GET` | `/admin/users` | `?role=&search=&page=&page_size=` (`role`: `player`, `educator`, `admin`; default `page_size: 20`) | Paginated `{ user_id, email, role, username, display_name, is_active, created_at }`, newest first |
+| `GET` | `/admin/approvals` | `?status=&page=&page_size=` (`status`: `pending` (default), `approved`, `rejected`; default `page_size: 20`) | Paginated `{ user_id, email, approval_status, created_at }`, oldest first |
+| `POST` | `/admin/approvals/{user_id}/approve` | None | `200 { user_id, email, approval_status, created_at }` |
+| `POST` | `/admin/approvals/{user_id}/reject` | None | `200 { user_id, email, approval_status, created_at }` |
+| `GET` | `/admin/classrooms` | `?search=&page=&page_size=` (default `page_size: 20`) | Paginated `ClassroomResponse` plus `{ owner_user_id, owner_email, owner_display_name }`, newest first |
+| `PATCH` | `/admin/classrooms/{code_id}` | Body: `{ is_active?, owner_user_id? }` (at least one required) | `200` with updated classroom object |
+| `DELETE` | `/admin/classrooms/{code_id}` | None | `204` (no body) |
+| `GET` | `/admin/logs` | `?action_type=&user_id=&page=&page_size=` (default `page_size: 20`) | Paginated `{ log_id, user_id, user_email, action_type, target_table, target_id, description, logged_at }`, newest first |
+| `GET` | `/admin/stats` | None | `200 { total_users, sessions_last_24h, threats_detected, uptime_seconds }` |
+
+### Documented Behavior Details
+- **User Accounts (`/admin/users`)**: Lists all live accounts. `username` is present for players; `display_name` is present for web users (currently always `null`). `search` filters email, username, or display name case-insensitively.
+- **Approval Review Queue (`/admin/approvals`)**: `pending` by default, ordered oldest first. Rejecting an account leaves the email registered so the user cannot re-register; an admin can approve previously rejected accounts later. Approve accepts `pending` or `rejected` registrations; Reject accepts `pending` only.
+- **Classroom Oversight (`/admin/classrooms`)**: Lists all live classrooms across all educators. Admins can deactivate a class or transfer ownership to another approved educator via `PATCH`. An admin cannot rename a class. `DELETE` soft-deletes the classroom (`204`).
+- **Audit Logs (`/admin/logs`)**: Paginated audit trail, newest first. Filterable by `user_id` (the actor) and `action_type`.
+- **System Metrics (`/admin/stats`)**:
+  - `total_users`: Total live user accounts.
+  - `sessions_last_24h`: Completed sessions synchronized to the server within the past 24 hours (preserves metric meaning: recent sessions, not active concurrent sessions).
+  - `threats_detected`: Total valid threats detected across uploaded gameplay events (preserves metric meaning: threats detected, not neutralized).
+  - `uptime_seconds`: Time since backend process boot (resets on free-tier spin-up).
+
+### Explicitly Unbuilt Endpoints (Do Not Integrate)
+Per `API_GUIDE.md`, the following endpoints are **not yet built** on the backend:
+- Modifying or deleting user accounts (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
+- Deleted-records inspection and restore screens (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
+- Profile mutations (updating `display_name`, uploading avatars, self-service password reset)
 
 ## 11. Synchronization Endpoints
 
 > [!NOTE]
-> **Status: PLANNED / GODOT CLIENT EXCLUSIVE**
-> `/sync/*` endpoints are designed exclusively for the Godot offline-first game client and are not built or utilized by the web portal.
+> **Godot Game Client Exclusive**
+> The `/sync/*` endpoints carry offline-to-online gameplay synchronization for the Godot mobile game client. The web portal does not call `/sync/*` directly; synchronized records are consumed by the portal via `/analytics/*` and `/players/*`. Sessions themselves are submitted via `POST /sessions`.
 
-Planned endpoints:
-- `GET /sync/player-state`
-- `POST /sync/session`
-- `POST /sync/threat-index`
-- `POST /sync/threat-events`
+Documented synchronization routes:
+- `GET /sync/player-state`: Pulls current cloud progress and threat unlocks for the authenticated player.
+- `POST /sync/threat-events`: Uploads client-logged attack event telemetry (`1 to 100` events per batch) tied to a client UUID `session_id`.
+- `POST /sync/threat-index`: Uploads newly unlocked canonical threat categories (`1 to 8` unlocks).
 
 ## 12. Authentication and Authorization Rules
 
@@ -523,6 +541,7 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 | `404` | `{"detail": "<plain string>"}` | Resource not found (e.g. unknown classroom code) |
 | `409` | `{"detail": {"field": "<field>", "message": "<msg>"}}` | **Nested object** tied to a specific field conflict (duplicate registration, already joined) |
 | `422` | FastAPI validation array `[{ "loc": [...], "msg": "...", "type": "..." }]` | Request body or query parameters failed Pydantic validation |
+| `500` | `{"detail": "Internal server error"}` | Unexpected server failure; display user-friendly retry notice |
 
 ## 14. Data Invariants
 
@@ -531,23 +550,22 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 - **Canonical Maps**: Home, Office, Internet Cafe, Public Park
 - **Session Results**: `win`, `lose`, `timeout`
 
-## 15. Confirmed vs. Pending
+## 15. Documented Contract vs. Unbuilt Endpoints
 
-### Confirmed by Actual Backend Implementation
-- API Base URL: `https://cybermorph-backend.onrender.com`
-- Swagger UI at `/docs`
-- 30-day JWT authentication via `POST /auth/login`
+### Documented in Integration Contract (`API_GUIDE.md`)
+- API Base URL: `https://cybermorph-backend.onrender.com` (Swagger UI at `/docs`)
+- 30-day JWT authentication via `POST /auth/login` (generic 401 on bad credentials)
 - Player registration (`POST /auth/register`) & Educator registration (`POST /auth/register-web` with `@dnsc.edu.ph`)
 - Seeded test accounts (`admin@cybermorph.local`, `educator@cybermorph.local`)
 - Player profile & Threat Index (`GET /players/me`, `GET /players/threat-index`)
-- Unified session submission (`POST /sessions`) and history (`GET /sessions/history`)
-- Leaderboard scores (`GET /leaderboard` with `map_name`, `page`, `page_size`)
-- Classroom operations (`POST /classroom/generate`, `GET /classroom/my-codes`, `POST /classroom/join`, `GET /classroom/{code_id}/students`, `PATCH /classroom/{code_id}`, `DELETE /classroom/{code_id}`)
+- Session submission (`POST /sessions` with client UUID) and history (`GET /sessions/history`)
+- Leaderboard scores (`GET /leaderboard` with `map_name`, `page`, `page_size`; top 50 cap)
+- Classroom management (`POST /classroom/generate`, `GET /classroom/my-codes`, `POST /classroom/join`, `GET /classroom/{code_id}/students`, `PATCH /classroom/{code_id}`, `DELETE /classroom/{code_id}`)
 - Educator analytics (`GET /analytics/classroom`, `GET /analytics/player`, `GET /analytics/session`)
-- Error shapes including nested 409 and 422 arrays
+- Admin operations (`GET /admin/users`, `GET /admin/approvals`, `POST /admin/approvals/{id}/approve`, `POST /admin/approvals/{id}/reject`, `GET /admin/classrooms`, `PATCH /admin/classrooms/{id}`, `DELETE /admin/classrooms/{id}`, `GET /admin/logs`, `GET /admin/stats`)
+- Godot sync endpoints (`GET /sync/player-state`, `POST /sync/threat-events`, `POST /sync/threat-index`)
 
-### Pending Backend Implementation
-- Admin endpoints (`/admin/*`)
-- Godot offline synchronization (`/sync/*`)
-- Profile mutations (`display_name` editing, avatar uploading, password reset)
-- Threat events logging into the `threat_events` table for session analytics
+### Explicitly Unbuilt on Backend (Do Not Implement or Assume)
+- User profile modification or deletion (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
+- Deleted records log and restoration views (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
+- Profile mutations (editing `display_name`, uploading profile avatars, self-service password reset)

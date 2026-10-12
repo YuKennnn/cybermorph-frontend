@@ -97,7 +97,7 @@ All API errors return JSON with a top-level `"detail"` key. Documentation and er
 
 When documenting or implementing analytics displays:
 - **Missing vs. Zero**: In `/analytics/classroom`, unplayed maps are **absent** from `avg_best_score_by_map`. Threat categories without attempts have a value of `null`, **not** `0`. Always write UI copy presenting `null` as *"No attempts recorded yet"*, never as *"0% fail rate"*.
-- **Empty Threat Events**: In `/analytics/session`, the `threat_events` array currently returns an empty list `[]` as backend telemetry writes are pending implementation. Document this as an expected empty state, never an error.
+- **Empty Threat Events**: In `/analytics/session`, the `threat_events` array reflects decisions uploaded from the Godot game client via `POST /sync/threat-events`. It returns an empty list `[]` for older sessions or devices that have not synced events yet. Document this as an expected empty state, never an error.
 - **Client UUID & Datetime**: Sessions submitted via `POST /sessions` require a client-generated UUID `session_id` (for idempotent retry safety) and an ISO 8601 `played_at` timestamp with explicit timezone offset or `'Z'` suffix (naive datetimes trigger 422).
 
 ---
@@ -105,8 +105,8 @@ When documenting or implementing analytics displays:
 ## 6. What NOT to Document or Assume as Active
 
 Do not write guides, instructions, or features assuming the existence of:
-- **Admin Endpoints (`/admin/*`)**: User management, educator approval actions, system logs, and stats endpoints are not yet built on the backend.
-- **Offline Sync Endpoints (`/sync/*`)**: Exclusively reserved for future Godot client synchronization; do not integrate into the web portal.
+- **Unbuilt Admin Routes**: Modifying or deleting user accounts (`PATCH/DELETE /admin/users/{id}`) and deleted-records log/restore (`/admin/deleted-records`) are not yet built on the backend. (Note: The 9 core admin routes documented in `API_GUIDE.md`—`/admin/users`, `/admin/approvals`, `/admin/classrooms`, `/admin/logs`, `/admin/stats`—are documented contracts, though live endpoint behavior has not been independently tested).
+- **Web Portal Offline Sync**: Offline sync endpoints (`/sync/*`) are exclusively reserved for Godot mobile client synchronization; do not integrate into the web portal.
 - **Profile Mutations**: No endpoints currently exist for updating `display_name`, uploading profile avatars, or self-service password resets.
 
 ---

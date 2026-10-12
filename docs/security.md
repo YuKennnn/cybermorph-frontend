@@ -178,12 +178,13 @@ The backend must therefore authenticate and authorize synchronization requests r
 
 The synchronization design also uses client-generated identifiers and idempotent operations to prevent repeated uploads from creating duplicate records.
 
-The planned sync endpoints are:
+The documented sync endpoints are:
 
 - `GET /sync/player-state`
-- `POST /sync/session`
-- `POST /sync/threat-index`
 - `POST /sync/threat-events`
+- `POST /sync/threat-index`
+
+(Sessions are submitted via `POST /sessions` with client-generated UUIDs).
 
 ## 13. Error Handling
 
