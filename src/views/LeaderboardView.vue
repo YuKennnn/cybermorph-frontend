@@ -113,10 +113,6 @@ onUnmounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <div class="card-badge">
-            <span class="badge-dot"></span>
-            <span>GLOBAL RANKINGS // LIVE FEED</span>
-          </div>
           <h2 class="title">Global Leaderboard</h2>
           <p class="subtitle">Top agent performance and threat simulation scores across all sectors</p>
         </div>
