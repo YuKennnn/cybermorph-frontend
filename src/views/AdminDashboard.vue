@@ -1,45 +1,59 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import { fetchAdminStats } from '../api/admin'
+import { fetchAdminStats, fetchAdminApprovals } from '../api/admin'
 
+const router = useRouter()
 const authStore = useAuthStore()
 
-const adminStats = ref({
-  total_users: 156,
-  active_sessions: 23,
-  pending_approvals: 4,
-  threats_detected: 412,
-  server_uptime: '99.9%',
-  recent_logs: [
-    { id: 1, action: 'User Registration', user: 'educator_smith@school.edu', status: 'Pending' },
-    { id: 2, action: 'Player Session Sync', user: 'player_alex', status: 'Success' },
-    { id: 3, action: 'Classroom Code Generated', user: 'prof_jones@univ.edu', status: 'Success' },
-  ],
-})
+const totalUsers = ref(null)
+const recentSessions = ref(null)
+const pendingApprovals = ref(null)
+const threatsDetected = ref(null)
 
 const isLoading = ref(true)
+const statsError = ref(false)
 const actionNotice = ref('')
 
 onMounted(async () => {
-  try {
-    const data = await fetchAdminStats()
-    if (data) {
-      adminStats.value = {
-        ...adminStats.value,
-        ...data,
-        active_sessions: data.sessions_last_24h ?? adminStats.value.active_sessions,
-      }
-    }
-  } catch {
-    // Keep mock defaults on network error
-  } finally {
-    isLoading.value = false
+  isLoading.value = true
+  statsError.value = false
+
+  const [statsRes, approvalsRes] = await Promise.allSettled([
+    fetchAdminStats(),
+    fetchAdminApprovals({ status: 'pending', page_size: 1 }),
+  ])
+
+  if (statsRes.status === 'fulfilled' && statsRes.value) {
+    totalUsers.value = typeof statsRes.value.total_users === 'number' ? statsRes.value.total_users : null
+    recentSessions.value = typeof statsRes.value.sessions_last_24h === 'number' ? statsRes.value.sessions_last_24h : null
+    threatsDetected.value = typeof statsRes.value.threats_detected === 'number' ? statsRes.value.threats_detected : null
+  } else {
+    statsError.value = true
   }
+
+  if (approvalsRes.status === 'fulfilled' && approvalsRes.value) {
+    pendingApprovals.value = typeof approvalsRes.value.total_count === 'number' ? approvalsRes.value.total_count : null
+  }
+
+  isLoading.value = false
 })
 
-const handleAdminAction = (panelName) => {
-  actionNotice.value = `${panelName} interface is not yet implemented. Admin integration is planned for a separate task.`
+const displayStat = (val) => {
+  if (isLoading.value) return '…'
+  if (val === null || val === undefined) return '—'
+  return typeof val === 'number' ? val.toLocaleString() : String(val)
+}
+
+const handleAdminAction = (action) => {
+  if (action === 'User Management') {
+    router.push('/admin/users')
+  } else if (action === 'Educator Approvals') {
+    router.push('/admin/approvals')
+  } else {
+    actionNotice.value = `${action} interface is not yet implemented. Audit log integration is planned for a separate task.`
+  }
 }
 </script>
 
@@ -54,24 +68,28 @@ const handleAdminAction = (panelName) => {
       </div>
     </div>
 
+    <div v-if="statsError" class="error-banner">
+      System metrics could not be loaded. Metric counts are currently unavailable.
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-value highlight-purple">{{ adminStats.total_users }}</div>
+        <div class="stat-value highlight-purple">{{ displayStat(totalUsers) }}</div>
         <div class="stat-label">Total Users</div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-value highlight-secondary">{{ adminStats.active_sessions }}</div>
+        <div class="stat-value highlight-secondary">{{ displayStat(recentSessions) }}</div>
         <div class="stat-label">Recent Sessions (24h)</div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-value highlight-amber">{{ adminStats.pending_approvals }}</div>
+        <div class="stat-value highlight-amber">{{ displayStat(pendingApprovals) }}</div>
         <div class="stat-label">Pending Educator Approvals</div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-value highlight-danger">{{ adminStats.threats_detected }}</div>
+        <div class="stat-value highlight-danger">{{ displayStat(threatsDetected) }}</div>
         <div class="stat-label">Threats Detected</div>
       </div>
     </div>
@@ -84,36 +102,34 @@ const handleAdminAction = (panelName) => {
       <h4>Administrative Actions</h4>
       <div class="actions-grid">
         <button class="action-tile" @click="handleAdminAction('User Management')">
-          <span class="tile-tag">OPS 01</span>
           <span class="tile-title">User Management</span>
-          <span class="tile-desc">Manage identities, user accounts and role scopes</span>
+          <span class="tile-desc">Inspect registered accounts, roles, and user identifiers</span>
         </button>
 
         <button class="action-tile highlight-tile" @click="handleAdminAction('Educator Approvals')">
-          <span class="tile-tag">QUEUE 02</span>
-          <span class="tile-title">Educator Approvals ({{ adminStats.pending_approvals }})</span>
-          <span class="tile-desc">Review and authorize institutional instructor requests</span>
+          <span class="tile-title">
+            Educator Approvals
+            <template v-if="pendingApprovals !== null && pendingApprovals > 0">
+              ({{ pendingApprovals }})
+            </template>
+          </span>
+          <span class="tile-desc">Review and authorize institutional instructor registrations</span>
         </button>
 
         <button class="action-tile" @click="handleAdminAction('System Logs')">
-          <span class="tile-tag">AUDIT 03</span>
           <span class="tile-title">Audit Logs</span>
-          <span class="tile-desc">Inspect administrative activity and system event logs</span>
+          <span class="tile-desc">Inspect administrative activity and system event logs (Planned)</span>
         </button>
       </div>
     </div>
 
     <div class="content-section">
       <h4>Recent Activity Logs</h4>
-      <ul class="log-list">
-        <li v-for="log in adminStats.recent_logs" :key="log.id" class="log-item">
-          <div class="log-meta">
-            <span class="log-action">{{ log.action }}</span>
-            <span class="log-user">{{ log.user }}</span>
-          </div>
-          <span :class="['status-tag', log.status.toLowerCase()]">{{ log.status }}</span>
-        </li>
-      </ul>
+      <div class="logs-placeholder-card">
+        <p class="placeholder-text">
+          Activity logs are not yet integrated. Full administrative audit log streams (GET /admin/logs) are part of the documented contract, but frontend UI integration is currently deferred.
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -159,13 +175,13 @@ const handleAdminAction = (panelName) => {
   border-radius: 12px;
   padding: 1.5rem;
   text-align: center;
-  box-shadow: var(--shadow-purple);
+  box-shadow: var(--shadow-card);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-purple-hover);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .stat-value {
@@ -204,7 +220,7 @@ const handleAdminAction = (panelName) => {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 1.75rem;
-  box-shadow: var(--shadow-purple);
+  box-shadow: var(--shadow-card);
 }
 
 .content-section h4 {
@@ -236,7 +252,7 @@ const handleAdminAction = (panelName) => {
 .action-tile:hover {
   background-color: var(--color-bg-muted);
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-purple);
+  box-shadow: var(--shadow-sm);
   transform: translateY(-2px);
 }
 
@@ -250,22 +266,6 @@ const handleAdminAction = (panelName) => {
   background: var(--color-warning-bg);
 }
 
-.tile-tag {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  background-color: var(--color-bg-muted);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  margin-bottom: 0.65rem;
-  letter-spacing: 0.05em;
-}
-
-.highlight-tile .tile-tag {
-  color: var(--color-warning);
-  background-color: var(--color-bg-subtle);
-}
 
 .tile-title {
   font-size: 1rem;
@@ -280,63 +280,18 @@ const handleAdminAction = (panelName) => {
   line-height: 1.45;
 }
 
-.log-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.log-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.85rem 1.15rem;
+.logs-placeholder-card {
+  padding: 2rem 1.5rem;
   background-color: var(--color-bg-subtle);
   border-radius: 8px;
-  border-left: 3.5px solid var(--color-secondary);
+  border: 1px dashed var(--color-border);
+  text-align: center;
+}
+
+.placeholder-text {
+  margin: 0;
   font-size: 0.9rem;
-}
-
-.log-meta {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.log-action {
-  font-weight: 600;
-  color: var(--color-text-main);
-}
-
-.log-user {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  color: var(--color-primary);
-}
-
-.status-tag {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  text-transform: uppercase;
-}
-
-.status-tag.success {
-  background-color: var(--color-success-bg);
-  color: var(--color-success);
-  border: 1px solid var(--color-success-border);
-}
-
-.status-tag.pending {
-  background-color: var(--color-warning-bg);
-  color: var(--color-warning);
-  border: 1px solid var(--color-warning-border);
+  color: var(--color-text-muted);
 }
 
 .notice-box {
@@ -347,5 +302,14 @@ const handleAdminAction = (panelName) => {
   border-radius: 8px;
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.error-banner {
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  padding: 0.85rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 </style>

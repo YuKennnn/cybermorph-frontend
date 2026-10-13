@@ -144,6 +144,18 @@ const formatRole = (role) => {
           <AppIcon name="analytics" :size="18" class="nav-icon" />
           <span class="nav-label">Threat analytics</span>
         </router-link>
+
+        <!-- Admin Specific Links -->
+        <router-link
+          v-if="authStore.isAdmin"
+          to="/admin/users"
+          class="nav-item"
+          :class="{ 'router-link-active': $route.path.startsWith('/admin') }"
+          @click="closeMobileMenu"
+        >
+          <AppIcon name="users" :size="18" class="nav-icon" />
+          <span class="nav-label">Users</span>
+        </router-link>
       </nav>
 
       <!-- Sidebar Footer -->

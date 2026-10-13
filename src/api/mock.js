@@ -560,6 +560,277 @@ mock.onGet(new RegExp('/analytics/session')).reply((config) => {
   ]
 })
 
+// ==========================================
+// Admin Stateful Mock Datasets & Endpoints
+// ==========================================
+let mockAdminUsers = [
+  {
+    user_id: 'u-admin-01',
+    email: 'admin@cybermorph.local',
+    role: 'admin',
+    username: null,
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-01T08:00:00Z',
+  },
+  {
+    user_id: 'u-educator-01',
+    email: 'educator@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-05T09:30:00Z',
+  },
+  {
+    user_id: 'u-educator-pending-01',
+    email: 'prof_smith@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: null,
+    is_active: false,
+    created_at: '2026-09-10T14:15:00Z',
+  },
+  {
+    user_id: 'u-educator-pending-02',
+    email: 'instructor_lee@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: null,
+    is_active: false,
+    created_at: '2026-09-15T11:20:00Z',
+  },
+  {
+    user_id: 'u-educator-rejected-01',
+    email: 'rejected_candidate@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: null,
+    is_active: false,
+    created_at: '2026-09-02T10:00:00Z',
+  },
+  {
+    user_id: 'u-player-01',
+    email: 'player_alex@example.com',
+    role: 'player',
+    username: 'AgentAlex',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-10T16:45:00Z',
+  },
+  {
+    user_id: 'u-player-02',
+    email: 'player_sam@example.com',
+    role: 'player',
+    username: 'SamSec',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-12T13:10:00Z',
+  },
+  {
+    user_id: 'u-player-03',
+    email: 'player_casey@example.com',
+    role: 'player',
+    username: 'CaseyByte',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-15T18:20:00Z',
+  },
+]
+
+let mockAdminApprovals = [
+  {
+    user_id: 'u-educator-pending-01',
+    email: 'prof_smith@dnsc.edu.ph',
+    approval_status: 'pending',
+    created_at: '2026-09-10T14:15:00Z',
+  },
+  {
+    user_id: 'u-educator-pending-02',
+    email: 'instructor_lee@dnsc.edu.ph',
+    approval_status: 'pending',
+    created_at: '2026-09-15T11:20:00Z',
+  },
+  {
+    user_id: 'u-educator-01',
+    email: 'educator@dnsc.edu.ph',
+    approval_status: 'approved',
+    created_at: '2026-08-05T09:30:00Z',
+  },
+  {
+    user_id: 'u-educator-rejected-01',
+    email: 'rejected_candidate@dnsc.edu.ph',
+    approval_status: 'rejected',
+    created_at: '2026-09-02T10:00:00Z',
+  },
+]
+
+mock.onGet('/admin/stats').reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  return [
+    200,
+    {
+      total_users: mockAdminUsers.length,
+      sessions_last_24h: 12,
+      threats_detected: 84,
+      uptime_seconds: 3600,
+    },
+  ]
+})
+
+mock.onGet('/admin/users').reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const params = config.params || {}
+  const roleFilter = params.role ? String(params.role).toLowerCase() : null
+  const searchQuery = params.search ? String(params.search).toLowerCase() : null
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+  const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
+
+  let filtered = mockAdminUsers.filter((u) => {
+    if (roleFilter && u.role?.toLowerCase() !== roleFilter) return false
+    if (searchQuery) {
+      const matchEmail = u.email?.toLowerCase().includes(searchQuery)
+      const matchUsername = u.username?.toLowerCase().includes(searchQuery)
+      const matchDisplay = u.display_name?.toLowerCase().includes(searchQuery)
+      if (!matchEmail && !matchUsername && !matchDisplay) return false
+    }
+    return true
+  })
+
+  filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+  const totalCount = filtered.length
+  const startIdx = (page - 1) * pageSize
+  const items = filtered.slice(startIdx, startIdx + pageSize)
+
+  return [
+    200,
+    {
+      items,
+      total_count: totalCount,
+      page,
+      page_size: pageSize,
+    },
+  ]
+})
+
+mock.onGet('/admin/approvals').reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const params = config.params || {}
+  const statusFilter = (params.status || 'pending').toLowerCase()
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+  const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
+
+  let filtered = mockAdminApprovals.filter((a) => a.approval_status === statusFilter)
+  filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+
+  const totalCount = filtered.length
+  const startIdx = (page - 1) * pageSize
+  const items = filtered.slice(startIdx, startIdx + pageSize)
+
+  return [
+    200,
+    {
+      items,
+      total_count: totalCount,
+      page,
+      page_size: pageSize,
+    },
+  ]
+})
+
+mock.onPost(new RegExp('^/admin/approvals/[^/]+/approve$')).reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const match = config.url.match(/^\/admin\/approvals\/([^/]+)\/approve$/)
+  const userId = match ? match[1] : null
+  const approvalItem = mockAdminApprovals.find((a) => a.user_id === userId)
+
+  if (!approvalItem) {
+    return [404, { detail: 'Educator registration not found' }]
+  }
+
+  if (approvalItem.approval_status === 'approved') {
+    return [409, { detail: { field: 'approval_status', message: 'Registration has already been approved' } }]
+  }
+
+  approvalItem.approval_status = 'approved'
+
+  const userAccount = mockAdminUsers.find((u) => u.user_id === userId)
+  if (userAccount) {
+    userAccount.is_active = true
+  }
+
+  return [
+    200,
+    {
+      user_id: approvalItem.user_id,
+      email: approvalItem.email,
+      approval_status: 'approved',
+      created_at: approvalItem.created_at,
+    },
+  ]
+})
+
+mock.onPost(new RegExp('^/admin/approvals/[^/]+/reject$')).reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const match = config.url.match(/^\/admin\/approvals\/([^/]+)\/reject$/)
+  const userId = match ? match[1] : null
+  const approvalItem = mockAdminApprovals.find((a) => a.user_id === userId)
+
+  if (!approvalItem) {
+    return [404, { detail: 'Educator registration not found' }]
+  }
+
+  if (approvalItem.approval_status !== 'pending') {
+    return [
+      409,
+      {
+        detail: {
+          field: 'approval_status',
+          message: `Cannot reject registration with status '${approvalItem.approval_status}'`,
+        },
+      },
+    ]
+  }
+
+  approvalItem.approval_status = 'rejected'
+
+  const userAccount = mockAdminUsers.find((u) => u.user_id === userId)
+  if (userAccount) {
+    userAccount.is_active = false
+  }
+
+  return [
+    200,
+    {
+      user_id: approvalItem.user_id,
+      email: approvalItem.email,
+      approval_status: 'rejected',
+      created_at: approvalItem.created_at,
+    },
+  ]
+})
+
 mock.onAny().passThrough()
 
 export default mock
