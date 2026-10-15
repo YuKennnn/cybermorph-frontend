@@ -24,10 +24,14 @@ The backend rewrite is designed as a feature-based asynchronous FastAPI applicat
 The official FastAPI backend is deployed at:
 
 ```
-https://cybermorph-backend.onrender.com
+https://cybermorph-backend.onrender.com/v1
 ```
 
-- **Interactive API Documentation**: Swagger UI is available at `/docs` on the host.
+All feature endpoints (`/auth`, `/players`, `/classroom`, `/analytics`, `/admin`, `/leaderboard`, `/sessions`) are relative to this `/v1` base URL.
+
+Two resources intentionally remain at the host root (`https://cybermorph-backend.onrender.com`):
+- **Interactive API Documentation & Schema**: Swagger UI at `/docs`, OpenAPI at `/openapi.json`
+- **Application & API Version Negotiation**: `GET /app/version` (unversioned host root)
 - **Cold Starts**: Render free-tier hosting spins down after ~15 minutes of idle time. The first request after idle requires 30–50 seconds to wake up. Frontend clients must handle this delay gracefully.
 - **CORS Allowlist**: Cross-origin requests are governed by the server-side `CORS_ORIGINS` environment variable on Render (e.g. `http://localhost:5173`). Dev servers must be explicitly added to this allowlist on the server.
 
@@ -553,7 +557,7 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 ## 15. Documented Contract vs. Unbuilt Endpoints
 
 ### Documented in Integration Contract (`API_GUIDE.md`)
-- API Base URL: `https://cybermorph-backend.onrender.com` (Swagger UI at `/docs`)
+- API Base URL: `https://cybermorph-backend.onrender.com/v1` (Swagger UI at `/docs`, version negotiation at `/app/version`)
 - 30-day JWT authentication via `POST /auth/login` (generic 401 on bad credentials)
 - Player registration (`POST /auth/register`) & Educator registration (`POST /auth/register-web` with `@dnsc.edu.ph`)
 - Seeded test accounts (`admin@cybermorph.local`, `educator@cybermorph.local`)

@@ -48,7 +48,7 @@ All errors return a top-level `"detail"` key, but their exact structure depends 
 Show friendly user-facing messages; never render raw backend error payloads.
 
 ### Endpoint groups (summary — details in docs/api.md)
-- **Base URL**: `https://cybermorph-backend.onrender.com` (Swagger UI at `/docs`). 30–50s cold start on idle wake-up.
+- **Base URL**: `https://cybermorph-backend.onrender.com/v1` (Swagger UI at `/docs`, version check at `/app/version`). 30–50s cold start on idle wake-up.
 - **Auth**: `POST /auth/register` (player), `POST /auth/register-web` (educator, `@dnsc.edu.ph` required, pending admin approval), `POST /auth/login` (30-day Bearer token, no refresh endpoint).
 - **Players**: `GET /players/me`, `GET /players/threat-index` (creates 8 canonical entries on first call).
 - **Sessions**: `POST /sessions` (submits completed session; requires client-generated UUID `session_id`, timezone-aware `played_at`, returns `{session, map_progress}`), `GET /sessions/history` (paginated).
@@ -72,7 +72,7 @@ Show friendly user-facing messages; never render raw backend error payloads.
 - `src/main.js` dynamically imports `src/api/mock.js` in DEV only. The mock
   uses `axios-mock-adapter` with `onAny().passThrough()` last, so unmatched
   requests hit the real base URL.
-- `src/api/client.js` defaults to `https://cybermorph-backend.onrender.com` or
+- `src/api/client.js` defaults to `https://cybermorph-backend.onrender.com/v1` or
   reads `import.meta.env.VITE_API_BASE_URL`.
 - CORS must be configured on Render via `CORS_ORIGINS`, not in frontend code.
 

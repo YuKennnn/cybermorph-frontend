@@ -65,7 +65,7 @@ Game session results are restricted to:
 ## 3. Backend & Network Documentation Rules
 
 ### Base URL & Environment
-- Production Base URL: `https://cybermorph-backend.onrender.com`
+- Production Base URL: `https://cybermorph-backend.onrender.com/v1` (endpoints under `/v1/*`, version endpoint at host root `/app/version`)
 - Swagger UI / OpenAPI docs: Available at `/docs` on the host.
 - Environment Variable: Documented as `VITE_API_BASE_URL`. Code should fall back cleanly to the hosted URL if unset.
 - **CORS**: Cross-Origin Resource Sharing is controlled exclusively by the backend's server-side `CORS_ORIGINS` environment variable on Render (e.g. `http://localhost:5173`). Do not write documentation suggesting CORS can be resolved via frontend client headers.

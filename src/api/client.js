@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const apiClient = axios.create({
-  baseURL: import.meta.env?.VITE_API_BASE_URL || 'https://cybermorph-backend.onrender.com',
+  baseURL: import.meta.env?.VITE_API_BASE_URL || 'https://cybermorph-backend.onrender.com/v1',
 })
 
 apiClient.interceptors.request.use(
