@@ -57,10 +57,7 @@ onUnmounted(() => {
     <PublicHeader />
     <div class="auth-container">
       <div class="auth-card">
-        <div class="card-badge">
-          <span class="badge-dot"></span>
-          <span>PORTAL SIGN IN</span>
-        </div>
+
 
         <h2 class="title">Sign In</h2>
         <p class="subtitle">Sign in to your CyberMorph account</p>
