@@ -88,10 +88,6 @@ onUnmounted(() => {
     <PublicHeader />
     <div class="auth-container">
       <div class="auth-card">
-        <div class="card-badge">
-          <span class="badge-dot"></span>
-          <span>ACCOUNT REGISTRATION</span>
-        </div>
 
         <h2 class="title">Create Account</h2>
         <p class="subtitle">Register a player or educator account for CyberMorph</p>

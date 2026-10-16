@@ -175,15 +175,6 @@ onMounted(() => {
               Distribute access codes to students to connect their devices to your roster.
             </p>
           </div>
-          <button
-            v-if="classrooms.length > 0"
-            type="button"
-            class="btn-outline-sm"
-            @click="isCreateModalOpen = true"
-          >
-            <AppIcon name="plus" :size="14" />
-            <span>New classroom</span>
-          </button>
         </div>
 
         <!-- Classrooms Grid (Reusing ClassroomCard with utility actions hidden) -->

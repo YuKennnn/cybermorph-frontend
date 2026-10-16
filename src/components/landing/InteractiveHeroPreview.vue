@@ -312,7 +312,6 @@ onUnmounted(() => {
     <!-- Top Bar with status & controls -->
     <div class="panel-header">
       <div class="header-left">
-        <span class="status-dot" :class="{ paused: isPaused }"></span>
         <span class="panel-title">Interactive preview</span>
         <span class="preview-badge">Simulation preview</span>
       </div>

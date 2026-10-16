@@ -45,11 +45,6 @@ const mapPreviews = [
                 <AppIcon name="arrow-right" :size="16" />
               </RouterLink>
             </div>
-
-            <div class="hero-status-note">
-              <span class="status-indicator-dot"></span>
-              <span>Free offline-first gameplay for everyone &bull; Optional classroom sync</span>
-            </div>
           </div>
 
           <!-- Bounded Interactive Pixel-Art Simulation Preview -->

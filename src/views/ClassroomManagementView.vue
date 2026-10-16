@@ -78,10 +78,6 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <div class="card-badge">
-            <span class="badge-dot"></span>
-            <span>INSTRUCTOR CONSOLE // SECTORS</span>
-          </div>
           <h2 class="title">Classroom Management</h2>
           <p class="subtitle">Generate codes, manage sector configurations, and inspect enrolled student progression</p>
         </div>
