@@ -78,22 +78,30 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <h2 class="title">Classroom Management</h2>
-          <p class="subtitle">Generate codes, manage sector configurations, and inspect enrolled student progression</p>
+          <h2 class="title">Classroom management</h2>
+          <p class="subtitle">Generate codes, manage classroom settings, and inspect student progress</p>
         </div>
         <div class="header-actions">
-          <button class="btn-primary" @click="isCreateModalOpen = true">+ Create Classroom</button>
+          <button class="btn-primary" @click="isCreateModalOpen = true">+ Create classroom</button>
         </div>
       </div>
     </header>
 
     <main class="page-body">
-      <div v-if="successMessage" class="success-banner">
+      <div v-if="successMessage" class="success-banner" role="status">
         {{ successMessage }}
       </div>
 
-      <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
+      <div v-if="errorMessage" class="error-banner" role="alert">
+        <span>{{ errorMessage }}</span>
+        <button
+          type="button"
+          class="btn-retry"
+          :disabled="isLoading"
+          @click="fetchClassrooms"
+        >
+          Try again
+        </button>
       </div>
 
       <div v-if="isLoading" class="loading-state">
@@ -113,10 +121,10 @@ onMounted(() => {
         />
       </div>
 
-      <div v-else class="empty-state">
-        <h4>No Active Classrooms Found</h4>
-        <p>Initialize a new security curriculum sector by generating a 6-character classroom code.</p>
-        <button class="btn-primary" @click="isCreateModalOpen = true">+ Create Classroom</button>
+      <div v-else-if="!errorMessage" class="empty-state">
+        <h4>No classrooms found</h4>
+        <p>Create a classroom and generate a 6-character access code for your students.</p>
+        <button class="btn-primary" @click="isCreateModalOpen = true">+ Create classroom</button>
       </div>
     </main>
 
@@ -184,14 +192,50 @@ onMounted(() => {
 
 .title {
   margin: 0 0 0.35rem 0;
-  color: var(--color-primary);
+  color: var(--color-text-main);
   font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background-color: var(--color-card);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
+}
+
+.btn-retry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .header-actions {

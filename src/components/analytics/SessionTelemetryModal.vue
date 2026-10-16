@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -26,15 +26,93 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  fallbackFocusSelector: {
+    type: String,
+    default: '.title',
+  },
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'backToStudent'])
 
-const handleKeyDown = (event) => {
-  if (event.key === 'Escape' && props.isOpen) {
-    emit('close')
+const modalRef = ref(null)
+const backBtnRef = ref(null)
+let previousActiveElement = null
+
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !modalRef.value) return
+  const focusables = modalRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
+  }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
   }
 }
+
+const handleKeyDown = (event) => {
+  if (!props.isOpen) return
+  if (event.key === 'Escape') {
+    emit('backToStudent')
+    return
+  }
+  trapFocus(event)
+}
+
+watch(
+  () => props.isOpen,
+  (open, oldOpen) => {
+    if (open) {
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        if (backBtnRef.value) {
+          backBtnRef.value.focus()
+        } else {
+          const firstFocusable = modalRef.value?.querySelector(
+            'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          )
+          firstFocusable?.focus()
+        }
+      })
+    } else if (oldOpen) {
+      nextTick(() => {
+        if (!document.querySelector('.modal-backdrop')) {
+          document.body.style.overflow = ''
+        }
+      })
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        previousActiveElement !== document.body &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else if (props.fallbackFocusSelector) {
+        const fallback = document.querySelector(props.fallbackFocusSelector)
+        if (fallback && typeof fallback.focus === 'function') {
+          if (!fallback.hasAttribute('tabindex')) {
+            fallback.setAttribute('tabindex', '-1')
+          }
+          fallback.focus()
+        }
+      }
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
@@ -42,33 +120,53 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (!document.querySelector('.modal-backdrop')) {
+    document.body.style.overflow = ''
+  }
 })
 </script>
 
 <template>
   <div
     v-if="isOpen"
+    ref="modalRef"
     class="modal-backdrop sub-backdrop"
     role="dialog"
     aria-modal="true"
-    aria-label="Session Attack Telemetry"
-    @click.self="emit('close')"
+    aria-label="Session details"
+    @click.self="emit('backToStudent')"
   >
     <div class="modal-dialog modal-md">
       <div class="modal-header">
-        <div class="modal-title-box">
-          <h4>Session Attack Telemetry</h4>
-          <span class="modal-profile-id">ID: {{ session?.session_id }}</span>
+        <div class="header-left-actions">
+          <button
+            ref="backBtnRef"
+            type="button"
+            class="btn-back-link"
+            @click="emit('backToStudent')"
+          >
+            ◀ Back to student
+          </button>
+          <div class="modal-title-box">
+            <h4>Session details</h4>
+            <span class="modal-profile-id">Session ID: {{ session?.session_id }}</span>
+          </div>
         </div>
-        <button class="modal-close-btn" aria-label="Close session telemetry modal" @click="emit('close')">✕</button>
+        <button
+          class="modal-close-btn"
+          aria-label="Close session details modal"
+          @click="emit('backToStudent')"
+        >
+          ✕
+        </button>
       </div>
 
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Querying session telemetry stream...</p>
+        <p>Loading session details...</p>
       </div>
 
-      <div v-else-if="errorMessage" class="error-banner">
+      <div v-else-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
       </div>
 
@@ -76,15 +174,15 @@ onUnmounted(() => {
         <!-- Session Context Header -->
         <div class="session-summary-box">
           <div class="summary-col">
-            <span class="summary-label">Codename</span>
-            <span class="summary-val">{{ sessionTelemetry.username || student?.username || 'Agent' }}</span>
+            <span class="summary-label">Student</span>
+            <span class="summary-val">{{ sessionTelemetry.username || student?.username || ('Student ID: ' + (student?.profile_id || '')) }}</span>
           </div>
           <div class="summary-col">
             <span class="summary-label">Map</span>
             <span class="summary-val">{{ sessionTelemetry.map_name }}</span>
           </div>
           <div class="summary-col">
-            <span class="summary-label">Mission Outcome</span>
+            <span class="summary-label">Outcome</span>
             <span :class="['result-pill', sessionTelemetry.result]">
               {{ sessionTelemetry.result?.toUpperCase() }}
             </span>
@@ -93,7 +191,7 @@ onUnmounted(() => {
 
         <!-- Threat Events Table or Graceful Empty State -->
         <div class="subsection">
-          <h5>Granular Attack & Defense Events</h5>
+          <h5>Session events</h5>
 
           <div
             v-if="sessionTelemetry.threat_events && sessionTelemetry.threat_events.length > 0"
@@ -102,8 +200,8 @@ onUnmounted(() => {
             <table class="data-table events-table">
               <thead>
                 <tr>
-                  <th>Threat Category</th>
-                  <th>Action Taken</th>
+                  <th>Type of threat</th>
+                  <th>Action taken</th>
                   <th>Assessment</th>
                   <th>Legitimate?</th>
                   <th>Credits</th>
@@ -145,10 +243,9 @@ onUnmounted(() => {
           <!-- Graceful Empty State for Telemetry Streaming -->
           <div v-else class="telemetry-pending-banner">
             <div class="pending-text">
-              <h6>Telemetry Event Stream Synchronization</h6>
+              <h6>Session event details</h6>
               <p>
-                No granular attack events recorded for this session. Threat event streaming from the Godot
-                game client is currently pending telemetry synchronization. Summary outcome metrics remain fully validated.
+                No individual threat events recorded for this session. Summary outcome metrics remain recorded above.
               </p>
             </div>
           </div>
@@ -159,6 +256,29 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.header-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-back-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-back-link:hover {
+  background-color: var(--color-bg-subtle);
+  text-decoration: underline;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -177,7 +297,7 @@ onUnmounted(() => {
 }
 
 .modal-dialog {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(124, 58, 237, 0.2);

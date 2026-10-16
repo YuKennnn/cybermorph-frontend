@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { deleteClassroom } from '../../api/classroom'
 
 const props = defineProps({
@@ -11,34 +11,99 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  fallbackFocusSelector: {
+    type: String,
+    default: '.btn-outline-sm',
+  },
 })
 
 const emit = defineEmits(['close', 'deleted'])
 
+const modalRef = ref(null)
+const cancelBtnRef = ref(null)
+let previousActiveElement = null
+
 const isDeleting = ref(false)
 const errorMessage = ref('')
 
-const handleKeyDown = (event) => {
-  if (event.key === 'Escape' && props.isOpen) {
-    emit('close')
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !modalRef.value) return
+  const focusables = modalRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
   }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
+  }
+}
+
+const handleKeyDown = (event) => {
+  if (!props.isOpen) return
+  if (event.key === 'Escape') {
+    emit('close')
+    return
+  }
+  trapFocus(event)
 }
 
 watch(
   () => props.isOpen,
-  (open) => {
+  (open, oldOpen) => {
     if (open) {
       errorMessage.value = ''
-      window.addEventListener('keydown', handleKeyDown)
-    } else {
-      window.removeEventListener('keydown', handleKeyDown)
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        if (cancelBtnRef.value) {
+          cancelBtnRef.value.focus()
+        }
+      })
+    } else if (oldOpen) {
+      nextTick(() => {
+        if (!document.querySelector('.modal-backdrop')) {
+          document.body.style.overflow = ''
+        }
+      })
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        previousActiveElement !== document.body &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else if (props.fallbackFocusSelector) {
+        const fallback = document.querySelector(props.fallbackFocusSelector)
+        if (fallback && typeof fallback.focus === 'function') {
+          fallback.focus()
+        }
+      }
     }
   },
   { immediate: true },
 )
 
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (!document.querySelector('.modal-backdrop')) {
+    document.body.style.overflow = ''
+  }
 })
 
 const handleDelete = async () => {
@@ -63,6 +128,7 @@ const handleDelete = async () => {
 <template>
   <div
     v-if="isOpen"
+    ref="modalRef"
     class="modal-overlay"
     role="dialog"
     aria-modal="true"
@@ -71,21 +137,26 @@ const handleDelete = async () => {
   >
     <div class="modal-card danger-modal">
       <div class="modal-header">
-        <h3 id="delete-modal-title" class="modal-title danger-title">Confirm Deletion</h3>
+        <h3 id="delete-modal-title" class="modal-title danger-title">Delete classroom</h3>
         <button class="close-btn" aria-label="Close dialog" @click="emit('close')">✕</button>
       </div>
 
-      <div v-if="errorMessage" class="error-banner">
+      <div v-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
       </div>
 
       <p class="modal-desc">
-        Are you sure you want to soft-delete <strong>"{{ classroom?.name }}"</strong>?
-        Enrolled students will no longer synchronize progress to this classroom.
+        Are you sure you want to delete <strong>"{{ classroom?.name }}"</strong>?
+        This classroom will be removed from your classroom lists and its join code will stop working.
       </p>
 
       <div class="modal-buttons">
-        <button type="button" class="btn-cancel" @click="emit('close')">
+        <button
+          ref="cancelBtnRef"
+          type="button"
+          class="btn-cancel"
+          @click="emit('close')"
+        >
           Cancel
         </button>
         <button
@@ -94,7 +165,7 @@ const handleDelete = async () => {
           :disabled="isDeleting"
           @click="handleDelete"
         >
-          {{ isDeleting ? 'Deleting...' : 'Delete Classroom' }}
+          {{ isDeleting ? 'Deleting...' : 'Delete classroom' }}
         </button>
       </div>
     </div>
@@ -204,7 +275,7 @@ const handleDelete = async () => {
 .btn-danger {
   padding: 0.65rem 1.25rem;
   background: var(--color-danger);
-  color: #ffffff;
+  color: var(--color-card);
   border: none;
   border-radius: 8px;
   font-family: var(--font-display);

@@ -1,11 +1,15 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import AppIcon from './AppIcon.vue'
 
 const authStore = useAuthStore()
 const isMobileNavOpen = ref(false)
+const drawerCloseBtnRef = ref(null)
+const menuToggleBtnRef = ref(null)
+const drawerRef = ref(null)
+let previousActiveElement = null
 
 const toggleMobileNav = () => {
   isMobileNavOpen.value = !isMobileNavOpen.value
@@ -14,6 +18,71 @@ const toggleMobileNav = () => {
 const closeMobileNav = () => {
   isMobileNavOpen.value = false
 }
+
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !drawerRef.value || !isMobileNavOpen.value) return
+  const focusables = drawerRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
+  }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
+  }
+}
+
+const handleKeyDown = (event) => {
+  if (event.key === 'Escape' && isMobileNavOpen.value) {
+    closeMobileNav()
+    return
+  }
+  trapFocus(event)
+}
+
+watch(
+  isMobileNavOpen,
+  (open) => {
+    if (open) {
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        drawerCloseBtnRef.value?.focus()
+      })
+    } else {
+      document.body.style.overflow = ''
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else {
+        menuToggleBtnRef.value?.focus()
+      }
+    }
+  },
+)
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
@@ -58,6 +127,7 @@ const closeMobileNav = () => {
 
         <!-- Mobile Hamburger Toggle -->
         <button
+          ref="menuToggleBtnRef"
           type="button"
           class="mobile-menu-toggle"
           :aria-expanded="isMobileNavOpen"
@@ -75,12 +145,13 @@ const closeMobileNav = () => {
       class="mobile-drawer-backdrop"
       @click="closeMobileNav"
     >
-      <div class="mobile-drawer" @click.stop>
+      <div ref="drawerRef" class="mobile-drawer" @click.stop>
         <div class="mobile-drawer-header">
           <RouterLink to="/" class="brand-link" @click="closeMobileNav">
             <span class="brand-name">CYBERMORPH</span>
           </RouterLink>
           <button
+            ref="drawerCloseBtnRef"
             type="button"
             class="mobile-close-btn"
             aria-label="Close menu"

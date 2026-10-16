@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { updateClassroom } from '../../api/classroom'
 
 const props = defineProps({
@@ -11,19 +11,54 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  fallbackFocusSelector: {
+    type: String,
+    default: '.btn-outline-sm',
+  },
 })
 
 const emit = defineEmits(['close', 'updated'])
+
+const modalRef = ref(null)
+const inputRef = ref(null)
+let previousActiveElement = null
 
 const editName = ref('')
 const editIsActive = ref(true)
 const isUpdating = ref(false)
 const errorMessage = ref('')
 
-const handleKeyDown = (event) => {
-  if (event.key === 'Escape' && props.isOpen) {
-    emit('close')
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !modalRef.value) return
+  const focusables = modalRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
   }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
+  }
+}
+
+const handleKeyDown = (event) => {
+  if (!props.isOpen) return
+  if (event.key === 'Escape') {
+    emit('close')
+    return
+  }
+  trapFocus(event)
 }
 
 watch(
@@ -40,18 +75,48 @@ watch(
 
 watch(
   () => props.isOpen,
-  (open) => {
+  (open, oldOpen) => {
     if (open) {
-      window.addEventListener('keydown', handleKeyDown)
-    } else {
-      window.removeEventListener('keydown', handleKeyDown)
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        if (inputRef.value) {
+          inputRef.value.focus()
+        }
+      })
+    } else if (oldOpen) {
+      nextTick(() => {
+        if (!document.querySelector('.modal-backdrop')) {
+          document.body.style.overflow = ''
+        }
+      })
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        previousActiveElement !== document.body &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else if (props.fallbackFocusSelector) {
+        const fallback = document.querySelector(props.fallbackFocusSelector)
+        if (fallback && typeof fallback.focus === 'function') {
+          fallback.focus()
+        }
+      }
     }
   },
   { immediate: true },
 )
 
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (!document.querySelector('.modal-backdrop')) {
+    document.body.style.overflow = ''
+  }
 })
 
 const handleSubmit = async () => {
@@ -79,6 +144,7 @@ const handleSubmit = async () => {
 <template>
   <div
     v-if="isOpen"
+    ref="modalRef"
     class="modal-overlay"
     role="dialog"
     aria-modal="true"
@@ -87,24 +153,30 @@ const handleSubmit = async () => {
   >
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="edit-modal-title" class="modal-title">Edit Classroom Configuration</h3>
+        <h3 id="edit-modal-title" class="modal-title">Edit classroom</h3>
         <button class="close-btn" aria-label="Close dialog" @click="emit('close')">✕</button>
       </div>
 
-      <div v-if="errorMessage" class="error-banner">
+      <div v-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
       </div>
 
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="edit-name">Classroom Sector Name</label>
-          <input id="edit-name" v-model="editName" type="text" required />
+          <label for="edit-name">Classroom name</label>
+          <input
+            id="edit-name"
+            ref="inputRef"
+            v-model="editName"
+            type="text"
+            required
+          />
         </div>
 
         <div class="form-group-checkbox">
           <label>
             <input v-model="editIsActive" type="checkbox" />
-            Active Status (Permit new students to join and synchronize session logs)
+            Allow new students to join.
           </label>
         </div>
 
@@ -113,7 +185,7 @@ const handleSubmit = async () => {
             Cancel
           </button>
           <button type="submit" class="btn-primary" :disabled="isUpdating">
-            {{ isUpdating ? 'Saving...' : 'Save Changes' }}
+            {{ isUpdating ? 'Saving...' : 'Save changes' }}
           </button>
         </div>
       </form>

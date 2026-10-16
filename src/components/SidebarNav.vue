@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import AppIcon from './common/AppIcon.vue'
@@ -8,6 +8,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const isMobileOpen = ref(false)
+const mobileCloseBtnRef = ref(null)
+const hamburgerBtnRef = ref(null)
+const sidebarRef = ref(null)
+let previousActiveElement = null
 
 const toggleMobileMenu = () => {
   isMobileOpen.value = !isMobileOpen.value
@@ -17,11 +21,61 @@ const closeMobileMenu = () => {
   isMobileOpen.value = false
 }
 
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !sidebarRef.value || !isMobileOpen.value) return
+  const focusables = sidebarRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
+  }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
+  }
+}
+
 const handleKeyDown = (event) => {
   if (event.key === 'Escape' && isMobileOpen.value) {
     closeMobileMenu()
+    return
   }
+  trapFocus(event)
 }
+
+watch(
+  isMobileOpen,
+  (open) => {
+    if (open) {
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        mobileCloseBtnRef.value?.focus()
+      })
+    } else {
+      document.body.style.overflow = ''
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else {
+        hamburgerBtnRef.value?.focus()
+      }
+    }
+  },
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
@@ -29,6 +83,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  document.body.style.overflow = ''
 })
 
 const handleLogout = () => {
@@ -51,6 +106,7 @@ const formatRole = (role) => {
         <span class="logo-text">CYBERMORPH</span>
       </div>
       <button
+        ref="hamburgerBtnRef"
         class="hamburger-btn"
         :aria-expanded="isMobileOpen"
         aria-label="Toggle navigation menu"
@@ -70,6 +126,7 @@ const formatRole = (role) => {
 
     <!-- Sidebar Aside Navigation -->
     <aside
+      ref="sidebarRef"
       :class="['sidebar-nav', { 'mobile-open': isMobileOpen }]"
       aria-label="Sidebar navigation"
     >
@@ -78,6 +135,7 @@ const formatRole = (role) => {
           <span class="logo-text">CYBERMORPH</span>
         </div>
         <button
+          ref="mobileCloseBtnRef"
           class="mobile-close-btn"
           aria-label="Close navigation menu"
           @click="closeMobileMenu"
@@ -105,7 +163,7 @@ const formatRole = (role) => {
 
         <router-link to="/dashboard" class="nav-item" @click="closeMobileMenu">
           <AppIcon name="dashboard" :size="18" class="nav-icon" />
-          <span class="nav-label">Dashboard</span>
+          <span class="nav-label">Overview</span>
         </router-link>
 
         <router-link to="/leaderboard" class="nav-item" @click="closeMobileMenu">
@@ -132,7 +190,7 @@ const formatRole = (role) => {
           @click="closeMobileMenu"
         >
           <AppIcon name="classrooms" :size="18" class="nav-icon" />
-          <span class="nav-label">Manage classrooms</span>
+          <span class="nav-label">Classrooms</span>
         </router-link>
 
         <router-link
@@ -142,7 +200,7 @@ const formatRole = (role) => {
           @click="closeMobileMenu"
         >
           <AppIcon name="analytics" :size="18" class="nav-icon" />
-          <span class="nav-label">Threat analytics</span>
+          <span class="nav-label">Classroom analytics</span>
         </router-link>
 
         <!-- Admin Specific Links -->

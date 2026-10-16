@@ -1,18 +1,23 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchClassroomStudents } from '../api/classroom'
+import { fetchClassroomStudents, fetchMyClassrooms } from '../api/classroom'
 
 const route = useRoute()
 const router = useRouter()
 
-const codeId = route.params.code_id
+const codeId = computed(() => route.params.code_id)
 const classroomInfo = ref(null)
 const students = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
+const metadataFailed = ref(false)
 
-const page = ref(1)
+let fetchRequestId = 0
+let metadataRequestId = 0
+
+const initialPage = parseInt(route.query.page, 10)
+const page = ref(!isNaN(initialPage) && initialPage > 0 ? initialPage : 1)
 const pageSize = ref(10)
 const totalCount = ref(0)
 
@@ -30,18 +35,44 @@ const formatMapProgress = (progress) => {
   if (typeof progress === 'string' && progress.trim()) {
     return progress
   }
-  return 'Not Started'
+  return 'Not started'
+}
+
+const loadClassroomMetadata = async () => {
+  const reqId = ++metadataRequestId
+  try {
+    const data = await fetchMyClassrooms()
+    if (reqId !== metadataRequestId) return
+    const list = Array.isArray(data) ? data : data?.classrooms || []
+    const matched = list.find(
+      (c) => String(c.code_id) === String(codeId.value) || String(c.id) === String(codeId.value),
+    )
+    if (matched) {
+      classroomInfo.value = {
+        name: matched.name,
+        code: matched.code_value || matched.code,
+      }
+    }
+    metadataFailed.value = false
+  } catch {
+    if (reqId === metadataRequestId) {
+      metadataFailed.value = true
+    }
+  }
 }
 
 const fetchStudents = async (targetPage = page.value) => {
+  const reqId = ++fetchRequestId
   isLoading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await fetchClassroomStudents(codeId, {
+    const data = await fetchClassroomStudents(codeId.value, {
       page: targetPage,
       page_size: pageSize.value,
     })
+
+    if (reqId !== fetchRequestId) return
 
     if (Array.isArray(data)) {
       students.value = data
@@ -52,29 +83,62 @@ const fetchStudents = async (targetPage = page.value) => {
       totalCount.value = data.total_count ?? data.total ?? students.value.length
       page.value = data.page ?? targetPage
       pageSize.value = data.page_size ?? pageSize.value
-      classroomInfo.value = data.classroom || classroomInfo.value || null
+      if (data.classroom) {
+        classroomInfo.value = data.classroom
+      }
     } else {
       students.value = []
       totalCount.value = 0
     }
   } catch {
-    errorMessage.value = 'Could not load the student list for this classroom.'
+    if (reqId === fetchRequestId) {
+      errorMessage.value = 'Could not load the student list for this classroom.'
+    }
   } finally {
-    isLoading.value = false
+    if (reqId === fetchRequestId) {
+      isLoading.value = false
+    }
   }
 }
 
-const handlePrevPage = () => {
-  if (page.value > 1 && !isLoading.value) {
-    fetchStudents(page.value - 1)
+const handleRetry = () => {
+  if (metadataFailed.value || !classroomInfo.value) {
+    loadClassroomMetadata()
+  }
+  fetchStudents(page.value)
+}
+
+const goToPage = (targetPage) => {
+  if (targetPage >= 1 && targetPage <= totalPages.value && !isLoading.value) {
+    router.push({
+      path: route.path,
+      query: { ...route.query, page: targetPage },
+    })
   }
 }
 
-const handleNextPage = () => {
-  if (page.value < totalPages.value && !isLoading.value) {
-    fetchStudents(page.value + 1)
-  }
-}
+watch(
+  () => route.query.page,
+  (newPageQuery) => {
+    const parsed = parseInt(newPageQuery, 10)
+    const target = !isNaN(parsed) && parsed > 0 ? parsed : 1
+    if (target !== page.value) {
+      page.value = target
+      fetchStudents(target)
+    }
+  },
+)
+
+watch(
+  () => route.params.code_id,
+  (newCode) => {
+    if (newCode) {
+      page.value = 1
+      loadClassroomMetadata()
+      fetchStudents(1)
+    }
+  },
+)
 
 const handleBack = () => {
   router.push('/classroom/manage')
@@ -93,7 +157,13 @@ const formatLastSynced = (isoString) => {
 }
 
 onMounted(() => {
-  fetchStudents()
+  loadClassroomMetadata()
+  fetchStudents(page.value)
+})
+
+onUnmounted(() => {
+  fetchRequestId++
+  metadataRequestId++
 })
 </script>
 
@@ -102,24 +172,38 @@ onMounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <button class="back-link" @click="handleBack">Return to Classrooms</button>
-          <h2 class="title">{{ classroomInfo?.name || 'Classroom Roster' }}</h2>
+          <button class="back-link" @click="handleBack">Return to classrooms</button>
+          <h2 class="title">{{ classroomInfo?.name || 'Classroom roster' }}</h2>
           <p v-if="classroomInfo?.code" class="subtitle">
-            Classroom Code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>
+            Classroom code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>
           </p>
         </div>
         <div class="badge-container">
-          <span class="count-badge">Enrolled Students: {{ totalCount }}</span>
-          <router-link :to="'/analytics/' + codeId" class="btn-analytics-header">
-            Classroom Analytics
+          <span class="count-badge">Enrolled students: {{ totalCount }}</span>
+          <router-link
+            :to="{
+              path: '/analytics/' + codeId,
+              query: { roster_page: page }
+            }"
+            class="btn-analytics-header"
+          >
+            Classroom analytics
           </router-link>
         </div>
       </div>
     </header>
 
     <main class="page-body">
-      <div v-if="errorMessage" class="error-banner">
-        {{ errorMessage }}
+      <div v-if="errorMessage" class="error-banner" role="alert">
+        <span>{{ errorMessage }}</span>
+        <button
+          type="button"
+          class="btn-retry"
+          :disabled="isLoading"
+          @click="handleRetry"
+        >
+          Try again
+        </button>
       </div>
 
       <div v-if="isLoading" class="loading-state">
@@ -131,10 +215,10 @@ onMounted(() => {
         <table class="roster-table">
           <thead>
             <tr>
-              <th>Student Name</th>
-              <th>Map Progress</th>
+              <th>Student name</th>
+              <th>Map progress</th>
               <th>Last synced</th>
-              <th class="text-right">Student Analytics</th>
+              <th class="text-right">Student analytics</th>
             </tr>
           </thead>
           <tbody>
@@ -147,8 +231,17 @@ onMounted(() => {
               </td>
               <td class="date-cell">{{ formatLastSynced(student.last_synced_at) }}</td>
               <td class="text-right">
-                <router-link :to="'/analytics/' + codeId" class="btn-inspect-link">
-                  View Analytics
+                <router-link
+                  :to="{
+                    path: '/analytics/' + codeId,
+                    query: {
+                      student: student.profile_id,
+                      roster_page: page
+                    }
+                  }"
+                  class="btn-inspect-link"
+                >
+                  View analytics
                 </router-link>
               </td>
             </tr>
@@ -166,7 +259,7 @@ onMounted(() => {
             <button
               class="page-btn"
               :disabled="page <= 1 || isLoading"
-              @click="handlePrevPage"
+              @click="goToPage(page - 1)"
             >
               ◀ Previous
             </button>
@@ -174,7 +267,7 @@ onMounted(() => {
             <button
               class="page-btn"
               :disabled="page >= totalPages || isLoading"
-              @click="handleNextPage"
+              @click="goToPage(page + 1)"
             >
               Next ▶
             </button>
@@ -183,11 +276,11 @@ onMounted(() => {
       </div>
 
       <div v-else-if="!errorMessage" class="empty-state">
-        <h4>No Students Enrolled Yet</h4>
+        <h4>No students enrolled yet</h4>
         <p>
           Distribute your classroom code <strong class="code-highlight">{{ classroomInfo?.code }}</strong> to students to have them join this classroom.
         </p>
-        <button class="btn-outline" @click="handleBack">Return to Classrooms</button>
+        <button class="btn-outline" @click="handleBack">Return to classrooms</button>
       </div>
     </main>
   </div>
@@ -229,8 +322,10 @@ onMounted(() => {
 
 .title {
   margin: 0 0 0.35rem 0;
-  color: var(--color-primary);
+  color: var(--color-text-main);
   font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
@@ -266,7 +361,7 @@ onMounted(() => {
 .btn-analytics-header {
   padding: 0.45rem 0.95rem;
   background: var(--btn-gradient);
-  color: #ffffff;
+  color: var(--color-card);
   border-radius: 8px;
   font-family: var(--font-display);
   font-weight: 700;
@@ -387,7 +482,7 @@ tr:hover {
 
 .btn-outline {
   padding: 0.55rem 1.2rem;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   color: var(--color-primary);
   border: 1.5px solid var(--color-border);
   border-radius: 8px;
@@ -434,6 +529,36 @@ tr:hover {
   border-radius: 8px;
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background-color: var(--color-card);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
+}
+
+.btn-retry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pagination-bar {

@@ -82,4 +82,18 @@ Do not replace understanding with large unexplained code dumps.
   - Sessions in the past 24 hours are recent sessions, not active sessions.
   - Threats detected (`threats_detected`) are threats detected, not threats completed or neutralized.
   - Do not present a score from recent session history as an all-time best score.
-
+
+
+## 7. Mandatory Context-Reading Requirement
+
+Before proposing changes, creating implementation plans, or starting implementation on any task in this repository:
+
+1. Read the root `AGENTS.md`.
+2. Inventory `.agents/skills/` and `docs/`.
+3. Read every `SKILL.md` and every Markdown document under `docs/`.
+4. Read supporting skill references relevant to the task (e.g. in `.agents/skills/*/references/`).
+5. Read `C:/Cyber-Morph/cybermorph-backend/API_GUIDE.md` for backend-facing work when accessible.
+6. Inspect the actual source files before proposing changes. Do not rely only on previous conversation summaries.
+7. List the context files actually read. Report missing, empty, or conflicting documentation rather than guessing.
+
+Supporting reference files should be read when applicable; generated files, dependencies, and unrelated skill datasets do not need exhaustive reading.

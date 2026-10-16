@@ -48,33 +48,29 @@ const handleBack = () => {
   <div class="join-page">
     <div class="join-card">
       <div class="card-header">
-        <button class="back-link" @click="handleBack">Return to Dashboard</button>
-        <div class="card-badge">
-          <span class="badge-dot"></span>
-          <span>SECTOR UPLINK // ENROLLMENT</span>
-        </div>
-        <h2 class="title">Join Classroom</h2>
+        <button class="back-link" @click="handleBack">Return to overview</button>
+        <h2 class="title">Join classroom</h2>
         <p class="subtitle">
-          Input the 6-character access key provided by your instructor to link your telemetry.
+          Enter the 6-character access code provided by your educator to link your account to the classroom.
         </p>
       </div>
 
-      <div v-if="successData" class="success-banner">
-        <h4>Enrollment Confirmed</h4>
+      <div v-if="successData" class="success-banner" role="status">
+        <h4>Enrollment confirmed</h4>
         <p>
-          You are now linked to sector <strong>{{ successData.name }}</strong> (Access Code:
+          You are now enrolled in <strong>{{ successData.name }}</strong> (Access code:
           <span class="code-highlight">{{ successData.code }}</span>).
         </p>
-        <button class="btn-primary" @click="handleBack">Return to Dashboard</button>
+        <button class="btn-primary" @click="handleBack">Return to overview</button>
       </div>
 
-      <div v-if="errorMessage" class="error-banner">
+      <div v-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
       </div>
 
       <form v-if="!successData" @submit.prevent="handleJoinClassroom">
         <div class="form-group">
-          <label for="code-input">6-Character Access Key</label>
+          <label for="code-input">6-character access code</label>
           <input
             id="code-input"
             v-model="classroomCode"
@@ -84,11 +80,11 @@ const handleBack = () => {
             required
             autocomplete="off"
           />
-          <span class="help-text">Access keys are case-insensitive alphanumeric codes.</span>
+          <span class="help-text">Access codes are case-insensitive alphanumeric codes.</span>
         </div>
 
         <button type="submit" class="btn-primary" :disabled="isLoading">
-          {{ isLoading ? 'Verifying Code...' : 'Verify & Join Classroom' }}
+          {{ isLoading ? 'Verifying code...' : 'Join classroom' }}
         </button>
       </form>
     </div>
@@ -164,8 +160,10 @@ const handleBack = () => {
 
 .title {
   margin: 0 0 0.35rem 0;
-  color: var(--color-primary);
+  color: var(--color-text-main);
   font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {

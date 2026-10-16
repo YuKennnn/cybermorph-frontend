@@ -1,27 +1,46 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchLeaderboardData } from '../api/leaderboard'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
-
-const leaderboardItems = ref([])
-const totalCount = ref(0)
-const page = ref(1)
-const pageSize = ref(10)
-const searchQuery = ref('')
-const selectedMap = ref('All')
-const isLoading = ref(false)
-const errorMessage = ref('')
 
 const mapOptions = ['All', 'Home', 'Office', 'Internet Cafe', 'Public Park']
 
-let debounceTimer = null
+// Parse and validate initial query parameters
+const parseMapQuery = (val) => {
+  if (typeof val === 'string' && mapOptions.includes(val)) {
+    return val
+  }
+  return 'All'
+}
+
+const parsePageQuery = (val) => {
+  const parsed = parseInt(val, 10)
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 1
+}
+
+const leaderboardItems = ref([])
+const totalCount = ref(0)
+const page = ref(parsePageQuery(route.query.page))
+const pageSize = ref(10)
+const selectedMap = ref(parseMapQuery(route.query.map))
+const isLoading = ref(false)
+const errorMessage = ref('')
+
+let latestRequestId = 0
 let isMounted = true
 
+const totalPages = computed(() => {
+  if (totalCount.value <= 0) return 1
+  return Math.ceil(totalCount.value / pageSize.value)
+})
+
 const fetchLeaderboard = async () => {
+  const reqId = ++latestRequestId
   isLoading.value = true
   errorMessage.value = ''
 
@@ -35,53 +54,78 @@ const fetchLeaderboard = async () => {
       params.map_name = selectedMap.value
     }
 
-    if (searchQuery.value && searchQuery.value.trim()) {
-      params.search = searchQuery.value.trim()
-    }
-
     const data = await fetchLeaderboardData(params)
 
-    if (!isMounted) return
+    if (!isMounted || reqId !== latestRequestId) return
 
     leaderboardItems.value = data.items || []
     totalCount.value = data.total_count || 0
   } catch {
-    if (!isMounted) return
-    errorMessage.value = 'Unable to load leaderboard telemetry. Please try again.'
+    if (!isMounted || reqId !== latestRequestId) return
+    errorMessage.value = 'Unable to load leaderboard scores. Please verify your connection or try again.'
   } finally {
-    if (isMounted) {
+    if (isMounted && reqId === latestRequestId) {
       isLoading.value = false
     }
   }
 }
 
-watch(searchQuery, () => {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
+// Keep URL query in sync when user changes filters
+const updateQueryParams = () => {
+  const query = { ...route.query }
+  if (selectedMap.value && selectedMap.value !== 'All') {
+    query.map = selectedMap.value
+  } else {
+    delete query.map
   }
-  debounceTimer = setTimeout(() => {
-    page.value = 1
-    fetchLeaderboard()
-  }, 300)
-})
+  if (page.value > 1) {
+    query.page = String(page.value)
+  } else {
+    delete query.page
+  }
+  router.replace({ query })
+}
 
-watch(selectedMap, () => {
+// Watch for external route query changes (e.g. browser Back/Forward or direct link)
+watch(
+  () => route.query,
+  (newQuery) => {
+    const newMap = parseMapQuery(newQuery.map)
+    const newPg = parsePageQuery(newQuery.page)
+    let shouldFetch = false
+
+    if (selectedMap.value !== newMap) {
+      selectedMap.value = newMap
+      shouldFetch = true
+    }
+    if (page.value !== newPg) {
+      page.value = newPg
+      shouldFetch = true
+    }
+    if (shouldFetch) {
+      fetchLeaderboard()
+    }
+  },
+)
+
+const handleMapChange = () => {
   page.value = 1
+  updateQueryParams()
   fetchLeaderboard()
-})
-
-const totalPages = () => Math.ceil(totalCount.value / pageSize.value) || 1
+}
 
 const handlePrevPage = () => {
-  if (page.value > 1) {
+  if (page.value > 1 && !isLoading.value) {
     page.value--
+    updateQueryParams()
     fetchLeaderboard()
   }
 }
 
 const handleNextPage = () => {
-  if (page.value < totalPages()) {
+  if (page.value < totalPages.value && !isLoading.value) {
     page.value++
+    updateQueryParams()
     fetchLeaderboard()
   }
 }
@@ -101,10 +145,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   isMounted = false
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-    debounceTimer = null
-  }
+  latestRequestId++
 })
 </script>
 
@@ -113,8 +154,8 @@ onUnmounted(() => {
     <header class="page-header">
       <div class="header-content">
         <div>
-          <h2 class="title">Global Leaderboard</h2>
-          <p class="subtitle">Top agent performance and threat simulation scores across all sectors</p>
+          <h2 class="title">Leaderboard</h2>
+          <p class="subtitle">Top scores and player rankings across maps</p>
         </div>
         <button v-if="!authStore.token" class="btn-outline" @click="handleNavAction">
           Sign In
@@ -125,33 +166,27 @@ onUnmounted(() => {
     <main class="page-body">
       <!-- Filter Bar -->
       <div class="filter-bar">
-        <div class="search-box">
-          <input
-            id="search-input"
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search by agent username..."
-          />
-        </div>
-
         <div class="map-filter">
-          <label for="map-select">Sector:</label>
-          <select id="map-select" v-model="selectedMap" class="select-input">
+          <label for="map-select">Map:</label>
+          <select id="map-select" v-model="selectedMap" class="select-input" @change="handleMapChange">
             <option v-for="mapName in mapOptions" :key="mapName" :value="mapName">
-              {{ mapName === 'All' ? 'All Sectors' : mapName }}
+              {{ mapName === 'All' ? 'All maps' : mapName }}
             </option>
           </select>
         </div>
       </div>
 
-      <div v-if="errorMessage" class="error-banner">
-        ⚠️ {{ errorMessage }}
+      <div v-if="errorMessage" class="error-banner" role="alert">
+        <span>{{ errorMessage }}</span>
+        <button type="button" class="btn-retry" :disabled="isLoading" @click="fetchLeaderboard">
+          Try again
+        </button>
       </div>
 
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Loading agent rankings...</p>
+        <p>Loading leaderboard rankings...</p>
       </div>
 
       <!-- Data Table -->
@@ -160,9 +195,9 @@ onUnmounted(() => {
           <thead>
             <tr>
               <th class="rank-col">Rank</th>
-              <th>Agent Codename</th>
-              <th>Simulation Map</th>
-              <th class="score-col">High Score</th>
+              <th>Player</th>
+              <th>Map</th>
+              <th class="score-col">High score</th>
             </tr>
           </thead>
           <tbody>
@@ -192,8 +227,8 @@ onUnmounted(() => {
 
       <!-- Empty State -->
       <div v-else class="empty-state">
-        <h4>No Matching Agent Records</h4>
-        <p>No operatives found matching the specified query filters.</p>
+        <h4>No scores recorded</h4>
+        <p>No scores recorded for this map selection yet.</p>
       </div>
 
       <!-- Pagination Controls -->
@@ -201,16 +236,16 @@ onUnmounted(() => {
         <div class="pagination-info">
           Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
           <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
-          <strong>{{ totalCount }}</strong> agents
+          <strong>{{ totalCount }}</strong> scores
         </div>
         <div class="pagination-actions">
           <button class="page-btn" :disabled="page <= 1 || isLoading" @click="handlePrevPage">
             ◀ Previous
           </button>
-          <span class="page-indicator">Page {{ page }} of {{ totalPages() }}</span>
+          <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
           <button
             class="page-btn"
-            :disabled="page >= totalPages() || isLoading"
+            :disabled="page >= totalPages || isLoading"
             @click="handleNextPage"
           >
             Next ▶
@@ -262,8 +297,9 @@ onUnmounted(() => {
 
 .title {
   margin: 0 0 0.35rem 0;
-  color: var(--color-primary);
+  color: var(--color-text-main);
   font-size: 1.65rem;
+  font-weight: 700;
 }
 
 .subtitle {
@@ -552,6 +588,11 @@ tr:hover {
 }
 
 .error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   background-color: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   color: var(--color-danger);
@@ -559,5 +600,25 @@ tr:hover {
   border-radius: 8px;
   margin-bottom: 1.25rem;
   font-size: 0.9rem;
+}
+
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  background-color: var(--color-card);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
 }
 </style>

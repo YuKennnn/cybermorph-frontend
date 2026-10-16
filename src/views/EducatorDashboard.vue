@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchMyClassrooms } from '../api/classroom'
@@ -17,6 +17,10 @@ const isLoading = ref(true)
 const errorMessage = ref('')
 const successMessage = ref('')
 const isCreateModalOpen = ref(false)
+
+const activeClassroomCount = computed(() => {
+  return classrooms.value.filter((c) => c.is_active === true).length
+})
 
 const loadDashboardData = async () => {
   isLoading.value = true
@@ -75,7 +79,7 @@ onMounted(() => {
       <div class="header-text">
         <h2 class="title">Educator overview</h2>
         <p class="subtitle">
-          Signed in as <strong>{{ authStore.displayName }}</strong>. Manage classroom access keys and inspect student progression.
+          Signed in as <strong>{{ authStore.displayName }}</strong>. Manage classroom access codes and review student progress.
         </p>
       </div>
       <div class="header-actions">
@@ -93,7 +97,7 @@ onMounted(() => {
           @click="() => handleViewAnalytics()"
         >
           <AppIcon name="analytics" :size="16" />
-          <span>Threat analytics</span>
+          <span>Classroom analytics</span>
         </button>
       </div>
     </header>
@@ -136,17 +140,17 @@ onMounted(() => {
             <span class="stat-label">Active classrooms</span>
             <AppIcon name="classrooms" :size="20" class="stat-icon" />
           </div>
-          <div class="stat-value">{{ classrooms.length }}</div>
-          <p class="stat-desc">Curriculum deployments currently active</p>
+          <div class="stat-value">{{ activeClassroomCount }}</div>
+          <p class="stat-desc">Classrooms currently marked active</p>
         </div>
 
         <div class="stat-card">
           <div class="stat-header">
-            <span class="stat-label">Enrolled students</span>
+            <span class="stat-label">Classroom enrollments</span>
             <AppIcon name="users" :size="20" class="stat-icon" />
           </div>
           <div class="stat-value">{{ totalStudents }}</div>
-          <p class="stat-desc">Total agents linked across all classrooms</p>
+          <p class="stat-desc">Total enrollments across classrooms; students in multiple classrooms are counted in each.</p>
         </div>
 
         <div class="stat-card stat-action-card">
@@ -154,7 +158,7 @@ onMounted(() => {
             <span class="stat-label">Classroom management</span>
             <AppIcon name="join" :size="20" class="stat-icon" />
           </div>
-          <p class="stat-desc full">Configure sector names, review status, or archive inactive codes.</p>
+          <p class="stat-desc full">Configure classroom names, review status, or archive inactive codes.</p>
           <button
             type="button"
             class="btn-subtle-link"
@@ -196,7 +200,7 @@ onMounted(() => {
           </div>
           <h4 class="empty-title">No classrooms created yet</h4>
           <p class="empty-desc">
-            Generate your first 6-character access code to allow students to link their simulation profiles and start tracking telemetry.
+            Generate your first 6-character access code to allow students to link their accounts and start tracking progress.
           </p>
           <button
             type="button"

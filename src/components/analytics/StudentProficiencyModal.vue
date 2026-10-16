@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: {
@@ -30,15 +30,106 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  fallbackFocusSelector: {
+    type: String,
+    default: '.title',
+  },
 })
 
 const emit = defineEmits(['close', 'inspectSession'])
 
-const handleKeyDown = (event) => {
-  if (event.key === 'Escape' && props.isOpen) {
-    emit('close')
+const modalRef = ref(null)
+const closeBtnRef = ref(null)
+let previousActiveElement = null
+let lastInspectSessionId = null
+
+const handleInspectSession = (session) => {
+  lastInspectSessionId = session?.session_id || null
+  emit('inspectSession', session)
+}
+
+const trapFocus = (event) => {
+  if (event.key !== 'Tab' || !modalRef.value) return
+  const focusables = modalRef.value.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) {
+    event.preventDefault()
+    return
+  }
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      last.focus()
+      event.preventDefault()
+    }
+  } else {
+    if (document.activeElement === last) {
+      first.focus()
+      event.preventDefault()
+    }
   }
 }
+
+const handleKeyDown = (event) => {
+  if (!props.isOpen) return
+  if (event.key === 'Escape') {
+    emit('close')
+    return
+  }
+  trapFocus(event)
+}
+
+watch(
+  () => props.isOpen,
+  (open, oldOpen) => {
+    if (open) {
+      previousActiveElement = document.activeElement
+      document.body.style.overflow = 'hidden'
+      nextTick(() => {
+        let restoredBtn = null
+        if (lastInspectSessionId) {
+          restoredBtn = modalRef.value?.querySelector(`[data-session-id="${lastInspectSessionId}"]`)
+          lastInspectSessionId = null
+        }
+        if (restoredBtn) {
+          restoredBtn.focus()
+        } else if (closeBtnRef.value) {
+          closeBtnRef.value.focus()
+        } else {
+          const firstFocusable = modalRef.value?.querySelector(
+            'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          )
+          firstFocusable?.focus()
+        }
+      })
+    } else if (oldOpen) {
+      nextTick(() => {
+        if (!document.querySelector('.modal-backdrop')) {
+          document.body.style.overflow = ''
+        }
+      })
+      if (
+        previousActiveElement &&
+        typeof previousActiveElement.focus === 'function' &&
+        previousActiveElement !== document.body &&
+        document.body.contains(previousActiveElement)
+      ) {
+        previousActiveElement.focus()
+      } else if (props.fallbackFocusSelector) {
+        const fallback = document.querySelector(props.fallbackFocusSelector)
+        if (fallback && typeof fallback.focus === 'function') {
+          if (!fallback.hasAttribute('tabindex')) {
+            fallback.setAttribute('tabindex', '-1')
+          }
+          fallback.focus()
+        }
+      }
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
@@ -46,6 +137,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (!document.querySelector('.modal-backdrop')) {
+    document.body.style.overflow = ''
+  }
 })
 
 const formatDuration = (seconds) => {
@@ -77,27 +171,35 @@ const getRiskLevelClass = (rate) => {
 <template>
   <div
     v-if="isOpen"
+    ref="modalRef"
     class="modal-backdrop"
     role="dialog"
     aria-modal="true"
-    :aria-label="`Agent Proficiency: ${student?.username || ''}`"
+    :aria-label="`Student proficiency: ${student?.username || student?.profile_id || ''}`"
     @click.self="emit('close')"
   >
     <div class="modal-dialog modal-lg">
       <div class="modal-header">
         <div class="modal-title-box">
-          <h4>Agent Proficiency: {{ student?.username }}</h4>
+          <h4>Student proficiency: {{ student?.username || ('Student ID: ' + (student?.profile_id || '')) }}</h4>
           <span class="modal-profile-id">Profile ID: {{ student?.profile_id }}</span>
         </div>
-        <button class="modal-close-btn" aria-label="Close proficiency modal" @click="emit('close')">✕</button>
+        <button
+          ref="closeBtnRef"
+          class="modal-close-btn"
+          aria-label="Close proficiency modal"
+          @click="emit('close')"
+        >
+          ✕
+        </button>
       </div>
 
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
-        <p>Compiling student telemetry breakdown...</p>
+        <p>Loading student analytics...</p>
       </div>
 
-      <div v-else-if="errorMessage" class="error-banner">
+      <div v-else-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
       </div>
 
@@ -106,11 +208,11 @@ const getRiskLevelClass = (rate) => {
         <div class="student-kpi-row">
           <div class="stat-box">
             <span class="stat-number stat-win">{{ studentAnalytics.wins }}</span>
-            <span class="stat-tag">Missions Won</span>
+            <span class="stat-tag">Missions won</span>
           </div>
           <div class="stat-box">
             <span class="stat-number stat-loss">{{ studentAnalytics.losses }}</span>
-            <span class="stat-tag">Missions Lost</span>
+            <span class="stat-tag">Missions lost</span>
           </div>
           <div class="stat-box">
             <span class="stat-number stat-rate">
@@ -120,19 +222,19 @@ const getRiskLevelClass = (rate) => {
                   : 'N/A'
               }}
             </span>
-            <span class="stat-tag">Win Rate</span>
+            <span class="stat-tag">Win rate</span>
           </div>
           <div class="stat-box">
             <span class="stat-number stat-duration">
               {{ formatDuration(studentAnalytics.avg_duration_seconds) }}
             </span>
-            <span class="stat-tag">Avg Duration</span>
+            <span class="stat-tag">Average duration</span>
           </div>
         </div>
 
         <!-- Best Score per Map -->
         <div class="subsection">
-          <h5>Best Scores Across Simulation Maps</h5>
+          <h5>Best scores by map</h5>
           <div class="map-scores-grid">
             <div
               v-for="m in canonicalMaps"
@@ -147,7 +249,7 @@ const getRiskLevelClass = (rate) => {
                 >
                   {{ studentAnalytics.best_score_by_map[m.name] }} pts
                 </span>
-                <span v-else class="s-map-unplayed">Not Attempted</span>
+                <span v-else class="s-map-unplayed">Not attempted</span>
               </div>
             </div>
           </div>
@@ -155,7 +257,7 @@ const getRiskLevelClass = (rate) => {
 
         <!-- Student Individual Threat Category Breakdown -->
         <div class="subsection">
-          <h5>Vulnerability by Threat Category</h5>
+          <h5>Performance by threat type</h5>
           <div class="student-threats-grid">
             <div
               v-for="threat in canonicalThreats"
@@ -172,8 +274,8 @@ const getRiskLevelClass = (rate) => {
                 {{
                   studentAnalytics.category_breakdown?.[threat.name] !== null &&
                   studentAnalytics.category_breakdown?.[threat.name] !== undefined
-                    ? `${(studentAnalytics.category_breakdown[threat.name] * 100).toFixed(0)}% Fail`
-                    : 'No Data'
+                    ? `${(studentAnalytics.category_breakdown[threat.name] * 100).toFixed(0)}% error rate`
+                    : 'No data'
                 }}
               </span>
             </div>
@@ -182,7 +284,7 @@ const getRiskLevelClass = (rate) => {
 
         <!-- Recent Sessions List -->
         <div class="subsection">
-          <h5>Recent Missions (Up to 10)</h5>
+          <h5>Recent sessions (up to 10)</h5>
           <div
             v-if="studentAnalytics.recent_sessions && studentAnalytics.recent_sessions.length > 0"
             class="table-container"
@@ -193,8 +295,8 @@ const getRiskLevelClass = (rate) => {
                   <th>Map</th>
                   <th>Result</th>
                   <th>Duration</th>
-                  <th>Credits Net</th>
-                  <th>Played At</th>
+                  <th>Credits net</th>
+                  <th>Played at</th>
                   <th class="text-right">Action</th>
                 </tr>
               </thead>
@@ -221,16 +323,17 @@ const getRiskLevelClass = (rate) => {
                   <td class="text-right">
                     <button
                       class="btn-telemetry"
-                      @click="emit('inspectSession', s)"
+                      :data-session-id="s.session_id"
+                      @click="handleInspectSession(s)"
                     >
-                      View Telemetry
+                      View session details
                     </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div v-else class="empty-note">No recent mission sessions recorded for this agent.</div>
+          <div v-else class="empty-note">No recent sessions recorded for this student.</div>
         </div>
       </div>
     </div>
@@ -251,7 +354,7 @@ const getRiskLevelClass = (rate) => {
 }
 
 .modal-dialog {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(124, 58, 237, 0.2);
@@ -368,7 +471,7 @@ const getRiskLevelClass = (rate) => {
 }
 
 .student-map-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 0.75rem;
@@ -536,7 +639,7 @@ const getRiskLevelClass = (rate) => {
 }
 
 .btn-telemetry:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-violet-subtle);
   border-color: var(--color-primary);
 }
 
