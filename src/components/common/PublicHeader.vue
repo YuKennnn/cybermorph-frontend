@@ -29,6 +29,7 @@ const closeMobileNav = () => {
         <RouterLink to="/about" class="nav-link" active-class="active">About</RouterLink>
         <RouterLink to="/gameplay" class="nav-link" active-class="active">Gameplay</RouterLink>
         <RouterLink to="/download" class="nav-link" active-class="active">Download</RouterLink>
+        <RouterLink to="/faq" class="nav-link" active-class="active">FAQ</RouterLink>
       </nav>
 
       <!-- Auth Action Link -->
@@ -101,6 +102,9 @@ const closeMobileNav = () => {
           </RouterLink>
           <RouterLink to="/download" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
             Download
+          </RouterLink>
+          <RouterLink to="/faq" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
+            FAQ
           </RouterLink>
         </nav>
 

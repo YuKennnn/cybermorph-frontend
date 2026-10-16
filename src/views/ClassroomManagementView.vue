@@ -82,7 +82,7 @@ onMounted(() => {
           <p class="subtitle">Generate codes, manage sector configurations, and inspect enrolled student progression</p>
         </div>
         <div class="header-actions">
-          <button class="btn-primary" @click="isCreateModalOpen = true">+ Generate Classroom</button>
+          <button class="btn-primary" @click="isCreateModalOpen = true">+ Create Classroom</button>
         </div>
       </div>
     </header>
@@ -116,7 +116,7 @@ onMounted(() => {
       <div v-else class="empty-state">
         <h4>No Active Classrooms Found</h4>
         <p>Initialize a new security curriculum sector by generating a 6-character classroom code.</p>
-        <button class="btn-primary" @click="isCreateModalOpen = true">+ Generate Classroom</button>
+        <button class="btn-primary" @click="isCreateModalOpen = true">+ Create Classroom</button>
       </div>
     </main>
 

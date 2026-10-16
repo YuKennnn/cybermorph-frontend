@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
 import AppIcon from '../components/common/AppIcon.vue'
@@ -40,26 +40,72 @@ onMounted(() => {
 
           <!-- Local Section Links -->
           <nav class="local-nav-bar" aria-label="Page section navigation">
-            <a href="#download" class="local-nav-link" @click.prevent="scrollToSection('download')">
-              Download
-            </a>
-            <span class="local-nav-sep" aria-hidden="true">|</span>
             <a href="#requirements" class="local-nav-link" @click.prevent="scrollToSection('requirements')">
               System requirements
             </a>
             <span class="local-nav-sep" aria-hidden="true">|</span>
-            <a href="#faq" class="local-nav-link" @click.prevent="scrollToSection('faq')">
-              FAQ
+            <a href="#download" class="local-nav-link" @click.prevent="scrollToSection('download')">
+              Download
             </a>
           </nav>
         </div>
       </section>
 
-      <!-- SECTION 1: Download (#download) -->
-      <section id="download" class="full-section">
+      <!-- SECTION 1: System requirements (#requirements) -->
+      <section id="requirements" class="full-section">
         <div class="page-container">
           <div class="section-header">
-            <span class="section-kicker">Platforms</span>
+            <h2 class="section-title">System requirements</h2>
+            <p class="section-lead">
+              Device specifications and compatibility information for Android devices.
+            </p>
+          </div>
+
+          <div class="requirements-card">
+            <table class="requirements-table">
+              <tbody>
+                <tr>
+                  <th scope="row">Platform</th>
+                  <td>Android</td>
+                </tr>
+                <tr>
+                  <th scope="row">Android Version</th>
+                  <td>
+                    <span class="text-pending">Awaiting confirmation</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Architecture</th>
+                  <td>ARM64</td>
+                </tr>
+                <tr>
+                  <th scope="row">Memory (RAM)</th>
+                  <td>
+                    <span class="text-pending">Awaiting confirmation</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Free Storage</th>
+                  <td>
+                    <span class="text-pending">Awaiting confirmation</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Network</th>
+                  <td>
+                    Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: Download & platforms (#download) -->
+      <section id="download" class="full-section section-bg-alt">
+        <div class="page-container">
+          <div class="section-header">
             <h2 class="section-title">Distribution & platforms</h2>
             <p class="section-lead">
               CyberMorph is currently developed as an offline-first Android application. Choose your platform below.
@@ -94,18 +140,17 @@ onMounted(() => {
                   <span class="status-subtle">Beta release awaiting confirmation</span>
                 </div>
                 <p class="status-hint">
-                  The direct APK package link will be activated once published. Register your player account now to reserve your username.
+                  The direct APK package link will be activated once published.
                 </p>
               </div>
 
               <div class="platform-actions">
-                <RouterLink to="/register" class="btn-primary">
-                  <span>Create Player Account</span>
-                  <AppIcon name="arrow-right" :size="16" />
-                </RouterLink>
-                <RouterLink to="/login" class="btn-secondary">
-                  <span>Sign In</span>
-                </RouterLink>
+                <button
+                  type="button"
+                  class="btn-primary"
+                >
+                  Download
+                </button>
               </div>
             </div>
 
@@ -194,113 +239,6 @@ onMounted(() => {
           </div>
         </div>
       </section>
-
-      <!-- SECTION 2: System requirements (#requirements) -->
-      <section id="requirements" class="full-section section-bg-alt">
-        <div class="page-container">
-          <div class="section-header">
-            <span class="section-kicker">Compatibility</span>
-            <h2 class="section-title">System requirements</h2>
-            <p class="section-lead">
-              Device specifications and compatibility information for Android devices.
-            </p>
-          </div>
-
-          <div class="requirements-card">
-            <table class="requirements-table">
-              <tbody>
-                <tr>
-                  <th scope="row">Platform</th>
-                  <td>Android</td>
-                </tr>
-                <tr>
-                  <th scope="row">Android Version</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Architecture</th>
-                  <td>ARM64</td>
-                </tr>
-                <tr>
-                  <th scope="row">Memory (RAM)</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Free Storage</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Network</th>
-                  <td>
-                    Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- SECTION 3: Frequently asked questions (#faq) -->
-      <section id="faq" class="full-section">
-        <div class="page-container">
-          <div class="section-header">
-            <span class="section-kicker">Got Questions?</span>
-            <h2 class="section-title">Frequently asked questions</h2>
-            <p class="section-lead">
-              Clear answers regarding gameplay, offline availability, device support, and classroom participation.
-            </p>
-          </div>
-
-          <div class="faq-list">
-            <!-- Q1: Can anyone play or do I need classroom? -->
-            <div class="faq-card">
-              <h3 class="faq-question">Can anyone play, or do I need to join a classroom?</h3>
-              <p class="faq-answer">
-                Anyone can play. Independent play is the default and complete experience. Anyone can download the Android game, play through all scenarios, and track their personal progress without needing to join a classroom. Joining a classroom is completely optional for students whose instructor provides a 6-character code.
-              </p>
-            </div>
-
-            <!-- Q2: Web browser play? -->
-            <div class="faq-card">
-              <h3 class="faq-question">Can I play in a web browser?</h3>
-              <p class="faq-answer">
-                No. The game runs natively on Android devices as an offline-first mobile app built in Godot. This web portal is used for account registration, viewing synchronized progress scores, and managing optional classrooms.
-              </p>
-            </div>
-
-            <!-- Q3: Internet connection needed? -->
-            <div class="faq-card">
-              <h3 class="faq-question">Do I need an internet connection to play?</h3>
-              <p class="faq-answer">
-                Gameplay simulation missions run offline locally on your Android device. You do not need a continuous internet connection to play. An active connection is only required to initially sign in and sync completed mission scores to your web account.
-              </p>
-            </div>
-
-            <!-- Q4: iPhone or iPad? -->
-            <div class="faq-card">
-              <h3 class="faq-question">Is the game available for iPhone or iPad?</h3>
-              <p class="faq-answer">
-                CyberMorph is currently developed exclusively for Android. It is not currently available for iPhone or iPad (iOS).
-              </p>
-            </div>
-
-            <!-- Q5: Google Play or Steam? -->
-            <div class="faq-card">
-              <h3 class="faq-question">Is it available on Google Play or Steam?</h3>
-              <p class="faq-answer">
-                No. CyberMorph is not currently available on Google Play or Steam. During the beta period, players install the game directly using an Android APK package.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
 
     <PublicFooter />
@@ -313,7 +251,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   background-color: var(--color-bg);
-  color: var(--color-text);
+  color: var(--color-text-main);
 }
 
 .download-main {
@@ -350,7 +288,7 @@ onMounted(() => {
   font-size: 2.5rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--color-text);
+  color: var(--color-text-main);
   line-height: 1.15;
   margin-bottom: 1rem;
 }
@@ -406,7 +344,7 @@ onMounted(() => {
 }
 
 .section-bg-alt {
-  background-color: var(--color-bg-alt);
+  background-color: var(--color-bg-alt, #f8fafc);
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
 }
@@ -415,21 +353,11 @@ onMounted(() => {
   margin-bottom: 2.5rem;
 }
 
-.section-kicker {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-purple);
-  margin-bottom: 0.5rem;
-}
-
 .section-title {
   font-size: 1.875rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--color-text);
+  color: var(--color-text-main);
   margin-bottom: 0.5rem;
 }
 
@@ -455,7 +383,7 @@ onMounted(() => {
 }
 
 .platform-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 1.75rem;
@@ -504,7 +432,7 @@ onMounted(() => {
 .platform-name {
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--color-text-main);
   margin-bottom: 0.25rem;
 }
 
@@ -560,7 +488,7 @@ onMounted(() => {
 
 .status-label {
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-main);
 }
 
 .status-badge-pending {
@@ -608,48 +536,37 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  width: 100%;
   padding: 0.65rem 1rem;
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #ffffff !important;
-  background: var(--btn-gradient) !important;
-  background-color: var(--color-primary) !important;
-  border: 1px solid var(--color-primary) !important;
+  color: #ffffff;
+  background: var(--btn-gradient);
+  background-color: var(--color-primary);
+  border: 1px solid var(--color-primary);
   border-radius: 6px;
   text-decoration: none;
+  cursor: pointer;
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
   transition: all 0.15s ease;
 }
 
 .btn-primary:hover {
-  background: var(--btn-gradient-hover) !important;
-  background-color: var(--color-primary-hover) !important;
-  border-color: var(--color-primary-hover) !important;
+  background: var(--btn-gradient-hover);
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.65rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  background-color: var(--color-violet-subtle);
-  border: 1px solid var(--color-violet-border);
-  border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-
-.btn-secondary:hover {
-  background-color: #ede9fe;
-  border-color: var(--color-primary);
+.btn-primary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .btn-disabled {
   width: 100%;
   padding: 0.65rem 1rem;
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
   color: #94a3b8;
@@ -662,7 +579,7 @@ onMounted(() => {
 
 /* Install Guide Panel */
 .install-guide-panel {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 2rem;
@@ -672,7 +589,7 @@ onMounted(() => {
 .guide-title {
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--color-text-main);
   margin-bottom: 1.25rem;
 }
 
@@ -691,12 +608,12 @@ onMounted(() => {
 }
 
 .guide-steps strong {
-  color: var(--color-text);
+  color: var(--color-text-main);
 }
 
 /* Requirements Section */
 .requirements-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 2rem;
@@ -724,7 +641,7 @@ onMounted(() => {
 .requirements-table th {
   width: 35%;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-main);
 }
 
 .requirements-table td {
@@ -735,34 +652,5 @@ onMounted(() => {
 .text-pending {
   font-style: italic;
   color: #854d0e;
-}
-
-/* FAQ Section */
-.faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.faq-card {
-  background-color: #ffffff;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 1.75rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.faq-question {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 0.65rem;
-}
-
-.faq-answer {
-  font-size: 0.925rem;
-  line-height: 1.6;
-  color: var(--color-text-muted);
-  margin: 0;
 }
 </style>

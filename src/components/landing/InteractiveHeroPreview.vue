@@ -350,10 +350,6 @@ onUnmounted(() => {
 
     <!-- Bottom Context Note -->
     <div class="panel-footer">
-      <div class="footer-hint">
-        <span class="hint-icon">&bull;</span>
-        <span>Move pointer or touch screen to guide the defender. Servers alert on contact.</span>
-      </div>
       <span class="disclaimer-text">Not a playable browser version &bull; Android APK required</span>
     </div>
   </div>
@@ -474,28 +470,14 @@ onUnmounted(() => {
 
 .panel-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 0.6rem 0.85rem;
   background-color: #ffffff;
   border-top: 1px solid var(--color-border-subtle);
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.footer-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--color-text-muted);
-}
-
-.hint-icon {
-  color: var(--color-primary);
-  font-size: 1rem;
-  line-height: 1;
+  text-align: center;
 }
 
 .disclaimer-text {
@@ -506,11 +488,6 @@ onUnmounted(() => {
 @media (max-width: 640px) {
   .canvas-stage {
     height: 260px;
-  }
-
-  .panel-footer {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>

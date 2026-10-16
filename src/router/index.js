@@ -27,6 +27,12 @@ const routes = [
     meta: { isPublic: true },
   },
   {
+    path: '/faq',
+    name: 'faq',
+    component: () => import('../views/FaqView.vue'),
+    meta: { isPublic: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('../views/LoginView.vue'),
@@ -108,6 +114,11 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
+  if (to.path === '/download' && to.hash === '#faq') {
+    next({ path: '/faq', replace: true })
+    return
+  }
+
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
