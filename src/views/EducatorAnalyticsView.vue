@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchMyClassrooms, fetchClassroomStudents } from '../api/classroom'
 import {
   fetchClassroomAnalytics,
-  fetchPlayerAnalytics,
   fetchSessionAnalytics,
 } from '../api/analytics'
 import ThreatPerformanceGauge from '../components/analytics/ThreatPerformanceGauge.vue'
@@ -36,7 +35,6 @@ const CANONICAL_MAPS = [
 
 // Request ID guards for concurrency / race conditions
 let classroomRequestId = 0
-let studentRequestId = 0
 let sessionRequestId = 0
 
 // ==========================================
@@ -241,7 +239,6 @@ watch(selectedClassroomId, (newCode, oldCode) => {
   if (newCode && newCode !== oldCode) {
     // Invalidate pending requests
     classroomRequestId++
-    studentRequestId++
     sessionRequestId++
 
     // Dismiss open dialogs and clear student/session state to prevent incompatible selection
@@ -280,49 +277,25 @@ watch(selectedClassroomId, (newCode, oldCode) => {
 })
 
 // ==========================================
-// Level 2: Student Analytics Deep Links & Modal
+// Level 2: Student Analytics Navigation
 // ==========================================
-const openStudentAnalyticsByProfileId = async (profileId, initialStudentData = null) => {
-  if (!profileId) return
-  const reqId = ++studentRequestId
-
-  isStudentModalOpen.value = true
-  isStudentLoading.value = true
-  studentErrorMessage.value = ''
-  studentAnalytics.value = null
-
-  // Resolve username from documented roster data if available; do not fabricate
-  const matchedInRoster = students.value.find(
-    (s) => String(s.profile_id) === String(profileId),
-  )
-  selectedStudent.value =
-    initialStudentData || matchedInRoster || { profile_id: profileId, username: null }
-
-  try {
-    const data = await fetchPlayerAnalytics(profileId)
-    if (reqId !== studentRequestId) return // stale response check
-    studentAnalytics.value = data
-  } catch {
-    if (reqId !== studentRequestId) return
-    studentErrorMessage.value = 'Could not retrieve student performance breakdown.'
-  } finally {
-    if (reqId === studentRequestId) {
-      isStudentLoading.value = false
-    }
-  }
-}
-
 const openStudentAnalytics = (student) => {
+  const codeId = selectedClassroomId.value || currentClassroom.value?.code_id || route.params.code_id
+  if (!codeId) return
+  const query = {
+    origin: 'analytics',
+    table_page: tablePage.value,
+  }
+  if (route.query.roster_page) {
+    query.roster_page = route.query.roster_page
+  }
   router.push({
-    path: route.path,
-    query: { ...route.query, student: student.profile_id },
+    path: `/classroom/students/${codeId}/progress/${student.profile_id}`,
+    query,
   })
-  openStudentAnalyticsByProfileId(student.profile_id, student)
 }
 
 const closeStudentModal = () => {
-  // Invalidate any in-flight student request immediately
-  studentRequestId++
   isStudentLoading.value = false
   studentErrorMessage.value = ''
   isStudentModalOpen.value = false
@@ -338,22 +311,45 @@ const closeStudentModal = () => {
   })
 }
 
-// Watch deep link student query
+// Watch deep link student query (redirect legacy links to dedicated view)
 watch(
-  () => route.query.student,
-  (newStudentId) => {
+  [() => route.query.student, () => selectedClassroomId.value, () => route.params.code_id],
+  ([newStudentId]) => {
     if (newStudentId && String(newStudentId).trim()) {
-      const cleanId = String(newStudentId).trim()
-      if (selectedStudent.value?.profile_id !== cleanId || !isStudentModalOpen.value) {
-        openStudentAnalyticsByProfileId(cleanId)
+      const codeId = route.params.code_id || selectedClassroomId.value || currentClassroom.value?.code_id
+      if (!codeId) return // Wait until classroom code is known; never fallback to hardcoded 'c1'
+
+      // Resolve origin strictly:
+      // - Preserve an explicit valid origin.
+      // - Otherwise, roster_page means Students, even with table_page.
+      // - Otherwise, table_page means Analytics.
+      let resolvedOrigin
+      if (route.query.origin === 'students' || route.query.origin === 'analytics') {
+        resolvedOrigin = route.query.origin
+      } else if (route.query.roster_page) {
+        resolvedOrigin = 'students'
+      } else {
+        resolvedOrigin = 'analytics'
       }
-    } else if (!newStudentId && isStudentModalOpen.value) {
-      studentRequestId++
-      isStudentLoading.value = false
-      studentErrorMessage.value = ''
-      isStudentModalOpen.value = false
-      selectedStudent.value = null
-      studentAnalytics.value = null
+
+      // Preserve relevant query parameters
+      const query = { origin: resolvedOrigin }
+      if (route.query.roster_page) {
+        query.roster_page = route.query.roster_page
+      }
+      if (route.query.table_page) {
+        query.table_page = route.query.table_page
+      } else if (resolvedOrigin === 'analytics' && tablePage.value) {
+        query.table_page = tablePage.value
+      }
+      if (route.query.session) {
+        query.session = route.query.session
+      }
+
+      router.replace({
+        path: `/classroom/students/${codeId}/progress/${String(newStudentId).trim()}`,
+        query,
+      })
     }
   },
   { immediate: true },
@@ -424,7 +420,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   classroomRequestId++
-  studentRequestId++
   sessionRequestId++
 })
 </script>
@@ -631,7 +626,7 @@ onUnmounted(() => {
                 <th>Student name</th>
                 <th>Map progress</th>
                 <th>Last synced</th>
-                <th class="text-right">Student analytics</th>
+                <th class="text-right">Student progress</th>
               </tr>
             </thead>
             <tbody>
@@ -640,7 +635,6 @@ onUnmounted(() => {
                   <span class="agent-avatar">{{ student.username?.charAt(0).toUpperCase() || 'S' }}</span>
                   <div>
                     <span class="agent-name">{{ student.username }}</span>
-                    <span class="agent-id">ID: {{ student.profile_id }}</span>
                   </div>
                 </td>
                 <td>

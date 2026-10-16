@@ -1,4 +1,4 @@
-import apiClient from './client'
+import apiClient from './client.js'
 
 /**
  * Fetch list of classrooms owned by the authenticated educator.

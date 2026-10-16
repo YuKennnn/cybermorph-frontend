@@ -1,20 +1,21 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchClassroomStudents, fetchMyClassrooms } from '../api/classroom'
+import { fetchClassroomStudents } from '../api/classroom'
+import { useClassroomStore } from '../stores/classroomStore'
+import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
+const classroomStore = useClassroomStore()
 
 const codeId = computed(() => route.params.code_id)
-const classroomInfo = ref(null)
 const students = ref([])
-const isLoading = ref(true)
-const errorMessage = ref('')
-const metadataFailed = ref(false)
+const isRosterLoading = ref(true)
+const rosterErrorMessage = ref('')
+const hasConfirmedRoster = ref(false)
 
 let fetchRequestId = 0
-let metadataRequestId = 0
 
 const initialPage = parseInt(route.query.page, 10)
 const page = ref(!isNaN(initialPage) && initialPage > 0 ? initialPage : 1)
@@ -38,33 +39,15 @@ const formatMapProgress = (progress) => {
   return 'Not started'
 }
 
-const loadClassroomMetadata = async () => {
-  const reqId = ++metadataRequestId
-  try {
-    const data = await fetchMyClassrooms()
-    if (reqId !== metadataRequestId) return
-    const list = Array.isArray(data) ? data : data?.classrooms || []
-    const matched = list.find(
-      (c) => String(c.code_id) === String(codeId.value) || String(c.id) === String(codeId.value),
-    )
-    if (matched) {
-      classroomInfo.value = {
-        name: matched.name,
-        code: matched.code_value || matched.code,
-      }
-    }
-    metadataFailed.value = false
-  } catch {
-    if (reqId === metadataRequestId) {
-      metadataFailed.value = true
-    }
-  }
+const syncClassroomMetadata = (force = false) => {
+  classroomStore.setCurrentClassroomId(codeId.value)
+  classroomStore.fetchClassrooms(force).catch(() => {})
 }
 
 const fetchStudents = async (targetPage = page.value) => {
   const reqId = ++fetchRequestId
-  isLoading.value = true
-  errorMessage.value = ''
+  isRosterLoading.value = true
+  rosterErrorMessage.value = ''
 
   try {
     const data = await fetchClassroomStudents(codeId.value, {
@@ -78,38 +61,45 @@ const fetchStudents = async (targetPage = page.value) => {
       students.value = data
       totalCount.value = data.length
       page.value = 1
+      hasConfirmedRoster.value = true
     } else if (data && typeof data === 'object') {
       students.value = data.items || data.students || []
       totalCount.value = data.total_count ?? data.total ?? students.value.length
       page.value = data.page ?? targetPage
       pageSize.value = data.page_size ?? pageSize.value
-      if (data.classroom) {
-        classroomInfo.value = data.classroom
-      }
+      hasConfirmedRoster.value = true
     } else {
       students.value = []
       totalCount.value = 0
+      hasConfirmedRoster.value = true
     }
   } catch {
     if (reqId === fetchRequestId) {
-      errorMessage.value = 'Could not load the student list for this classroom.'
+      rosterErrorMessage.value = 'Could not load the student list for this classroom.'
+      hasConfirmedRoster.value = false
     }
   } finally {
     if (reqId === fetchRequestId) {
-      isLoading.value = false
+      isRosterLoading.value = false
     }
   }
 }
 
-const handleRetry = () => {
-  if (metadataFailed.value || !classroomInfo.value) {
-    loadClassroomMetadata()
+const handleRetryRoster = () => {
+  if (classroomStore.error || !classroomStore.currentClassroom) {
+    syncClassroomMetadata(true)
   }
   fetchStudents(page.value)
 }
 
+const handleRetryMetadata = () => {
+  if (!hasConfirmedRoster.value) {
+    fetchStudents(page.value)
+  }
+}
+
 const goToPage = (targetPage) => {
-  if (targetPage >= 1 && targetPage <= totalPages.value && !isLoading.value) {
+  if (targetPage >= 1 && targetPage <= totalPages.value && !isRosterLoading.value) {
     router.push({
       path: route.path,
       query: { ...route.query, page: targetPage },
@@ -134,15 +124,11 @@ watch(
   (newCode) => {
     if (newCode) {
       page.value = 1
-      loadClassroomMetadata()
+      syncClassroomMetadata()
       fetchStudents(1)
     }
   },
 )
-
-const handleBack = () => {
-  router.push('/classroom/manage')
-}
 
 const formatLastSynced = (isoString) => {
   if (!isoString) return 'Not synced yet'
@@ -157,56 +143,41 @@ const formatLastSynced = (isoString) => {
 }
 
 onMounted(() => {
-  loadClassroomMetadata()
+  syncClassroomMetadata()
   fetchStudents(page.value)
 })
 
 onUnmounted(() => {
   fetchRequestId++
-  metadataRequestId++
 })
 </script>
 
 <template>
   <div class="roster-page">
-    <header class="page-header">
-      <div class="header-content">
-        <div>
-          <button class="back-link" @click="handleBack">Return to classrooms</button>
-          <h2 class="title">{{ classroomInfo?.name || 'Classroom roster' }}</h2>
-          <p v-if="classroomInfo?.code" class="subtitle">
-            Classroom code: <strong class="code-highlight">{{ classroomInfo.code }}</strong>
-          </p>
-        </div>
-        <div class="badge-container">
-          <span class="count-badge">Enrolled students: {{ totalCount }}</span>
-          <router-link
-            :to="{
-              path: '/analytics/' + codeId,
-              query: { roster_page: page }
-            }"
-            class="btn-analytics-header"
-          >
-            Classroom analytics
-          </router-link>
-        </div>
-      </div>
-    </header>
+    <ClassroomWorkspaceHeader
+      :code-id="codeId"
+      :student-count="hasConfirmedRoster ? totalCount : null"
+      :is-count-loading="isRosterLoading"
+      :count-error="Boolean(rosterErrorMessage)"
+      :originating-roster-page="page"
+      active-tab="students"
+      @retry-metadata="handleRetryMetadata"
+    />
 
     <main class="page-body">
-      <div v-if="errorMessage" class="error-banner" role="alert">
-        <span>{{ errorMessage }}</span>
+      <div v-if="rosterErrorMessage" class="error-banner" role="alert">
+        <span>{{ rosterErrorMessage }}</span>
         <button
           type="button"
           class="btn-retry"
-          :disabled="isLoading"
-          @click="handleRetry"
+          :disabled="isRosterLoading"
+          @click="handleRetryRoster"
         >
           Try again
         </button>
       </div>
 
-      <div v-if="isLoading" class="loading-state">
+      <div v-if="isRosterLoading" class="loading-state">
         <div class="spinner"></div>
         <p>Loading enrolled students...</p>
       </div>
@@ -218,7 +189,7 @@ onUnmounted(() => {
               <th>Student name</th>
               <th>Map progress</th>
               <th>Last synced</th>
-              <th class="text-right">Student analytics</th>
+              <th class="text-right">Student progress</th>
             </tr>
           </thead>
           <tbody>
@@ -233,15 +204,15 @@ onUnmounted(() => {
               <td class="text-right">
                 <router-link
                   :to="{
-                    path: '/analytics/' + codeId,
+                    path: `/classroom/students/${codeId}/progress/${student.profile_id}`,
                     query: {
-                      student: student.profile_id,
+                      origin: 'students',
                       roster_page: page
                     }
                   }"
                   class="btn-inspect-link"
                 >
-                  View analytics
+                  View progress
                 </router-link>
               </td>
             </tr>
@@ -266,7 +237,7 @@ onUnmounted(() => {
             <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
             <button
               class="page-btn"
-              :disabled="page >= totalPages || isLoading"
+              :disabled="page >= totalPages || isRosterLoading"
               @click="goToPage(page + 1)"
             >
               Next ▶
@@ -275,12 +246,14 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-else-if="!errorMessage" class="empty-state">
+      <div v-else-if="!rosterErrorMessage" class="empty-state">
         <h4>No students enrolled yet</h4>
         <p>
-          Distribute your classroom code <strong class="code-highlight">{{ classroomInfo?.code }}</strong> to students to have them join this classroom.
+          Distribute your classroom code <strong class="code-highlight">{{ classroomStore.currentClassroom?.code_value || '' }}</strong> to students to have them join this classroom.
         </p>
-        <button class="btn-outline" @click="handleBack">Return to classrooms</button>
+        <router-link to="/classroom/manage" class="btn-outline">
+          Return to classrooms
+        </router-link>
       </div>
     </main>
   </div>

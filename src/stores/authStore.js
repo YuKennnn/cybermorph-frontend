@@ -6,7 +6,8 @@ import {
   registerWebAccount,
   fetchWebUserProfile,
   fetchPlayerProfile,
-} from '../api/auth'
+} from '../api/auth.js'
+import { useClassroomStore } from './classroomStore.js'
 
 export const useAuthStore = defineStore('auth', () => {
   // ==========================================
@@ -136,6 +137,11 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('cyber_token')
     localStorage.removeItem('cyber_user')
     localStorage.removeItem('cyber_role')
+    try {
+      useClassroomStore().reset()
+    } catch {
+      // In case store is not yet active
+    }
   }
 
   return {

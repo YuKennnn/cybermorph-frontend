@@ -68,6 +68,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
+    path: '/classroom/students/:code_id/progress/:profile_id',
+    name: 'student-progress',
+    component: () => import('../views/StudentProgressView.vue'),
+    meta: { requiresAuth: true, roles: ['educator'] },
+  },
+  {
     path: '/classroom/join',
     name: 'classroom-join',
     component: () => import('../views/ClassroomJoinView.vue'),

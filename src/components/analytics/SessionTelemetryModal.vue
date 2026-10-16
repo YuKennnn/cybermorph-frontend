@@ -149,7 +149,6 @@ onUnmounted(() => {
           </button>
           <div class="modal-title-box">
             <h4>Session details</h4>
-            <span class="modal-profile-id">Session ID: {{ session?.session_id }}</span>
           </div>
         </div>
         <button
@@ -175,7 +174,7 @@ onUnmounted(() => {
         <div class="session-summary-box">
           <div class="summary-col">
             <span class="summary-label">Student</span>
-            <span class="summary-val">{{ sessionTelemetry.username || student?.username || ('Student ID: ' + (student?.profile_id || '')) }}</span>
+            <span class="summary-val">{{ sessionTelemetry.username || student?.username || 'Student' }}</span>
           </div>
           <div class="summary-col">
             <span class="summary-label">Map</span>

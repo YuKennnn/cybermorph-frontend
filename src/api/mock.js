@@ -7,6 +7,7 @@ export const mockControl = {
   failThreatIndexCount: 0,
   delayPlayerAnalyticsMs: 0,
   delayClassroomAnalytics: {},
+  delaySessionAnalyticsMs: 0,
 }
 
 if (typeof window !== 'undefined') {
@@ -934,8 +935,34 @@ mock.onGet(new RegExp('/analytics/player')).reply(async (config) => {
   ]
 })
 
-mock.onGet(new RegExp('/analytics/session')).reply((config) => {
+mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
   const sessionId = config.params?.session_id || ''
+
+  let delay = mockControl.delaySessionAnalyticsMs || 0
+  if (!delay && typeof window !== 'undefined') {
+    try {
+      delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_SESSION__') || '0', 10) || 0
+    } catch {
+      /* ignore */
+    }
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  if (sessionId === 'session-missing-profile') {
+    return [
+      200,
+      {
+        session_id: 'session-missing-profile',
+        profile_id: null,
+        username: 'NoProfileUser',
+        map_name: 'Home',
+        result: 'win',
+        threat_events: [],
+      },
+    ]
+  }
 
   if (sessionId === 'e2a8b351-9c2f-4612-8342-210394857612') {
     return [
