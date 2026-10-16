@@ -6,8 +6,16 @@ const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 export const mockControl = {
   failThreatIndexCount: 0,
   delayPlayerAnalyticsMs: 0,
+  delayClassroomsMs: 0,
   delayClassroomAnalytics: {},
   delaySessionAnalyticsMs: 0,
+  failClassroomsCount: 0,
+  failClassroomAnalyticsCount: 0,
+  failClassroomStudentsCount: 0,
+  failClassroomPatchCount: 0,
+  delayClassroomPatchMs: 0,
+  failClassroomDeleteCount: 0,
+  delayClassroomDeleteMs: 0,
 }
 
 if (typeof window !== 'undefined') {
@@ -24,6 +32,7 @@ let mockClassrooms = [
     code: 'CYB101',
     code_value: 'CYB101',
     name: 'BSIT 4A',
+    description: 'Cybersecurity fundamentals and threat defense.',
     is_active: true,
     student_count: 23,
     created_at: '2026-08-20T10:00:00Z',
@@ -35,6 +44,7 @@ let mockClassrooms = [
     code: 'NET202',
     code_value: 'NET202',
     name: 'BSIT 3C',
+    description: null,
     is_active: true,
     student_count: 1,
     created_at: '2026-08-22T14:30:00Z',
@@ -46,6 +56,7 @@ let mockClassrooms = [
     code: 'OLD303',
     code_value: 'OLD303',
     name: 'BSCS 2B (Archived)',
+    description: 'Archived 2025-2026 cohort.',
     is_active: false,
     student_count: 5,
     created_at: '2026-06-10T08:00:00Z',
@@ -604,9 +615,27 @@ const getClassroomResponse = () => {
   })
 }
 
-mock.onGet('/classroom/my-codes').reply(() => {
+mock.onGet('/classroom/my-codes').reply(async () => {
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOMS__') || '0', 10) : 0
+  if (mockControl.failClassroomsCount > 0 || sessionFail > 0) {
+    if (mockControl.failClassroomsCount > 0) mockControl.failClassroomsCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_CLASSROOMS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary classroom list failure' }]
+  }
+  let delay = mockControl.delayClassroomsMs || 0
+  if (!delay && typeof window !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_CLASSROOMS__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+  if (typeof window !== 'undefined') {
+    window.__MY_CODES_FETCH_COUNT__ = (window.__MY_CODES_FETCH_COUNT__ || 0) + 1
+  }
   const list = getClassroomResponse()
-  return [200, { classrooms: list, total_students: mockStudentEnrollments.length }]
+  return [200, list]
 })
 
 mock.onGet('/educator/classrooms').reply(() => {
@@ -706,9 +735,30 @@ mock.onPost('/classroom/join').reply((config) => {
 })
 
 // GET /classroom/:code_id/students
-mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply((config) => {
+mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply(async (config) => {
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_STUDENTS__') || '0', 10) : 0
+  if (mockControl.failClassroomStudentsCount > 0 || sessionFail > 0) {
+    if (mockControl.failClassroomStudentsCount > 0) mockControl.failClassroomStudentsCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_CLASSROOM_STUDENTS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary student roster failure' }]
+  }
   const match = config.url.match(/\/classroom\/([^/]+)\/students/)
   const codeId = match ? match[1] : null
+
+  let delay = mockControl.delayClassroomAnalytics?.[codeId] || 0
+  if (!delay && typeof window !== 'undefined') {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('__CYBERMORPH_DELAY_CLASSROOM__') || '{}')
+      delay = stored[codeId] || 0
+    } catch {
+      /* ignore */
+    }
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
 
   const classroom = mockClassrooms.find(
     (c) =>
@@ -749,12 +799,33 @@ mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply((config) => {
 })
 
 // PATCH /classroom/:code_id
-mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply((config) => {
+mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply(async (config) => {
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_PATCH__') || '0', 10) : 0
+  if (mockControl.failClassroomPatchCount > 0 || sessionFail > 0) {
+    if (mockControl.failClassroomPatchCount > 0) mockControl.failClassroomPatchCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_CLASSROOM_PATCH__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary server error saving classroom settings.' }]
+  }
+
+  let delay = mockControl.delayClassroomPatchMs || 0
+  if (!delay && typeof window !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_CLASSROOM_PATCH__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
   const match = config.url.match(/\/classroom\/([^/]+)$/)
   const codeId = match ? match[1] : null
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
 
-  const index = mockClassrooms.findIndex((c) => !c.deleted_at && (c.id === codeId || c.code === codeId))
+  const index = mockClassrooms.findIndex(
+    (c) =>
+      !c.deleted_at &&
+      (c.id === codeId || c.code_id === codeId || c.code === codeId || c.code_value === codeId),
+  )
   if (index === -1) {
     return [404, { detail: 'Classroom not found.' }]
   }
@@ -762,6 +833,12 @@ mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply((config) => {
   const updated = {
     ...mockClassrooms[index],
     name: data.name !== undefined ? data.name : mockClassrooms[index].name,
+    description:
+      data.description !== undefined
+        ? data.description === null || data.description === ''
+          ? null
+          : data.description
+        : mockClassrooms[index].description ?? null,
     is_active: data.is_active !== undefined ? data.is_active : mockClassrooms[index].is_active,
   }
 
@@ -771,11 +848,32 @@ mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply((config) => {
 })
 
 // DELETE /classroom/:code_id
-mock.onDelete(new RegExp('/classroom/([^/]+)$')).reply((config) => {
+mock.onDelete(new RegExp('/classroom/([^/]+)$')).reply(async (config) => {
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_DELETE__') || '0', 10) : 0
+  if (mockControl.failClassroomDeleteCount > 0 || sessionFail > 0) {
+    if (mockControl.failClassroomDeleteCount > 0) mockControl.failClassroomDeleteCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_CLASSROOM_DELETE__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary server error deleting classroom.' }]
+  }
+
+  let delay = mockControl.delayClassroomDeleteMs || 0
+  if (!delay && typeof window !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_CLASSROOM_DELETE__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
   const match = config.url.match(/\/classroom\/([^/]+)$/)
   const codeId = match ? match[1] : null
 
-  const index = mockClassrooms.findIndex((c) => !c.deleted_at && (c.id === codeId || c.code === codeId))
+  const index = mockClassrooms.findIndex(
+    (c) =>
+      !c.deleted_at &&
+      (c.id === codeId || c.code_id === codeId || c.code === codeId || c.code_value === codeId),
+  )
   if (index === -1) {
     return [404, { detail: 'Classroom not found.' }]
   }
@@ -828,6 +926,14 @@ mock.onGet('/leaderboard').reply((config) => {
 // Analytics Endpoints (Educator)
 // ==========================================
 mock.onGet(new RegExp('/analytics/classroom')).reply(async (config) => {
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_ANALYTICS__') || '0', 10) : 0
+  if (mockControl.failClassroomAnalyticsCount > 0 || sessionFail > 0) {
+    if (mockControl.failClassroomAnalyticsCount > 0) mockControl.failClassroomAnalyticsCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_CLASSROOM_ANALYTICS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary classroom analytics failure' }]
+  }
   const codeId = config.params?.code_id || 'c1'
   let delay = mockControl.delayClassroomAnalytics?.[codeId] || 0
   if (!delay && typeof window !== 'undefined') {

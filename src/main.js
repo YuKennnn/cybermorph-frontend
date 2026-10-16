@@ -4,6 +4,9 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './assets/main.css'
+import { initAccessibilityPreferences } from './utils/accessibility.js'
+
+initAccessibilityPreferences()
 
 if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true') {
   await import('./api/mock.js')
@@ -17,6 +20,7 @@ app.use(router)
 
 if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true') {
   window.__pinia = pinia
+  window.__router = router
 }
 
 app.mount('#app')

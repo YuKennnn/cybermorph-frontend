@@ -149,7 +149,7 @@ async function runStep1StoreTests() {
 // 2. Real Headless Chrome Browser Verification on Isolated Port
 // =============================================================
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-const TEST_PORT = 5174
+const TEST_PORT = process.env.TEST_PORT ? Number(process.env.TEST_PORT) : 5181
 const CDP_PORT = 9226
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-step1-cdp-${Date.now()}`)
 
@@ -468,7 +468,10 @@ async function runStep1BrowserTests() {
 
     // Return to classroom roster
     console.log('5. Testing return to roster page...')
-    await client.eval(`document.querySelector('.back-link')?.click()`)
+    await client.eval(`
+      const target = document.querySelector('.workspace-nav .nav-link') || document.querySelector('.back-link');
+      target?.click();
+    `)
     await client.waitEval(`window.location.pathname.includes('/classroom/students/c1')`, 8000)
     const rosterQuery = await client.eval(`window.location.search`)
     console.log('Roster URL query after return:', rosterQuery)

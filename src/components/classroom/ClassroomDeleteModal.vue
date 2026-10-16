@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { deleteClassroom } from '../../api/classroom'
+import { useAuthStore } from '../../stores/authStore'
 
 const props = defineProps({
   isOpen: {
@@ -19,12 +20,14 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'deleted'])
 
+const authStore = useAuthStore()
 const modalRef = ref(null)
 const cancelBtnRef = ref(null)
 let previousActiveElement = null
 
 const isDeleting = ref(false)
 const errorMessage = ref('')
+const isUnmounted = ref(false)
 
 const trapFocus = (event) => {
   if (event.key !== 'Tab' || !modalRef.value) return
@@ -53,7 +56,9 @@ const trapFocus = (event) => {
 const handleKeyDown = (event) => {
   if (!props.isOpen) return
   if (event.key === 'Escape') {
-    emit('close')
+    if (!isDeleting.value) {
+      emit('close')
+    }
     return
   }
   trapFocus(event)
@@ -100,6 +105,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isUnmounted.value = true
   window.removeEventListener('keydown', handleKeyDown)
   if (!document.querySelector('.modal-backdrop')) {
     document.body.style.overflow = ''
@@ -107,20 +113,50 @@ onUnmounted(() => {
 })
 
 const handleDelete = async () => {
-  if (!props.classroom) return
+  if (!props.classroom || isDeleting.value) return
+
+  const targetCodeId = props.classroom.code_id
+  if (!targetCodeId) return
+
+  // Capture target classroom and auth-session context BEFORE the request
+  const capturedClassroom = { ...props.classroom }
+  const capturedSessionToken = authStore.token
 
   isDeleting.value = true
   errorMessage.value = ''
 
   try {
-    const targetId = props.classroom.code_id || props.classroom.id
-    await deleteClassroom(targetId)
-    emit('deleted', props.classroom)
+    await deleteClassroom(targetCodeId)
+
+    // Ignore obsolete completion events after unmount, classroom change, or session change
+    if (
+      isUnmounted.value ||
+      props.classroom?.code_id !== targetCodeId ||
+      authStore.token !== capturedSessionToken
+    ) {
+      return
+    }
+
+    // Emit the captured classroom, not later props
+    emit('deleted', capturedClassroom)
     emit('close')
   } catch {
+    if (
+      isUnmounted.value ||
+      props.classroom?.code_id !== targetCodeId ||
+      authStore.token !== capturedSessionToken
+    ) {
+      return
+    }
     errorMessage.value = 'Failed to delete classroom. Please verify connection.'
   } finally {
-    isDeleting.value = false
+    if (
+      !isUnmounted.value &&
+      props.classroom?.code_id === targetCodeId &&
+      authStore.token === capturedSessionToken
+    ) {
+      isDeleting.value = false
+    }
   }
 }
 </script>
@@ -133,12 +169,19 @@ const handleDelete = async () => {
     role="dialog"
     aria-modal="true"
     aria-labelledby="delete-modal-title"
-    @click.self="emit('close')"
+    @click.self="!isDeleting && emit('close')"
   >
     <div class="modal-card danger-modal">
       <div class="modal-header">
         <h3 id="delete-modal-title" class="modal-title danger-title">Delete classroom</h3>
-        <button class="close-btn" aria-label="Close dialog" @click="emit('close')">✕</button>
+        <button
+          class="close-btn"
+          aria-label="Close dialog"
+          :disabled="isDeleting"
+          @click="!isDeleting && emit('close')"
+        >
+          ✕
+        </button>
       </div>
 
       <div v-if="errorMessage" class="error-banner" role="alert">
@@ -147,7 +190,7 @@ const handleDelete = async () => {
 
       <p class="modal-desc">
         Are you sure you want to delete <strong>"{{ classroom?.name }}"</strong>?
-        This classroom will be removed from your classroom lists and its join code will stop working.
+        This classroom will be removed from your classroom lists and its access code will be deactivated.
       </p>
 
       <div class="modal-buttons">
@@ -155,7 +198,8 @@ const handleDelete = async () => {
           ref="cancelBtnRef"
           type="button"
           class="btn-cancel"
-          @click="emit('close')"
+          :disabled="isDeleting"
+          @click="!isDeleting && emit('close')"
         >
           Cancel
         </button>

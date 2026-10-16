@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { isReducedMotionActive } from '../utils/accessibility.js'
 
 const routes = [
   {
@@ -51,6 +52,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('../views/SettingsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/leaderboard',
     name: 'leaderboard',
     component: () => import('../views/LeaderboardView.vue'),
@@ -71,6 +78,12 @@ const routes = [
     path: '/classroom/students/:code_id/progress/:profile_id',
     name: 'student-progress',
     component: () => import('../views/StudentProgressView.vue'),
+    meta: { requiresAuth: true, roles: ['educator'] },
+  },
+  {
+    path: '/classroom/settings/:code_id',
+    name: 'classroom-settings',
+    component: () => import('../views/ClassroomSettingsView.vue'),
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
@@ -112,10 +125,11 @@ const router = createRouter({
     if (savedPosition) {
       return savedPosition
     }
+    const behavior = isReducedMotionActive() ? 'auto' : 'smooth'
     if (to.hash) {
-      return { el: to.hash, behavior: 'smooth' }
+      return { el: to.hash, behavior }
     }
-    return { top: 0 }
+    return { top: 0, behavior }
   },
 })
 

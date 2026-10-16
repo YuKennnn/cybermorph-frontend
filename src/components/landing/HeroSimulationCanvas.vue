@@ -1,8 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { isReducedMotionActive, onMotionChange } from '../../utils/accessibility.js'
 
 const heroCanvasRef = ref(null)
 let animationFrameId = null
+let unsubscribeMotion = null
 let frameCount = 0
 
 const mousePos = reactive({
@@ -455,16 +457,42 @@ const animate = () => {
 
   drawReticle(ctx)
 
-  animationFrameId = requestAnimationFrame(animate)
+  if (!isReducedMotionActive()) {
+    animationFrameId = requestAnimationFrame(animate)
+  } else {
+    animationFrameId = null
+  }
 }
 
 const handleResize = () => {
   setupCanvas()
+  if (isReducedMotionActive()) {
+    animate()
+  }
 }
 
 onMounted(() => {
   setupCanvas()
-  animationFrameId = requestAnimationFrame(animate)
+  if (isReducedMotionActive()) {
+    animate()
+  } else {
+    animationFrameId = requestAnimationFrame(animate)
+  }
+
+  unsubscribeMotion = onMotionChange((reducedActive) => {
+    if (reducedActive) {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+      animate()
+    } else {
+      if (!animationFrameId) {
+        animationFrameId = requestAnimationFrame(animate)
+      }
+    }
+  })
+
   window.addEventListener('resize', handleResize)
 
   const parent = heroCanvasRef.value?.parentElement
@@ -475,8 +503,13 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (unsubscribeMotion) {
+    unsubscribeMotion()
+    unsubscribeMotion = null
+  }
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
   }
   window.removeEventListener('resize', handleResize)
 

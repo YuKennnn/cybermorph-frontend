@@ -3,6 +3,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import AppIcon from './common/AppIcon.vue'
+import LogoutModal from './common/LogoutModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -11,6 +12,9 @@ const isMobileOpen = ref(false)
 const mobileCloseBtnRef = ref(null)
 const hamburgerBtnRef = ref(null)
 const sidebarRef = ref(null)
+const logoutBtnRef = ref(null)
+const isLogoutModalOpen = ref(false)
+const isLoggingOut = ref(false)
 let previousActiveElement = null
 
 const toggleMobileMenu = () => {
@@ -19,6 +23,28 @@ const toggleMobileMenu = () => {
 
 const closeMobileMenu = () => {
   isMobileOpen.value = false
+}
+
+const isElementVisible = (el) => {
+  if (!el || !document.body.contains(el)) return false
+  const rect = el.getBoundingClientRect()
+  const style = window.getComputedStyle(el)
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.visibility !== 'hidden' &&
+    style.display !== 'none'
+  )
+}
+
+const syncBodyOverflow = () => {
+  if (typeof document !== 'undefined') {
+    if (isMobileOpen.value || isLogoutModalOpen.value) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+  }
 }
 
 const trapFocus = (event) => {
@@ -46,6 +72,9 @@ const trapFocus = (event) => {
 }
 
 const handleKeyDown = (event) => {
+  // Only the topmost dialog handles focus trapping and Escape
+  if (isLogoutModalOpen.value) return
+
   if (event.key === 'Escape' && isMobileOpen.value) {
     closeMobileMenu()
     return
@@ -56,14 +85,13 @@ const handleKeyDown = (event) => {
 watch(
   isMobileOpen,
   (open) => {
+    syncBodyOverflow()
     if (open) {
       previousActiveElement = document.activeElement
-      document.body.style.overflow = 'hidden'
       nextTick(() => {
         mobileCloseBtnRef.value?.focus()
       })
     } else {
-      document.body.style.overflow = ''
       if (
         previousActiveElement &&
         typeof previousActiveElement.focus === 'function' &&
@@ -86,10 +114,37 @@ onUnmounted(() => {
   document.body.style.overflow = ''
 })
 
-const handleLogout = () => {
-  closeMobileMenu()
-  authStore.logout()
-  router.push('/login')
+const handleLogoutClick = () => {
+  isLogoutModalOpen.value = true
+  syncBodyOverflow()
+}
+
+const handleLogoutCancelled = () => {
+  isLogoutModalOpen.value = false
+  syncBodyOverflow()
+  nextTick(() => {
+    // Restore focus to logout button if visible, otherwise to mobile menu control
+    if (logoutBtnRef.value && isElementVisible(logoutBtnRef.value)) {
+      logoutBtnRef.value.focus()
+    } else {
+      hamburgerBtnRef.value?.focus()
+    }
+  })
+}
+
+const handleLogoutConfirmed = async () => {
+  if (isLoggingOut.value) return
+  isLoggingOut.value = true
+
+  try {
+    isLogoutModalOpen.value = false
+    closeMobileMenu()
+    syncBodyOverflow()
+    authStore.logout()
+    await router.replace('/login')
+  } finally {
+    isLoggingOut.value = false
+  }
 }
 
 const formatRole = (role) => {
@@ -214,16 +269,36 @@ const formatRole = (role) => {
           <AppIcon name="users" :size="18" class="nav-icon" />
           <span class="nav-label">Users</span>
         </router-link>
+
+        <!-- Settings Link -->
+        <router-link to="/settings" class="nav-item" @click="closeMobileMenu">
+          <AppIcon name="settings" :size="18" class="nav-icon" />
+          <span class="nav-label">Settings</span>
+        </router-link>
       </nav>
 
       <!-- Sidebar Footer -->
       <div class="sidebar-footer">
-        <button class="logout-btn" @click="handleLogout">
+        <button
+          ref="logoutBtnRef"
+          type="button"
+          class="logout-btn"
+          aria-label="Sign out of account"
+          @click="handleLogoutClick"
+        >
           <AppIcon name="logout" :size="18" class="logout-icon" />
           <span>Sign out</span>
         </button>
       </div>
     </aside>
+
+    <!-- Logout Confirmation Dialog -->
+    <LogoutModal
+      :is-open="isLogoutModalOpen"
+      :is-logging-out="isLoggingOut"
+      @close="handleLogoutCancelled"
+      @confirm="handleLogoutConfirmed"
+    />
   </div>
 </template>
 
@@ -234,7 +309,7 @@ const formatRole = (role) => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1.25rem;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border-bottom: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   position: sticky;
@@ -277,7 +352,7 @@ const formatRole = (role) => {
   position: fixed;
   top: 0;
   left: 0;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -461,7 +536,7 @@ const formatRole = (role) => {
   min-height: 40px;
   background-color: transparent;
   border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
+  color: var(--color-text-main);
   border-radius: 8px;
   font-family: var(--font-sans);
   font-size: 0.85rem;
@@ -471,7 +546,8 @@ const formatRole = (role) => {
 }
 
 .logout-icon {
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
+  transition: color 0.15s ease;
 }
 
 .logout-btn:hover {
@@ -482,6 +558,17 @@ const formatRole = (role) => {
 
 .logout-btn:hover .logout-icon {
   color: var(--color-danger);
+}
+
+.logout-btn:active {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  transform: scale(0.99);
+}
+
+.logout-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Responsive Breakpoints */

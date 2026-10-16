@@ -2,12 +2,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMyClassrooms } from '../api/classroom'
+import { useClassroomStore } from '../stores/classroomStore'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
 import ClassroomCreateModal from '../components/classroom/ClassroomCreateModal.vue'
 import ClassroomEditModal from '../components/classroom/ClassroomEditModal.vue'
 import ClassroomDeleteModal from '../components/classroom/ClassroomDeleteModal.vue'
 
 const router = useRouter()
+const classroomStore = useClassroomStore()
 
 const classrooms = ref([])
 const isLoading = ref(false)
@@ -26,7 +28,7 @@ const fetchClassrooms = async () => {
 
   try {
     const data = await fetchMyClassrooms()
-    classrooms.value = Array.isArray(data) ? data : data.classrooms || []
+    classrooms.value = Array.isArray(data) ? data : []
   } catch {
     errorMessage.value = 'Failed to load classroom roster. Please try again.'
   } finally {
@@ -37,6 +39,7 @@ const fetchClassrooms = async () => {
 const handleCreated = (newClassroom) => {
   const code = newClassroom.code_value || newClassroom.code || 'GENERATED'
   successMessage.value = `Classroom "${newClassroom.name}" generated with access code: ${code}`
+  classroomStore.updateClassroomInState(newClassroom)
   fetchClassrooms()
 }
 
@@ -45,7 +48,10 @@ const handleOpenEdit = (classroom) => {
   isEditModalOpen.value = true
 }
 
-const handleUpdated = () => {
+const handleUpdated = (updated) => {
+  if (updated) {
+    classroomStore.updateClassroomInState(updated)
+  }
   successMessage.value = 'Classroom configurations updated successfully.'
   fetchClassrooms()
 }
@@ -56,6 +62,9 @@ const handleOpenDelete = (classroom) => {
 }
 
 const handleDeleted = (classroom) => {
+  if (classroom) {
+    classroomStore.removeClassroomFromState(classroom.code_id)
+  }
   successMessage.value = `Classroom "${classroom.name}" was soft-deleted.`
   fetchClassrooms()
 }
@@ -70,6 +79,12 @@ const handleViewAnalytics = (codeId) => {
 
 onMounted(() => {
   fetchClassrooms()
+  if (history.state?.flashMessage) {
+    successMessage.value = history.state.flashMessage
+    const cleanState = { ...history.state }
+    delete cleanState.flashMessage
+    history.replaceState(cleanState, '')
+  }
 })
 </script>
 

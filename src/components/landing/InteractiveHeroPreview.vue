@@ -1,10 +1,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { isReducedMotionActive, onMotionChange } from '../../utils/accessibility.js'
 
 const canvasRef = ref(null)
 const containerRef = ref(null)
 const isPaused = ref(false)
 const userPrefersReducedMotion = ref(false)
+let unsubscribeMotion = null
 
 let animationFrameId = null
 let mouseX = -100
@@ -277,12 +279,22 @@ const draw = () => {
 }
 
 onMounted(() => {
-  // Check user preference for reduced motion
-  const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-  userPrefersReducedMotion.value = mediaQuery.matches
-  if (mediaQuery.matches) {
+  // Check user preference for reduced motion (both explicit setting and system media query)
+  userPrefersReducedMotion.value = isReducedMotionActive()
+  if (userPrefersReducedMotion.value) {
     isPaused.value = true
   }
+
+  unsubscribeMotion = onMotionChange((reducedActive) => {
+    userPrefersReducedMotion.value = reducedActive
+    if (reducedActive) {
+      isPaused.value = true
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+    }
+  })
 
   window.addEventListener('resize', resizeCanvas)
   resizeCanvas()
@@ -300,6 +312,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (unsubscribeMotion) {
+    unsubscribeMotion()
+    unsubscribeMotion = null
+  }
   window.removeEventListener('resize', resizeCanvas)
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)

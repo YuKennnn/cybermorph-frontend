@@ -164,6 +164,13 @@ const analyticsRoute = computed(() => {
   }
 })
 
+const settingsRoute = computed(() => {
+  return {
+    path: `/classroom/settings/${props.codeId}`,
+    query: props.originatingRosterPage > 1 ? { roster_page: props.originatingRosterPage } : {},
+  }
+})
+
 onUnmounted(() => {
   if (copyTimeout) {
     clearTimeout(copyTimeout)
@@ -305,14 +312,15 @@ onUnmounted(() => {
         <span>Analytics</span>
       </router-link>
 
-      <!-- Settings remains inactive without linking to unbuilt route -->
-      <span
-        class="nav-link nav-link-disabled"
-        aria-disabled="true"
-        title="Settings (available soon)"
+      <router-link
+        :to="settingsRoute"
+        class="nav-link"
+        :class="{ active: activeTab === 'settings' }"
+        :aria-current="activeTab === 'settings' ? 'page' : undefined"
       >
+        <AppIcon name="settings" :size="16" />
         <span>Settings</span>
-      </span>
+      </router-link>
     </nav>
   </header>
 </template>

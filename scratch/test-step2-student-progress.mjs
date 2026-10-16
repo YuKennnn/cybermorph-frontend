@@ -124,7 +124,7 @@ async function runStep2FormulaChecks() {
 // 2. Real Headless Chrome Browser Application Tests on Isolated Port
 // =============================================================
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-const TEST_PORT = 5174
+const TEST_PORT = process.env.TEST_PORT ? Number(process.env.TEST_PORT) : 5182
 const CDP_PORT = 9226
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-step2-cdp-${Date.now()}`)
 

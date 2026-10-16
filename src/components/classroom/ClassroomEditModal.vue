@@ -126,12 +126,12 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    const targetId = props.classroom.code_id || props.classroom.id
-    await updateClassroom(targetId, {
+    const targetId = props.classroom.code_id
+    const updated = await updateClassroom(targetId, {
       name: editName.value.trim(),
       is_active: editIsActive.value,
     })
-    emit('updated')
+    emit('updated', updated)
     emit('close')
   } catch {
     errorMessage.value = 'Failed to update classroom. Please verify connection.'

@@ -68,7 +68,7 @@ export const useClassroomStore = defineStore('classroom', () => {
           return classrooms.value
         }
 
-        const list = Array.isArray(data) ? data : data?.classrooms || []
+        const list = Array.isArray(data) ? data : []
         classrooms.value = list
         isFetched.value = true
         error.value = ''
@@ -110,9 +110,12 @@ export const useClassroomStore = defineStore('classroom', () => {
    * using documented fields (code_id, code_value, name, is_active).
    */
   const updateClassroomInState = (updated) => {
-    if (!updated?.code_id) return
-    const id = String(updated.code_id)
-    const index = classrooms.value.findIndex((c) => String(c.code_id) === id)
+    const targetId = updated?.code_id
+    if (!targetId) return
+    const id = String(targetId)
+    const index = classrooms.value.findIndex(
+      (c) => String(c.code_id) === id,
+    )
     if (index !== -1) {
       classrooms.value[index] = { ...classrooms.value[index], ...updated }
     } else {
@@ -126,7 +129,9 @@ export const useClassroomStore = defineStore('classroom', () => {
   const removeClassroomFromState = (codeId) => {
     if (!codeId) return
     const id = String(codeId)
-    classrooms.value = classrooms.value.filter((c) => String(c.code_id) !== id)
+    classrooms.value = classrooms.value.filter(
+      (c) => String(c.code_id) !== id,
+    )
     if (String(currentClassroomId.value) === id) {
       currentClassroomId.value = null
     }

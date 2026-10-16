@@ -28,10 +28,9 @@ const loadDashboardData = async () => {
 
   try {
     const data = await fetchMyClassrooms()
-    const list = Array.isArray(data) ? data : data?.classrooms || []
+    const list = Array.isArray(data) ? data : []
     classrooms.value = list
-    totalStudents.value =
-      data?.total_students ?? list.reduce((sum, c) => sum + (c.student_count || 0), 0)
+    totalStudents.value = list.reduce((sum, c) => sum + (c.student_count || 0), 0)
   } catch (error) {
     errorMessage.value = extractErrorMessage(
       error,

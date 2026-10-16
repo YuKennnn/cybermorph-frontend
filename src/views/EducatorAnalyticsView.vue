@@ -1,17 +1,15 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchMyClassrooms, fetchClassroomStudents } from '../api/classroom'
-import {
-  fetchClassroomAnalytics,
-  fetchSessionAnalytics,
-} from '../api/analytics'
+import { fetchClassroomStudents } from '../api/classroom.js'
+import { fetchClassroomAnalytics } from '../api/analytics.js'
+import { useClassroomStore } from '../stores/classroomStore.js'
+import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 import ThreatPerformanceGauge from '../components/analytics/ThreatPerformanceGauge.vue'
-import StudentProficiencyModal from '../components/analytics/StudentProficiencyModal.vue'
-import SessionTelemetryModal from '../components/analytics/SessionTelemetryModal.vue'
 
 const route = useRoute()
 const router = useRouter()
+const classroomStore = useClassroomStore()
 
 // Canonical DICT Threat Categories
 const CANONICAL_THREATS = [
@@ -33,24 +31,33 @@ const CANONICAL_MAPS = [
   { name: 'Public Park' },
 ]
 
-// Request ID guards for concurrency / race conditions
+// Concurrency & stale response request ID guards
 let classroomRequestId = 0
-let sessionRequestId = 0
+let rosterRequestId = 0
+let bareRouteSeq = 0
+let isComponentMounted = true
+
+const isCurrentBareAnalyticsContext = (seq) => {
+  return (
+    seq === bareRouteSeq &&
+    isComponentMounted &&
+    !route.params.code_id &&
+    route.path === '/analytics'
+  )
+}
 
 // ==========================================
 // Level 1: Classroom Aggregate State
 // ==========================================
-const classrooms = ref([])
-const selectedClassroomId = ref(route.params.code_id || '')
 const classroomAnalytics = ref(null)
 const students = ref([])
-const isClassroomsLoading = ref(true)
 const isAnalyticsLoading = ref(false)
 const isStudentsLoading = ref(false)
 const aggregateErrorMessage = ref('')
 const rosterErrorMessage = ref('')
+const hasConfirmedRoster = ref(false)
 
-// Analytics Table Pagination
+// Table Pagination
 const parseQueryInt = (val, fallback = 1) => {
   const p = parseInt(val, 10)
   return !isNaN(p) && p > 0 ? p : fallback
@@ -69,218 +76,186 @@ const originatingRosterPage = computed(() => {
   return parseQueryInt(route.query.roster_page, 1)
 })
 
-// ==========================================
-// Level 2: Student Proficiency Modal State
-// ==========================================
-const selectedStudent = ref(null)
-const studentAnalytics = ref(null)
-const isStudentModalOpen = ref(false)
-const isStudentLoading = ref(false)
-const studentErrorMessage = ref('')
+// Current Classroom Context
+const effectiveCodeId = computed(() => {
+  return route.params.code_id ? String(route.params.code_id) : ''
+})
 
-// ==========================================
-// Level 3: Session Telemetry Modal State
-// ==========================================
-const selectedSession = ref(null)
-const sessionTelemetry = ref(null)
-const isSessionModalOpen = ref(false)
-const isSessionLoading = ref(false)
-const sessionErrorMessage = ref('')
-
-// Selected Classroom Object
+// Documented matching: use only code_id. Never use id, code_value, or code as aliases.
 const currentClassroom = computed(() => {
+  if (!effectiveCodeId.value) return null
   return (
-    classrooms.value.find(
-      (c) =>
-        (c.code_id && c.code_id === selectedClassroomId.value) ||
-        (c.id && c.id === selectedClassroomId.value) ||
-        (c.code_value && c.code_value === selectedClassroomId.value) ||
-        (c.code && c.code === selectedClassroomId.value),
-    ) ||
-    classrooms.value[0] ||
-    null
+    classroomStore.classrooms.find(
+      (c) => String(c.code_id) === String(effectiveCodeId.value),
+    ) || null
   )
 })
 
-// Load All Classrooms for the Instructor
-const loadClassrooms = async () => {
-  isClassroomsLoading.value = true
-  aggregateErrorMessage.value = ''
-
-  try {
-    const data = await fetchMyClassrooms()
-    const list = Array.isArray(data) ? data : data.classrooms || []
-    classrooms.value = list
-
-    if (list.length > 0) {
-      if (!selectedClassroomId.value) {
-        selectedClassroomId.value =
-          list[0].code_id || list[0].id || list[0].code_value || list[0].code
-      }
-      await loadClassroomData(selectedClassroomId.value, tablePage.value)
-    }
-  } catch {
-    aggregateErrorMessage.value = 'Failed to load classroom list. Please verify your connection.'
-  } finally {
-    isClassroomsLoading.value = false
-  }
-}
-
-// Load Aggregate Analytics & Student Roster for a Classroom
-const loadClassroomData = async (codeId, targetTablePage = tablePage.value) => {
+// ==========================================
+// Data Fetching Operations
+// ==========================================
+const loadAggregateAnalytics = async (codeId) => {
   if (!codeId) return
   const reqId = ++classroomRequestId
-
   isAnalyticsLoading.value = true
-  isStudentsLoading.value = true
   aggregateErrorMessage.value = ''
-  rosterErrorMessage.value = ''
 
   try {
-    const [analyticsResult, rosterResult] = await Promise.allSettled([
-      fetchClassroomAnalytics(codeId),
-      fetchClassroomStudents(codeId, {
-        page: targetTablePage,
-        page_size: tablePageSize.value,
-      }),
-    ])
-
-    if (reqId !== classroomRequestId) return // stale response check
-
-    if (analyticsResult.status === 'fulfilled') {
-      classroomAnalytics.value = analyticsResult.value
-    } else {
-      classroomAnalytics.value = null
-      aggregateErrorMessage.value = 'Could not load classroom summary.'
-    }
-
-    if (rosterResult.status === 'fulfilled') {
-      const r = rosterResult.value
-      if (Array.isArray(r)) {
-        students.value = r
-        tableTotalCount.value = r.length
-        tablePage.value = 1
-      } else if (r && typeof r === 'object') {
-        students.value = r.items || r.students || []
-        tableTotalCount.value = r.total_count ?? r.total ?? students.value.length
-        tablePage.value = r.page ?? targetTablePage
-        tablePageSize.value = r.page_size ?? tablePageSize.value
-      } else {
-        students.value = []
-        tableTotalCount.value = 0
-      }
-
-      // If a student modal is currently open with unknown username, resolve it from roster
-      if (selectedStudent.value && !selectedStudent.value.username) {
-        const matched = students.value.find(
-          (s) => String(s.profile_id) === String(selectedStudent.value.profile_id),
-        )
-        if (matched && matched.username) {
-          selectedStudent.value = {
-            ...selectedStudent.value,
-            username: matched.username,
-          }
-        }
-      }
-    } else {
-      students.value = []
-      tableTotalCount.value = 0
-      rosterErrorMessage.value = 'Could not load student roster.'
-    }
+    const data = await fetchClassroomAnalytics(codeId)
+    if (reqId !== classroomRequestId) return
+    classroomAnalytics.value = data
   } catch {
-    if (reqId === classroomRequestId) {
-      aggregateErrorMessage.value = 'Could not load classroom data.'
-    }
+    if (reqId !== classroomRequestId) return
+    classroomAnalytics.value = null
+    aggregateErrorMessage.value = 'Could not load classroom summary.'
   } finally {
     if (reqId === classroomRequestId) {
       isAnalyticsLoading.value = false
+    }
+  }
+}
+
+const loadStudentRoster = async (codeId, targetPage = tablePage.value) => {
+  if (!codeId) return
+  const reqId = ++rosterRequestId
+  isStudentsLoading.value = true
+  rosterErrorMessage.value = ''
+
+  try {
+    const r = await fetchClassroomStudents(codeId, {
+      page: targetPage,
+      page_size: tablePageSize.value,
+    })
+    if (reqId !== rosterRequestId) return
+
+    if (Array.isArray(r)) {
+      students.value = r
+      tableTotalCount.value = r.length
+      tablePage.value = 1
+      hasConfirmedRoster.value = true
+    } else if (r && typeof r === 'object') {
+      students.value = r.items || r.students || []
+      tableTotalCount.value = r.total_count ?? r.total ?? students.value.length
+      tablePage.value = r.page ?? targetPage
+      tablePageSize.value = r.page_size ?? tablePageSize.value
+      hasConfirmedRoster.value = true
+    } else {
+      students.value = []
+      tableTotalCount.value = 0
+      hasConfirmedRoster.value = true
+    }
+  } catch {
+    if (reqId !== rosterRequestId) return
+    students.value = []
+    hasConfirmedRoster.value = false
+    rosterErrorMessage.value = 'Could not load student roster.'
+  } finally {
+    if (reqId === rosterRequestId) {
       isStudentsLoading.value = false
     }
   }
 }
 
-const goToTablePage = (targetPage) => {
-  if (targetPage >= 1 && targetPage <= tableTotalPages.value && !isStudentsLoading.value) {
-    tablePage.value = targetPage
-    router.push({
-      path: route.path,
-      query: { ...route.query, table_page: targetPage },
-    })
-    loadClassroomData(selectedClassroomId.value, targetPage)
+const loadClassroomData = (codeId, targetPage = tablePage.value) => {
+  return Promise.allSettled([
+    loadAggregateAnalytics(codeId),
+    loadStudentRoster(codeId, targetPage),
+  ])
+}
+
+// ==========================================
+// Bare /analytics Redirection Handling
+// ==========================================
+const resolveBareAnalyticsRoute = async () => {
+  const currentSeq = ++bareRouteSeq
+
+  if (route.params.code_id) {
+    classroomStore.setCurrentClassroomId(route.params.code_id)
+    if (!classroomStore.isFetched && !classroomStore.isLoading) {
+      classroomStore.fetchClassrooms().catch(() => {})
+    }
+    return
+  }
+
+  // Bare /analytics route: ensure classroom list is fetched
+  if (!classroomStore.isFetched) {
+    try {
+      await classroomStore.fetchClassrooms()
+    } catch {
+      // List loading failed. classroomStore.error is set.
+      // Distinguish list-loading failure from empty list.
+      return
+    }
+  }
+
+  // Guard against obsolete navigation:
+  // After awaiting classroom loading, redirect only if this operation
+  // is still current and the user is still on bare /analytics.
+  if (!isCurrentBareAnalyticsContext(currentSeq)) {
+    return
+  }
+
+  // Confirmed empty classrooms list
+  if (classroomStore.classrooms.length === 0) {
+    return
+  }
+
+  // Prefer valid classroom already selected in the shared store; otherwise choose the first available classroom
+  const selectedId = classroomStore.currentClassroomId
+  const hasValidSelection =
+    selectedId &&
+    classroomStore.classrooms.some((c) => String(c.code_id) === String(selectedId))
+
+  const targetId = hasValidSelection
+    ? String(selectedId)
+    : String(classroomStore.classrooms[0].code_id)
+
+  classroomStore.setCurrentClassroomId(targetId)
+
+  // Verify context again before replacing route
+  if (!isCurrentBareAnalyticsContext(currentSeq)) {
+    return
+  }
+
+  // Preserve relevant query parameters during redirection
+  router.replace({
+    path: `/analytics/${targetId}`,
+    query: { ...route.query },
+  })
+}
+
+const retryClassroomList = async () => {
+  const currentSeq = ++bareRouteSeq
+  try {
+    await classroomStore.fetchClassrooms(true)
+    if (isCurrentBareAnalyticsContext(currentSeq)) {
+      resolveBareAnalyticsRoute()
+    }
+  } catch {
+    // Error is captured in classroomStore.error
   }
 }
 
-// Watch table_page from query (supports browser Back/Forward)
-watch(
-  () => route.query.table_page,
-  (newPageQuery) => {
-    const parsed = parseQueryInt(newPageQuery, 1)
-    if (parsed !== tablePage.value) {
-      tablePage.value = parsed
-      if (selectedClassroomId.value) {
-        loadClassroomData(selectedClassroomId.value, parsed)
-      }
-    }
-  },
-)
-
-// Watch Classroom Route Param Change (supports browser Back/Forward between classrooms)
-watch(
-  () => route.params.code_id,
-  (newCodeParam) => {
-    if (newCodeParam && newCodeParam !== selectedClassroomId.value) {
-      selectedClassroomId.value = newCodeParam
-    }
-  },
-)
-
-// Watch Classroom Selection Dropdown Change
-watch(selectedClassroomId, (newCode, oldCode) => {
-  if (newCode && newCode !== oldCode) {
-    // Invalidate pending requests
-    classroomRequestId++
-    sessionRequestId++
-
-    // Dismiss open dialogs and clear student/session state to prevent incompatible selection
-    isStudentModalOpen.value = false
-    selectedStudent.value = null
-    studentAnalytics.value = null
-    isStudentLoading.value = false
-    studentErrorMessage.value = ''
-
-    isSessionModalOpen.value = false
-    selectedSession.value = null
-    sessionTelemetry.value = null
-    isSessionLoading.value = false
-    sessionErrorMessage.value = ''
-
-    // Distinguish new classroom selection from history restoration
-    const isHistoryRestoration = route.params.code_id === newCode
-    const targetPage = isHistoryRestoration ? parseQueryInt(route.query.table_page, 1) : 1
-    tablePage.value = targetPage
-
-    // Clear incompatible student query param while preserving originating roster page
-    const nextQuery = { ...route.query }
-    delete nextQuery.student
-
-    if (!isHistoryRestoration) {
-      delete nextQuery.table_page
-      if (route.params.code_id !== newCode) {
-        router.push({
-          path: `/analytics/${newCode}`,
-          query: nextQuery,
-        })
-      }
-    }
-    loadClassroomData(newCode, targetPage)
+// ==========================================
+// Metadata Retry (Condition 1)
+// ==========================================
+const handleRetryMetadata = () => {
+  // ClassroomWorkspaceHeader already executed classroomStore.fetchClassrooms(true).
+  // Do NOT trigger another fetchClassrooms call here.
+  // Retry failed analytics or roster requests separately if they were in an error state.
+  if (aggregateErrorMessage.value) {
+    loadAggregateAnalytics(effectiveCodeId.value)
   }
-})
+  if (rosterErrorMessage.value) {
+    loadStudentRoster(effectiveCodeId.value, tablePage.value)
+  }
+}
 
 // ==========================================
-// Level 2: Student Analytics Navigation
+// Student Navigation & Pagination
 // ==========================================
 const openStudentAnalytics = (student) => {
-  const codeId = selectedClassroomId.value || currentClassroom.value?.code_id || route.params.code_id
+  const codeId = effectiveCodeId.value
   if (!codeId) return
   const query = {
     origin: 'analytics',
@@ -295,103 +270,18 @@ const openStudentAnalytics = (student) => {
   })
 }
 
-const closeStudentModal = () => {
-  isStudentLoading.value = false
-  studentErrorMessage.value = ''
-  isStudentModalOpen.value = false
-  selectedStudent.value = null
-  studentAnalytics.value = null
-
-  // Remove student selection query while preserving table_page and roster_page
-  const nextQuery = { ...route.query }
-  delete nextQuery.student
-  router.push({
-    path: route.path,
-    query: nextQuery,
-  })
-}
-
-// Watch deep link student query (redirect legacy links to dedicated view)
-watch(
-  [() => route.query.student, () => selectedClassroomId.value, () => route.params.code_id],
-  ([newStudentId]) => {
-    if (newStudentId && String(newStudentId).trim()) {
-      const codeId = route.params.code_id || selectedClassroomId.value || currentClassroom.value?.code_id
-      if (!codeId) return // Wait until classroom code is known; never fallback to hardcoded 'c1'
-
-      // Resolve origin strictly:
-      // - Preserve an explicit valid origin.
-      // - Otherwise, roster_page means Students, even with table_page.
-      // - Otherwise, table_page means Analytics.
-      let resolvedOrigin
-      if (route.query.origin === 'students' || route.query.origin === 'analytics') {
-        resolvedOrigin = route.query.origin
-      } else if (route.query.roster_page) {
-        resolvedOrigin = 'students'
-      } else {
-        resolvedOrigin = 'analytics'
-      }
-
-      // Preserve relevant query parameters
-      const query = { origin: resolvedOrigin }
-      if (route.query.roster_page) {
-        query.roster_page = route.query.roster_page
-      }
-      if (route.query.table_page) {
-        query.table_page = route.query.table_page
-      } else if (resolvedOrigin === 'analytics' && tablePage.value) {
-        query.table_page = tablePage.value
-      }
-      if (route.query.session) {
-        query.session = route.query.session
-      }
-
-      router.replace({
-        path: `/classroom/students/${codeId}/progress/${String(newStudentId).trim()}`,
-        query,
-      })
-    }
-  },
-  { immediate: true },
-)
-
-// ==========================================
-// Level 3: Inspect Session Breakdown
-// ==========================================
-const openSessionTelemetry = async (session) => {
-  const reqId = ++sessionRequestId
-  selectedSession.value = session
-  isStudentModalOpen.value = false // Hide student modal so dialogs do NOT stack
-  isSessionModalOpen.value = true
-  isSessionLoading.value = true
-  sessionErrorMessage.value = ''
-  sessionTelemetry.value = null
-
-  try {
-    const data = await fetchSessionAnalytics(session.session_id)
-    if (reqId !== sessionRequestId) return // stale response check
-    sessionTelemetry.value = data
-  } catch {
-    if (reqId !== sessionRequestId) return
-    sessionErrorMessage.value = 'Could not retrieve session details.'
-  } finally {
-    if (reqId === sessionRequestId) {
-      isSessionLoading.value = false
-    }
+const goToTablePage = (targetPage) => {
+  if (targetPage >= 1 && targetPage <= tableTotalPages.value && !isStudentsLoading.value) {
+    tablePage.value = targetPage
+    router.push({
+      path: route.path,
+      query: { ...route.query, table_page: targetPage },
+    })
+    loadStudentRoster(effectiveCodeId.value, targetPage)
   }
 }
 
-const handleBackToStudentFromSession = () => {
-  sessionRequestId++
-  isSessionLoading.value = false
-  sessionErrorMessage.value = ''
-  isSessionModalOpen.value = false
-  selectedSession.value = null
-  sessionTelemetry.value = null
-  isStudentModalOpen.value = true // Restore student context without stacking
-}
-
-// Helpers: Formatting
+// Formatters
 const formatMapProgress = (progress) => {
   if (typeof progress === 'number' && progress >= 1 && progress <= CANONICAL_MAPS.length) {
     return CANONICAL_MAPS[progress - 1].name
@@ -414,76 +304,161 @@ const formatLastSynced = (isoString) => {
       })
 }
 
-onMounted(() => {
-  loadClassrooms()
-})
+// ==========================================
+// Watchers
+// ==========================================
+// Watch table_page from query (supports browser Back/Forward)
+watch(
+  () => route.query.table_page,
+  (newPageQuery) => {
+    const parsed = parseQueryInt(newPageQuery, 1)
+    if (parsed !== tablePage.value) {
+      tablePage.value = parsed
+      if (effectiveCodeId.value) {
+        loadStudentRoster(effectiveCodeId.value, parsed)
+      }
+    }
+  },
+)
+
+// Watch path changes to invalidate obsolete bare /analytics resolution if user leaves
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath !== '/analytics') {
+      bareRouteSeq++
+    }
+  },
+)
+
+// Watch Classroom Route Param Change (supports browser Back/Forward & client-side navigation between classrooms)
+watch(
+  () => route.params.code_id,
+  (newCode, oldCode) => {
+    bareRouteSeq++
+    if (newCode) {
+      if (newCode !== oldCode) {
+        // Invalidate in-flight requests from previous classroom
+        classroomRequestId++
+        rosterRequestId++
+        classroomAnalytics.value = null
+        students.value = []
+        hasConfirmedRoster.value = false
+        aggregateErrorMessage.value = ''
+        rosterErrorMessage.value = ''
+
+        classroomStore.setCurrentClassroomId(newCode)
+        if (!classroomStore.isFetched && !classroomStore.isLoading) {
+          classroomStore.fetchClassrooms().catch(() => {})
+        }
+
+        const targetPage = parseQueryInt(route.query.table_page, 1)
+        tablePage.value = targetPage
+        loadClassroomData(newCode, targetPage)
+      }
+    } else {
+      resolveBareAnalyticsRoute()
+    }
+  },
+  { immediate: true },
+)
+
+// Watch deep link student query (redirect legacy links to dedicated student progress view)
+watch(
+  [() => route.query.student, () => effectiveCodeId.value],
+  ([newStudentId, codeId]) => {
+    if (newStudentId && String(newStudentId).trim() && codeId) {
+      // Resolve origin strictly:
+      // - Preserve an explicit valid origin.
+      // - Otherwise, roster_page means Students, even with table_page.
+      // - Otherwise, table_page means Analytics.
+      let resolvedOrigin
+      if (route.query.origin === 'students' || route.query.origin === 'analytics') {
+        resolvedOrigin = route.query.origin
+      } else if (route.query.roster_page) {
+        resolvedOrigin = 'students'
+      } else {
+        resolvedOrigin = 'analytics'
+      }
+
+      const query = { origin: resolvedOrigin }
+      if (route.query.roster_page) {
+        query.roster_page = route.query.roster_page
+      }
+      if (route.query.table_page) {
+        query.table_page = route.query.table_page
+      } else if (resolvedOrigin === 'analytics' && tablePage.value) {
+        query.table_page = tablePage.value
+      }
+      if (route.query.session) {
+        query.session = route.query.session
+      }
+
+      router.replace({
+        path: `/classroom/students/${codeId}/progress/${String(newStudentId).trim()}`,
+        query,
+      })
+    }
+  },
+  { immediate: true },
+)
 
 onUnmounted(() => {
+  isComponentMounted = false
+  bareRouteSeq++
   classroomRequestId++
-  sessionRequestId++
+  rosterRequestId++
 })
 </script>
 
 <template>
   <div class="analytics-suite">
-    <!-- Header Section -->
-    <header class="suite-header">
-      <div>
-        <router-link
-          :to="{
-            path: `/classroom/students/${selectedClassroomId}`,
-            query: { page: originatingRosterPage }
-          }"
-          class="back-link"
-        >
-          ◀ Return to classroom roster
-        </router-link>
-        <h2 class="title">Classroom analytics</h2>
-        <p class="subtitle">
-          Review overall classroom performance, common mistake areas, and student progress
-        </p>
-      </div>
+    <!-- Header Section: Shared Classroom Workspace Header -->
+    <ClassroomWorkspaceHeader
+      v-if="effectiveCodeId"
+      :code-id="effectiveCodeId"
+      active-tab="analytics"
+      :student-count="hasConfirmedRoster && !rosterErrorMessage && !isStudentsLoading ? tableTotalCount : null"
+      :is-count-loading="isStudentsLoading"
+      :count-error="Boolean(rosterErrorMessage)"
+      :originating-roster-page="originatingRosterPage"
+      @retry-metadata="handleRetryMetadata"
+    />
 
-      <!-- Classroom Selector -->
-      <div v-if="classrooms.length > 0" class="classroom-picker">
-        <label for="classroomSelect" class="picker-label">Classroom:</label>
-        <select
-          id="classroomSelect"
-          v-model="selectedClassroomId"
-          class="custom-select"
-        >
-          <option
-            v-for="c in classrooms"
-            :key="c.code_id || c.id || c.code_value || c.code"
-            :value="c.code_id || c.id || c.code_value || c.code"
-          >
-            {{ c.name }} (Code: {{ c.code_value || c.code }})
-          </option>
-        </select>
+    <!-- Header fallback when no classroom is selected yet (bare /analytics loading/error) -->
+    <header v-else class="bare-header">
+      <div class="breadcrumb-bar">
+        <router-link to="/classroom/manage" class="back-link">
+          ◀ Return to all classrooms
+        </router-link>
       </div>
+      <h2 class="title">Classroom analytics</h2>
+      <p class="subtitle">
+        Review overall classroom performance, common mistake areas, and student progress
+      </p>
     </header>
 
-    <!-- Error Banner for Aggregate Metrics -->
-    <div v-if="aggregateErrorMessage" class="error-banner" role="alert">
-      <span>{{ aggregateErrorMessage }}</span>
+    <!-- Error Banner for Bare /analytics List-Loading Failure -->
+    <div v-if="classroomStore.error && !effectiveCodeId" class="error-banner" role="alert">
+      <span>{{ classroomStore.error }}</span>
       <button
         type="button"
         class="btn-retry"
-        :disabled="isAnalyticsLoading"
-        @click="loadClassroomData(selectedClassroomId, tablePage)"
+        :disabled="classroomStore.isLoading"
+        @click="retryClassroomList"
       >
         Try again
       </button>
     </div>
 
-    <!-- Main Loading State -->
-    <div v-if="isClassroomsLoading" class="loading-state">
+    <!-- Main Loading State for Bare /analytics initial resolution -->
+    <div v-else-if="classroomStore.isLoading && !effectiveCodeId" class="loading-state">
       <div class="spinner"></div>
       <p>Loading classroom analytics...</p>
     </div>
 
-    <!-- Empty Classrooms State -->
-    <div v-else-if="classrooms.length === 0" class="empty-state">
+    <!-- Empty Classrooms State: Confirmed 0 classrooms -->
+    <div v-else-if="classroomStore.isFetched && classroomStore.classrooms.length === 0" class="empty-state">
       <h3>No classrooms created yet</h3>
       <p>Create a classroom to enroll students and review classroom analytics.</p>
       <router-link to="/classroom/manage" class="btn-primary">
@@ -492,33 +467,50 @@ onUnmounted(() => {
     </div>
 
     <!-- Active Analytics Content -->
-    <div v-else class="analytics-content">
+    <div v-else-if="effectiveCodeId" class="analytics-content">
+      <!-- Error Banner for Aggregate Metrics (separate from metadata and roster) -->
+      <div v-if="aggregateErrorMessage" class="error-banner" role="alert">
+        <span>{{ aggregateErrorMessage }}</span>
+        <button
+          type="button"
+          class="btn-retry"
+          :disabled="isAnalyticsLoading"
+          @click="loadAggregateAnalytics(effectiveCodeId)"
+        >
+          Try again
+        </button>
+      </div>
+
       <!-- LEVEL 1: CLASSROOM AGGREGATE SUMMARY -->
       <section class="section-card">
         <div class="card-header">
           <div class="header-titles">
             <h3>Classroom performance overview</h3>
-            <span v-if="currentClassroom" class="meta-tag">
-              Classroom: {{ currentClassroom.name }} [Code: {{ currentClassroom.code_value || currentClassroom.code }}]
+            <span v-if="currentClassroom && currentClassroom.code_value" class="meta-tag">
+              Classroom: {{ currentClassroom.name }} [Code: {{ currentClassroom.code_value }}]
             </span>
           </div>
           <button
             class="refresh-btn"
-            :disabled="isAnalyticsLoading"
-            @click="loadClassroomData(selectedClassroomId, tablePage)"
+            :disabled="isAnalyticsLoading || isStudentsLoading"
+            @click="loadClassroomData(effectiveCodeId, tablePage)"
           >
-            {{ isAnalyticsLoading ? 'Refreshing...' : 'Refresh data' }}
+            {{ isAnalyticsLoading || isStudentsLoading ? 'Refreshing...' : 'Refresh data' }}
           </button>
         </div>
 
-        <!-- If aggregate analytics failed, show truthful unavailable state -->
-        <div v-if="aggregateErrorMessage || (!classroomAnalytics && !isAnalyticsLoading)" class="overview-unavailable-card" role="alert">
+        <!-- If aggregate analytics failed, show truthful unavailable state with independent retry -->
+        <div
+          v-if="aggregateErrorMessage || (!classroomAnalytics && !isAnalyticsLoading)"
+          class="overview-unavailable-card"
+          role="alert"
+        >
           <p class="unavailable-message">Classroom performance overview is currently unavailable.</p>
           <button
             type="button"
             class="btn-retry"
             :disabled="isAnalyticsLoading"
-            @click="loadClassroomData(selectedClassroomId, tablePage)"
+            @click="loadAggregateAnalytics(effectiveCodeId)"
           >
             Try again
           </button>
@@ -602,13 +594,14 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- Roster Error Banner with Independent Retry -->
         <div v-if="rosterErrorMessage" class="error-banner" role="alert">
           <span>{{ rosterErrorMessage }}</span>
           <button
             type="button"
             class="btn-retry"
             :disabled="isStudentsLoading"
-            @click="loadClassroomData(selectedClassroomId, tablePage)"
+            @click="loadStudentRoster(effectiveCodeId, tablePage)"
           >
             Try again
           </button>
@@ -686,35 +679,10 @@ onUnmounted(() => {
 
         <div v-else-if="!rosterErrorMessage" class="empty-note">
           No students currently enrolled in this classroom. Share access code
-          <strong>{{ currentClassroom?.code_value || currentClassroom?.code }}</strong> with students to start tracking progress.
+          <strong>{{ currentClassroom?.code_value || '' }}</strong> with students to start tracking progress.
         </div>
       </section>
     </div>
-
-    <!-- LEVEL 2 MODAL: STUDENT PROFICIENCY DRILL-DOWN -->
-    <StudentProficiencyModal
-      :is-open="isStudentModalOpen"
-      :student="selectedStudent"
-      :student-analytics="studentAnalytics"
-      :is-loading="isStudentLoading"
-      :error-message="studentErrorMessage"
-      :canonical-maps="CANONICAL_MAPS"
-      :canonical-threats="CANONICAL_THREATS"
-      @close="closeStudentModal"
-      @inspect-session="openSessionTelemetry"
-    />
-
-    <!-- LEVEL 3 MODAL: SESSION DETAILS (NON-STACKING, DIRECT RETURN TO STUDENT) -->
-    <SessionTelemetryModal
-      :is-open="isSessionModalOpen"
-      :session="selectedSession"
-      :session-telemetry="sessionTelemetry"
-      :is-loading="isSessionLoading"
-      :error-message="sessionErrorMessage"
-      :student="selectedStudent"
-      @close="handleBackToStudentFromSession"
-      @back-to-student="handleBackToStudentFromSession"
-    />
   </div>
 </template>
 
@@ -726,38 +694,43 @@ onUnmounted(() => {
   width: 100%;
 }
 
-/* Header */
-.suite-header {
+.analytics-content {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 1.25rem;
+  flex-direction: column;
+  gap: 1.75rem;
+  width: 100%;
+}
+
+/* Bare Header */
+.bare-header {
   padding-bottom: 0.5rem;
 }
 
+.breadcrumb-bar {
+  margin-bottom: 0.75rem;
+}
+
 .back-link {
-  display: inline-block;
-  background: none;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--color-primary);
   font-family: var(--font-sans);
   font-size: 0.88rem;
   font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 0.5rem;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease;
 }
 
 .back-link:hover {
   text-decoration: underline;
+  opacity: 0.85;
 }
 
 .title {
   margin: 0 0 0.35rem 0;
   color: var(--color-text-main);
+  font-family: var(--font-display);
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -767,39 +740,6 @@ onUnmounted(() => {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
-}
-
-.classroom-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.picker-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.custom-select {
-  padding: 0.6rem 1.1rem;
-  background-color: var(--color-card);
-  border: 1.5px solid var(--color-border);
-  border-radius: 8px;
-  color: var(--color-text-main);
-  font-family: var(--font-sans);
-  font-size: 0.92rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--shadow-purple-sm);
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.custom-select:focus {
-  border-color: var(--color-primary);
 }
 
 /* Section Card */
@@ -873,6 +813,11 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* KPI Grid */
 .kpi-grid {
   display: grid;
@@ -893,11 +838,6 @@ onUnmounted(() => {
 .kpi-card.map-scores-card {
   grid-column: 1 / -1;
   align-items: flex-start;
-}
-
-.kpi-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
 }
 
 .kpi-content {
@@ -990,6 +930,109 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 1rem;
+}
+
+/* Student Roster Table */
+.table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.data-table th {
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  padding: 0.85rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1.5px solid var(--color-border);
+}
+
+.data-table td {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-main);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.agent-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.agent-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-border);
+}
+
+.agent-name {
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.badge-progression {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.date-cell {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.btn-inspect {
+  padding: 0.4rem 0.85rem;
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-inspect:hover {
+  background-color: var(--color-violet-subtle);
+  border-color: var(--color-primary);
 }
 
 /* Generic States */
@@ -1128,11 +1171,6 @@ onUnmounted(() => {
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--color-text-muted);
-}
-
-.empty-icon {
-  font-size: 2.75rem;
-  margin-bottom: 0.5rem;
 }
 
 .empty-note {
