@@ -1,13 +1,55 @@
 <script setup>
+import { ref, computed, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
 import AppIcon from '../components/common/AppIcon.vue'
+import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
+import { getStoredReadAloud } from '../utils/accessibility.js'
+import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
 import homeImg from '../assets/maps/home.png'
 import officeImg from '../assets/maps/office.png'
 import internetCafeImg from '../assets/maps/internet-cafe.png'
 import publicParkImg from '../assets/maps/public-park.png'
+
+const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
+
+const btnRefHero = ref(null)
+const btnRefEnvironments = ref(null)
+const btnRefTopics = ref(null)
+
+const GAMEPLAY_SECTIONS = {
+  hero: {
+    title: 'Overview',
+    text: 'Gameplay and Simulation Environments. CyberMorph combines top-down pixel exploration with real-world security decision scenarios. Explore four everyday maps and practice defending against eight core threat types.',
+  },
+  environments: {
+    title: 'Four Simulation Maps',
+    text: 'Four realistic simulation maps. Each map represents a familiar real-world setting where players encounter security challenges specific to that environment. Home: Personal Residence. Learn to protect personal home networks, avoid deceptive delivery notifications, and identify email phishing links targeting personal accounts. Office: Corporate Workplace. Practice workstation security hygiene, recognise fake urgent executive requests, and stop physical shoulder-surfing and tailgating attempts. Internet Cafe: Shared Public Terminals. Master defense strategies on shared public computers, ensuring credentials are not cached and private sessions are completely terminated. Public Park: Open Public Space. Navigate the dangers of unencrypted open wireless hotspots and spot rogue access points set up to intercept mobile internet traffic.',
+  },
+  topics: {
+    title: 'The Eight Learning Topics',
+    text: 'The eight learning topics. The game curriculum systematically covers the eight most common digital threats encountered by everyday users. 01: Phishing. Deceptive email messages and fraudulent login pages designed to trick people into surrendering usernames and passwords. 02: Smishing. SMS-based text message scams using fake package delivery notices or urgent account suspensions to induce clicks. 03: Vishing. Voice calls where attackers impersonate bank agents, technical support personnel, or government agencies. 04: Social Engineering. Psychological manipulation techniques that exploit urgency, trust, or authority to bypass security procedures. 05: Credential Theft. Attacks targeting login credentials, including password reuse, keylogging, and weak password choices. 06: Public Wi-Fi Attacks. Rogue access points, evil twin networks, and packet interception on unencrypted public Wi-Fi connections. 07: Malware Infection. Dangerous email attachments, malicious installers, and compromised download links that deploy harmful software. 08: Ransomware. Malicious programs that lock or encrypt files, along with essential backup strategies and defensive habits.',
+  },
+}
+
+const handleReadSection = (ownerId, title, text, triggerEl) => {
+  startNarration({
+    ownerId,
+    title,
+    text,
+    triggerEl,
+    triggerMode: 'explicit',
+  })
+}
+
+onUnmounted(() => {
+  const currentOwner = getSpeechState().activeOwnerId
+  if (currentOwner && currentOwner.startsWith('gameplay-')) {
+    stopNarration(currentOwner)
+  }
+})
 
 const environments = [
   {
@@ -108,11 +150,29 @@ const learningTopics = [
       <!-- Hero -->
       <section class="gameplay-hero">
         <div class="page-container">
-          <span class="badge-subtle">Game Experience</span>
+          <div class="header-with-action">
+            <span class="badge-subtle">Game Experience</span>
+            <button
+              v-if="isReadAloudEnabled"
+              ref="btnRefHero"
+              type="button"
+              class="btn-read-section"
+              :aria-label="`Read section: ${GAMEPLAY_SECTIONS.hero.title}`"
+              @click="handleReadSection('gameplay-hero', GAMEPLAY_SECTIONS.hero.title, GAMEPLAY_SECTIONS.hero.text, btnRefHero)"
+            >
+              <AppIcon name="volume-2" :size="16" />
+              <span>Read section</span>
+            </button>
+          </div>
           <h1 class="page-title">Gameplay & Simulation Environments</h1>
           <p class="page-lead">
             CyberMorph combines top-down pixel exploration with real-world security decision scenarios. Explore four everyday maps and practice defending against eight core threat types.
           </p>
+          <InlineSpeechPlayer
+            owner-id="gameplay-hero"
+            :title="GAMEPLAY_SECTIONS.hero.title"
+            :trigger-ref="btnRefHero"
+          />
         </div>
       </section>
 
@@ -120,11 +180,31 @@ const learningTopics = [
       <section class="content-section">
         <div class="page-container">
           <div class="section-header">
-            <span class="section-kicker">Interactive Environments</span>
-            <h2 class="section-title">Four realistic simulation maps</h2>
+            <div class="header-with-action">
+              <div>
+                <span class="section-kicker">Interactive Environments</span>
+                <h2 class="section-title">Four realistic simulation maps</h2>
+              </div>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefEnvironments"
+                type="button"
+                class="btn-read-section"
+                :aria-label="`Read section: ${GAMEPLAY_SECTIONS.environments.title}`"
+                @click="handleReadSection('gameplay-environments', GAMEPLAY_SECTIONS.environments.title, GAMEPLAY_SECTIONS.environments.text, btnRefEnvironments)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
             <p class="section-lead">
               Each map represents a familiar real-world setting where players encounter security challenges specific to that environment.
             </p>
+            <InlineSpeechPlayer
+              owner-id="gameplay-environments"
+              :title="GAMEPLAY_SECTIONS.environments.title"
+              :trigger-ref="btnRefEnvironments"
+            />
           </div>
 
           <div class="environments-grid">
@@ -163,11 +243,31 @@ const learningTopics = [
       <section class="content-section section-bg-alt">
         <div class="page-container">
           <div class="section-header">
-            <span class="section-kicker">Curriculum Coverage</span>
-            <h2 class="section-title">The eight learning topics</h2>
+            <div class="header-with-action">
+              <div>
+                <span class="section-kicker">Curriculum Coverage</span>
+                <h2 class="section-title">The eight learning topics</h2>
+              </div>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefTopics"
+                type="button"
+                class="btn-read-section"
+                :aria-label="`Read section: ${GAMEPLAY_SECTIONS.topics.title}`"
+                @click="handleReadSection('gameplay-topics', GAMEPLAY_SECTIONS.topics.title, GAMEPLAY_SECTIONS.topics.text, btnRefTopics)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
             <p class="section-lead">
               The game curriculum systematically covers the eight most common digital threats encountered by everyday users.
             </p>
+            <InlineSpeechPlayer
+              owner-id="gameplay-topics"
+              :title="GAMEPLAY_SECTIONS.topics.title"
+              :trigger-ref="btnRefTopics"
+            />
           </div>
 
           <div class="topics-grid">
@@ -323,7 +423,7 @@ const learningTopics = [
 }
 
 .environment-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   overflow: hidden;
@@ -439,7 +539,7 @@ const learningTopics = [
 }
 
 .topic-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1.25rem;
@@ -476,7 +576,7 @@ const learningTopics = [
 }
 
 .download-cta-box {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 2.5rem;
@@ -528,5 +628,41 @@ const learningTopics = [
   background: var(--btn-gradient-hover) !important;
   background-color: var(--color-primary-hover) !important;
   border-color: var(--color-primary-hover) !important;
+}
+
+.header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.btn-read-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.btn-read-section:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-read-section:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 </style>

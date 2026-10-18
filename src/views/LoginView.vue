@@ -193,8 +193,8 @@ label {
 
 input {
   padding: 0.75rem 1rem;
-  background-color: #ffffff;
-  border: 1.5px solid var(--color-border);
+  background-color: var(--color-bg);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 8px;
   color: var(--color-text-main);
   font-family: var(--font-sans);

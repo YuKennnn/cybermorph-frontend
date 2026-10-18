@@ -373,7 +373,7 @@ onUnmounted(() => {
 
 <style scoped>
 .interactive-preview-panel {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   box-shadow: var(--shadow-purple);
@@ -418,7 +418,7 @@ onUnmounted(() => {
   font-size: 0.725rem;
   font-weight: 500;
   color: var(--color-primary);
-  background-color: #ede9fe;
+  background-color: var(--color-violet-subtle);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
@@ -430,8 +430,8 @@ onUnmounted(() => {
 }
 
 .btn-control {
-  background-color: #ffffff;
-  border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 4px;
   padding: 0.2rem 0.55rem;
   font-size: 0.75rem;
@@ -444,14 +444,14 @@ onUnmounted(() => {
 .btn-control:hover {
   color: var(--color-primary);
   border-color: var(--color-primary);
-  background-color: #f5f3ff;
+  background-color: var(--color-violet-subtle);
 }
 
 .canvas-stage {
   position: relative;
   width: 100%;
   height: 340px;
-  background-color: #fdfdfd;
+  background-color: var(--color-bg);
   cursor: crosshair;
   overflow: hidden;
   touch-action: none;
@@ -476,8 +476,8 @@ onUnmounted(() => {
 .paused-pill {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #475569;
-  background-color: rgba(255, 255, 255, 0.95);
+  color: var(--color-text-main);
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   padding: 0.35rem 0.75rem;
   border-radius: 9999px;
@@ -489,7 +489,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   padding: 0.6rem 0.85rem;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border-top: 1px solid var(--color-border-subtle);
   font-size: 0.75rem;
   color: var(--color-text-muted);

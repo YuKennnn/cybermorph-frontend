@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { isReducedMotionActive } from '../utils/accessibility.js'
+import { stopNarration } from '../utils/speech.js'
 
 const routes = [
   {
@@ -153,6 +154,13 @@ router.beforeEach((to, from, next) => {
     next('/dashboard')
   } else {
     next()
+  }
+})
+
+router.afterEach((to, from, failure) => {
+  // Only stop narration on successful, non-failed page navigation where destination path changed
+  if (!failure && to.path !== from.path) {
+    stopNarration()
   }
 })
 

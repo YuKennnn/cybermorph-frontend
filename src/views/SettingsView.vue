@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import {
@@ -9,9 +9,24 @@ import {
   setStoredTextSize,
   getStoredMotionPreference,
   setStoredMotionPreference,
+  getStoredReadAloud,
+  setStoredReadAloud,
+  getStoredReadSpeed,
+  setStoredReadSpeed,
   resetAccessibilityPreferences,
+  VALID_READ_SPEEDS,
 } from '../utils/accessibility'
+import {
+  getVoiceLoadingStatus,
+  getAvailableVoices,
+  startNarration,
+  stopNarration,
+  changeNarrationSpeed,
+  addVoicesChangedListener,
+  retryLoadingVoices,
+} from '../utils/speech'
 import AppIcon from '../components/common/AppIcon.vue'
+import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,7 +95,24 @@ const handleTabKeydown = (event, currentTab) => {
 const currentTheme = ref(getStoredTheme())
 const currentTextSize = ref(getStoredTextSize())
 const currentMotion = ref(getStoredMotionPreference())
+const currentReadAloud = ref(getStoredReadAloud())
+const currentReadSpeed = ref(getStoredReadSpeed())
+const voiceEngineStatus = ref(getVoiceLoadingStatus())
+const voiceCount = ref(getAvailableVoices().length)
+const sampleBtnRef = ref(null)
 const resetFeedbackMessage = ref('')
+
+const SAMPLE_NARRATION_TEXT =
+  'CyberMorph is an educational cybersecurity game designed for players and educators. Practice cybersecurity decisions through interactive scenarios.'
+
+let removeVoicesListener = null
+
+onMounted(() => {
+  removeVoicesListener = addVoicesChangedListener((voices, status) => {
+    voiceEngineStatus.value = status
+    voiceCount.value = voices.length
+  })
+})
 
 const handleThemeChange = (theme) => {
   currentTheme.value = setStoredTheme(theme)
@@ -94,11 +126,55 @@ const handleMotionChange = (motion) => {
   currentMotion.value = setStoredMotionPreference(motion)
 }
 
+const handleReadAloudChange = (val) => {
+  currentReadAloud.value = setStoredReadAloud(val)
+  if (val === 'off') {
+    stopNarration()
+  }
+}
+
+const handleReadSpeedChange = (speed) => {
+  currentReadSpeed.value = setStoredReadSpeed(speed)
+  changeNarrationSpeed(speed, 'settings-sample')
+}
+
+const handleTestSampleNarration = () => {
+  startNarration({
+    ownerId: 'settings-sample',
+    title: 'Sample narration',
+    text: SAMPLE_NARRATION_TEXT,
+    rate: currentReadSpeed.value,
+    triggerEl: sampleBtnRef.value,
+  })
+}
+
+const handleRetryVoices = () => {
+  retryLoadingVoices()
+}
+
+// Switching away from the Accessibility section counts as disposing the sample narration
+watch(activeSection, (newSection) => {
+  if (newSection !== 'accessibility') {
+    stopNarration('settings-sample')
+  }
+})
+
+onUnmounted(() => {
+  if (removeVoicesListener) {
+    removeVoicesListener()
+    removeVoicesListener = null
+  }
+  stopNarration('settings-sample')
+})
+
 const handleResetPreferences = () => {
+  stopNarration()
   const defaults = resetAccessibilityPreferences()
   currentTheme.value = defaults.theme
   currentTextSize.value = defaults.textSize
-  currentMotion.value = defaults.reducedMotion
+  currentMotion.value = defaults.motion || 'system'
+  currentReadAloud.value = defaults.readAloud || 'off'
+  currentReadSpeed.value = defaults.readSpeed || '1'
   resetFeedbackMessage.value = 'Accessibility preferences have been reset to defaults.'
   setTimeout(() => {
     resetFeedbackMessage.value = ''
@@ -308,26 +384,6 @@ const webUserEmail = computed(() => {
 
           <div class="pref-options-grid" role="radiogroup" aria-labelledby="theme-preferences-heading">
             <label
-              :class="['pref-option-card', { active: currentTheme === 'system' }]"
-              for="theme-pref-system"
-            >
-              <input
-                id="theme-pref-system"
-                type="radio"
-                name="themePreference"
-                value="system"
-                :checked="currentTheme === 'system'"
-                @change="handleThemeChange('system')"
-              />
-              <div class="option-content">
-                <span class="option-title">System default</span>
-                <span class="option-desc">
-                  Match your operating system appearance automatically.
-                </span>
-              </div>
-            </label>
-
-            <label
               :class="['pref-option-card', { active: currentTheme === 'light' }]"
               for="theme-pref-light"
             >
@@ -340,9 +396,9 @@ const webUserEmail = computed(() => {
                 @change="handleThemeChange('light')"
               />
               <div class="option-content">
-                <span class="option-title">Light</span>
+                <span class="option-title">Light (default)</span>
                 <span class="option-desc">
-                  High-contrast bright background for daylight environments.
+                  Default high-contrast bright background for standard reading.
                 </span>
               </div>
             </label>
@@ -363,6 +419,26 @@ const webUserEmail = computed(() => {
                 <span class="option-title">Dark</span>
                 <span class="option-desc">
                   Dark surface with luminous text for reduced eye strain.
+                </span>
+              </div>
+            </label>
+
+            <label
+              :class="['pref-option-card', { active: currentTheme === 'system' }]"
+              for="theme-pref-system"
+            >
+              <input
+                id="theme-pref-system"
+                type="radio"
+                name="themePreference"
+                value="system"
+                :checked="currentTheme === 'system'"
+                @change="handleThemeChange('system')"
+              />
+              <div class="option-content">
+                <span class="option-title">System</span>
+                <span class="option-desc">
+                  Match your operating system appearance automatically.
                 </span>
               </div>
             </label>
@@ -497,12 +573,132 @@ const webUserEmail = computed(() => {
           </p>
         </section>
 
-        <!-- 4. Reset to Defaults Card -->
+        <!-- 4. Read Aloud (Narration) Card -->
+        <section class="settings-card" aria-labelledby="read-aloud-heading">
+          <div class="card-header">
+            <h2 id="read-aloud-heading" class="card-title">Read aloud (narration)</h2>
+            <p class="card-subtitle">
+              Enable explicit section reading on public pages and configure reading speed.
+            </p>
+          </div>
+
+          <div class="pref-options-grid two-column" role="radiogroup" aria-labelledby="read-aloud-heading">
+            <label
+              :class="['pref-option-card', { active: currentReadAloud === 'off' }]"
+              for="read-aloud-pref-off"
+            >
+              <input
+                id="read-aloud-pref-off"
+                type="radio"
+                name="readAloudPreference"
+                value="off"
+                :checked="currentReadAloud === 'off'"
+                @change="handleReadAloudChange('off')"
+              />
+              <div class="option-content">
+                <span class="option-title">Disabled (default)</span>
+                <span class="option-desc">
+                  Section narration buttons remain hidden.
+                </span>
+              </div>
+            </label>
+
+            <label
+              :class="['pref-option-card', { active: currentReadAloud === 'on' }]"
+              for="read-aloud-pref-on"
+            >
+              <input
+                id="read-aloud-pref-on"
+                type="radio"
+                name="readAloudPreference"
+                value="on"
+                :checked="currentReadAloud === 'on'"
+                @change="handleReadAloudChange('on')"
+              />
+              <div class="option-content">
+                <span class="option-title">Enabled</span>
+                <span class="option-desc">
+                  Show "Read section" buttons on public pages.
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <!-- Speed Controls, Engine Status & Sample Narration -->
+          <div class="read-aloud-details">
+            <div class="setting-subrow">
+              <div class="subrow-info">
+                <span class="subrow-title">Reading speed</span>
+                <span class="subrow-desc">Controls speech rate for section reading.</span>
+              </div>
+              <div class="speed-selector" role="group" aria-label="Reading speed">
+                <button
+                  v-for="speed in VALID_READ_SPEEDS"
+                  :key="speed"
+                  type="button"
+                  class="speed-btn"
+                  :class="{ active: currentReadSpeed === speed }"
+                  :aria-pressed="currentReadSpeed === speed"
+                  :aria-label="`${speed} times normal speed`"
+                  @click="handleReadSpeedChange(speed)"
+                >
+                  {{ speed }}x
+                </button>
+              </div>
+            </div>
+
+            <div class="engine-status-row">
+              <span class="engine-label">Speech engine:</span>
+              <span v-if="voiceEngineStatus === 'unsupported'" class="engine-badge unsupported">
+                Web Speech is not supported in this browser
+              </span>
+              <span v-else-if="voiceEngineStatus === 'loading'" class="engine-badge loading">
+                Loading browser voices...
+              </span>
+              <span v-else-if="voiceEngineStatus === 'ready'" class="engine-badge ready">
+                Ready ({{ voiceCount }} voice{{ voiceCount === 1 ? '' : 's' }} available)
+              </span>
+              <span v-else class="engine-badge unavailable">
+                No voice list loaded (browser default voice will be attempted if supported)
+              </span>
+              <button
+                v-if="voiceEngineStatus === 'unavailable'"
+                type="button"
+                class="btn-retry-voices"
+                aria-label="Retry loading browser voices"
+                @click="handleRetryVoices"
+              >
+                Retry
+              </button>
+            </div>
+
+            <div class="sample-narration-row">
+              <button
+                ref="sampleBtnRef"
+                type="button"
+                class="btn-sample-speech"
+                :disabled="voiceEngineStatus === 'unsupported'"
+                @click="handleTestSampleNarration"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Sample narration</span>
+              </button>
+
+              <InlineSpeechPlayer
+                owner-id="settings-sample"
+                title="Settings sample"
+                :trigger-ref="sampleBtnRef"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Reset to Defaults Card -->
         <section class="settings-card reset-card" aria-labelledby="reset-preferences-heading">
           <div class="reset-info">
             <h2 id="reset-preferences-heading" class="card-title">Reset accessibility settings</h2>
             <p class="card-subtitle">
-              Revert theme, text size, and motion settings to device defaults. This will not affect your account or sign you out.
+              Revert theme, text size, motion, read aloud, and reading speed settings to device defaults. This will not affect your account or sign you out.
             </p>
           </div>
 
@@ -775,6 +971,224 @@ const webUserEmail = computed(() => {
   margin: 1.25rem 0 0 0;
   font-size: 0.82rem;
   color: var(--color-text-muted);
+}
+
+/* Read Aloud Details */
+.read-aloud-details {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.hover-narration-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.hover-options {
+  margin-top: 0.25rem;
+}
+
+.hover-delay-subrow {
+  padding-top: 0.5rem;
+}
+
+.setting-subrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.subrow-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.subrow-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.subrow-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.speed-selector {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.speed-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1.5px solid var(--color-border-control);
+  background-color: var(--color-card);
+  color: var(--color-text-main);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.speed-btn:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-border-hover);
+}
+
+.speed-btn.active {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+}
+
+.speed-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.engine-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.engine-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.engine-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.engine-badge.ready {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.engine-badge.loading {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.engine-badge.unsupported,
+.engine-badge.empty {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.engine-badge.unavailable {
+  background-color: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+:root[data-theme="dark"] .engine-badge.ready {
+  background-color: #052e16;
+  border-color: #166534;
+  color: #86efac;
+}
+
+:root[data-theme="dark"] .engine-badge.loading {
+  background-color: #172554;
+  border-color: #1e40af;
+  color: #93c5fd;
+}
+
+:root[data-theme="dark"] .engine-badge.unsupported,
+:root[data-theme="dark"] .engine-badge.empty {
+  background-color: #450a0a;
+  border-color: #991b1b;
+  color: #fca5a5;
+}
+
+:root[data-theme="dark"] .engine-badge.unavailable {
+  background-color: #451a03;
+  border-color: #92400e;
+  color: #fcd34d;
+}
+
+.btn-retry-voices {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--color-border-control);
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry-voices:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.btn-retry-voices:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.sample-narration-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.btn-sample-speech {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background-color: var(--color-bg-subtle);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 40px;
+}
+
+.btn-sample-speech:hover:not(:disabled) {
+  background-color: var(--color-card);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-sample-speech:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-sample-speech:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Reset Card */

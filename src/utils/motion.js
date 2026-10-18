@@ -8,6 +8,13 @@ const PREFERENCE_KEY = 'cyber_pref_reduced_motion'
 
 // Fallback in-memory state if localStorage is blocked (e.g. security sandbox, private mode)
 let memoryPreference = 'system'
+let motionWriteFailed = false
+
+export const isMotionWriteFailed = () => motionWriteFailed
+
+export const resetMotionWriteFailed = () => {
+  motionWriteFailed = false
+}
 
 // Motion change listener subscribers
 const motionListeners = new Set()
@@ -16,10 +23,14 @@ let systemMotionListener = null
 
 /**
  * Retrieve the current motion preference from localStorage, falling back to memory.
+ * When writes fail in this browser session, returns the active in-memory choice.
  * Invalid or corrupted stored values safely default to 'system'.
  * @returns {'system' | 'reduced'}
  */
 export const getStoredMotionPreference = () => {
+  if (motionWriteFailed) {
+    return memoryPreference
+  }
   try {
     const stored = localStorage.getItem(PREFERENCE_KEY)
     if (stored === 'reduced' || stored === 'system') {
@@ -78,6 +89,7 @@ export const applyMotionPreference = (pref) => {
 /**
  * Save and apply the motion preference.
  * Handles storage exceptions gracefully without crashing.
+ * When writes fail, preserves the active choice in memory for this session.
  * @param {'system' | 'reduced'} pref
  * @returns {'system' | 'reduced'}
  */
@@ -86,8 +98,13 @@ export const setStoredMotionPreference = (pref) => {
   memoryPreference = validPref
   try {
     localStorage.setItem(PREFERENCE_KEY, validPref)
+    if (localStorage.getItem(PREFERENCE_KEY) === validPref) {
+      motionWriteFailed = false
+    } else {
+      motionWriteFailed = true
+    }
   } catch {
-    // localStorage unavailable (e.g. privacy restriction), maintain in-memory
+    motionWriteFailed = true
   }
   applyMotionPreference(validPref)
   notifyMotionListeners()
@@ -122,6 +139,7 @@ export const onMotionChange = (callback) => {
  */
 export const initMotionPreference = () => {
   const pref = getStoredMotionPreference()
+  memoryPreference = pref
   applyMotionPreference(pref)
   return pref
 }

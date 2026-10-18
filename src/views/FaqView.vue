@@ -1,6 +1,24 @@
 <script setup>
+import { ref, computed, onUnmounted } from 'vue'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
+import AppIcon from '../components/common/AppIcon.vue'
+import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
+import { getStoredReadAloud } from '../utils/accessibility.js'
+import {
+  startNarration,
+  stopNarration,
+  getSpeechState,
+} from '../utils/speech.js'
+
+const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
+const triggerRefs = ref({})
+
+const setTriggerRef = (el, index) => {
+  if (el) {
+    triggerRefs.value[index] = el
+  }
+}
 
 const faqItems = [
   {
@@ -29,6 +47,24 @@ const faqItems = [
       'No. CyberMorph is not currently available on Google Play or Steam. During the beta period, players install the game directly using an Android APK package.',
   },
 ]
+
+const handleReadAnswer = (index, item) => {
+  const trigger = triggerRefs.value[index] || null
+  startNarration({
+    ownerId: `faq-${index}`,
+    title: item.question,
+    text: `${item.question}. ${item.answer}`,
+    triggerEl: trigger,
+    triggerMode: 'explicit',
+  })
+}
+
+onUnmounted(() => {
+  const currentOwner = getSpeechState().activeOwnerId
+  if (currentOwner && currentOwner.startsWith('faq-')) {
+    stopNarration(currentOwner)
+  }
+})
 </script>
 
 <template>
@@ -53,8 +89,28 @@ const faqItems = [
               :key="index"
               class="faq-card"
             >
-              <h2 class="faq-question">{{ item.question }}</h2>
+              <div class="faq-card-header">
+                <h2 class="faq-question">{{ item.question }}</h2>
+                <button
+                  v-if="isReadAloudEnabled"
+                  :ref="(el) => setTriggerRef(el, index)"
+                  type="button"
+                  class="btn-read-answer"
+                  :aria-label="`Read answer: ${item.question}`"
+                  @click="handleReadAnswer(index, item)"
+                >
+                  <AppIcon name="volume-2" :size="15" />
+                  <span>Read answer</span>
+                </button>
+              </div>
+
               <p class="faq-answer">{{ item.answer }}</p>
+
+              <InlineSpeechPlayer
+                :owner-id="`faq-${index}`"
+                :title="item.question"
+                :trigger-ref="triggerRefs[index]"
+              />
             </article>
           </div>
         </div>
@@ -131,11 +187,49 @@ const faqItems = [
   box-shadow: var(--shadow-sm);
 }
 
+.faq-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .faq-question {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text-main);
-  margin: 0 0 0.65rem 0;
+  margin: 0;
+  flex: 1;
+}
+
+.btn-read-answer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.78125rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background-color: var(--color-bg-subtle);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+.btn-read-answer:hover {
+  background-color: var(--color-card);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-read-answer:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .faq-answer {

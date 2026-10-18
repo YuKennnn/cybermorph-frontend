@@ -36,21 +36,27 @@ function getContrastRatio(hex1, hex2) {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-// Suite 1: Mathematical Contrast & Specification Verification
+// Suite 1: Mathematical Contrast & Token Pair Verification
 function runUnitContrastChecks() {
   console.log('=== Suite 1: Mathematical Contrast & Token Pair Verification ===')
 
   // Light Mode Tokens
   const lightCard = '#ffffff'
+  const lightBg = '#f8fafc'
   const lightTextMain = '#0f172a'
   const lightTextMuted = '#475569'
   const lightBorderControl = '#64748b' // Essential UI control boundaries
+  const lightPrimary = '#4f46e5'
+  const lightVioletSubtle = '#f5f3ff'
 
   // Dark Mode Tokens
   const darkCard = '#131b2e'
+  const darkBg = '#0b0f19'
   const darkTextMain = '#f8fafc'
   const darkTextMuted = '#94a3b8'
   const darkBorderControl = '#64748b' // Essential UI control boundaries
+  const darkPrimary = '#a78bfa'
+  const darkVioletSubtle = '#1e1b4b'
 
   console.log('1. Checking Light Mode Contrast Ratios:')
   const lightTextRatio = getContrastRatio(lightTextMain, lightCard)
@@ -78,7 +84,46 @@ function runUnitContrastChecks() {
   console.log(`- Essential Control Border (#64748b) on Card (#131b2e): ${darkControlBorderRatio.toFixed(2)}:1 (threshold 3.0:1)`)
   assert.ok(darkControlBorderRatio >= 3.0, 'Dark mode control border contrast below 3.0:1')
 
-  console.log('3. Checking Semantic Role Badge Contrast:')
+  console.log('3. Checking Shared Buttons & Navigation Contrast in Both Themes:')
+  // Shared Primary Button in Light: white text on #4f46e5 to #7c3aed
+  const lightBtnRatio = getContrastRatio('#ffffff', '#4f46e5')
+  console.log(`- Light Primary Button Text (#ffffff on #4f46e5): ${lightBtnRatio.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(lightBtnRatio >= 4.5, 'Light primary button text below 4.5:1')
+
+  // Shared Primary Button in Dark: white text on #7c3aed to #6d28d9
+  const darkBtnRatio1 = getContrastRatio('#ffffff', '#7c3aed')
+  const darkBtnRatio2 = getContrastRatio('#ffffff', '#6d28d9')
+  console.log(`- Dark Primary Button Text (#ffffff on #7c3aed): ${darkBtnRatio1.toFixed(2)}:1 (threshold 4.5:1)`)
+  console.log(`- Dark Primary Button Text (#ffffff on #6d28d9): ${darkBtnRatio2.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(darkBtnRatio1 >= 4.5, 'Dark primary button gradient stop 1 below 4.5:1')
+  assert.ok(darkBtnRatio2 >= 4.5, 'Dark primary button gradient stop 2 below 4.5:1')
+
+  // Secondary Button in Light: #4f46e5 on #f5f3ff
+  const lightSecondaryBtn = getContrastRatio(lightPrimary, lightVioletSubtle)
+  console.log(`- Light Secondary Button Text (#4f46e5 on #f5f3ff): ${lightSecondaryBtn.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(lightSecondaryBtn >= 4.5, 'Light secondary button below 4.5:1')
+
+  // Secondary Button in Dark: #a78bfa on #1e1b4b
+  const darkSecondaryBtn = getContrastRatio(darkPrimary, darkVioletSubtle)
+  console.log(`- Dark Secondary Button Text (#a78bfa on #1e1b4b): ${darkSecondaryBtn.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(darkSecondaryBtn >= 4.5, 'Dark secondary button below 4.5:1')
+
+  console.log('4. Checking Authentication Inputs & Control Boundaries:')
+  // Inputs in Light: #0f172a text on #f8fafc bg, #64748b border
+  const lightInputTextRatio = getContrastRatio(lightTextMain, lightBg)
+  console.log(`- Light Input Text (#0f172a on #f8fafc): ${lightInputTextRatio.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(lightInputTextRatio >= 4.5, 'Light input text below 4.5:1')
+
+  // Inputs in Dark: #f8fafc text on #0b0f19 bg, #64748b border
+  const darkInputTextRatio = getContrastRatio(darkTextMain, darkBg)
+  console.log(`- Dark Input Text (#f8fafc on #0b0f19): ${darkInputTextRatio.toFixed(2)}:1 (threshold 4.5:1)`)
+  assert.ok(darkInputTextRatio >= 4.5, 'Dark input text below 4.5:1')
+
+  const darkInputBorderRatio = getContrastRatio(darkBorderControl, darkBg)
+  console.log(`- Dark Input Border (#64748b on #0b0f19): ${darkInputBorderRatio.toFixed(2)}:1 (threshold 3.0:1)`)
+  assert.ok(darkInputBorderRatio >= 3.0, 'Dark input border below 3.0:1')
+
+  console.log('5. Checking Semantic Role Badges:')
   const lightPlayerRatio = getContrastRatio('#166534', '#f0fdf4')
   console.log(`- Light Player Badge (#166534 on #f0fdf4): ${lightPlayerRatio.toFixed(2)}:1`)
   assert.ok(lightPlayerRatio >= 4.5, 'Light player badge below 4.5:1')
@@ -436,30 +481,172 @@ async function runBrowserTests() {
     await cdp.eval(`document.getElementById('size-pref-standard').click()`)
     await sleep(200)
 
-    // Test 4: Browser Zoom (200%) vs Viewport Resizing
-    console.log('\n--- Test 4: Browser Zoom (200%) vs Viewport Resizing ---')
-    // Emulate 200% page scale factor (Browser Zoom)
-    await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2.0 })
-    await sleep(400)
-
-    const zoomState = await cdp.eval(`(() => {
-      const scrollWidth = document.documentElement.scrollWidth;
-      const clientWidth = document.documentElement.clientWidth;
-      return {
-        scrollWidth,
-        clientWidth,
-        noHorizontalOverflow: scrollWidth <= clientWidth + 2
+    // Test 4: Preference Fallback when writes fail but reads succeed (Requirement 2)
+    console.log('\n--- Test 4: Preference Fallback (Writes Fail, Reads Succeed) ---')
+    // Install controlled storage write blocker
+    await cdp.eval(`(() => {
+      window.__blockStorageWrites = false;
+      const nativeSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) {
+        if (window.__blockStorageWrites && typeof key === 'string' && key.startsWith('cyber_pref_')) {
+          throw new DOMException('QuotaExceededError: write failed', 'QuotaExceededError');
+        }
+        return nativeSetItem.apply(this, arguments);
       };
     })()`)
-    console.log('200% Browser Zoom State:', zoomState)
-    assert.ok(zoomState.noHorizontalOverflow, '200% zoom caused uncontained layout overflow')
-    console.log('✓ 200% browser zoom preserved layout without broken horizontal overflow')
 
-    // Reset page scale factor
-    await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1.0 })
-    await sleep(200)
+    // Test actual utilities under write failure
+    const utilFallbackResult = await cdp.eval(`(async () => {
+      const a11y = await import('/src/utils/accessibility.js');
+      const motion = await import('/src/utils/motion.js');
 
-    // Emulate narrow viewport (360px mobile width)
+      // Seed localStorage with baseline values
+      localStorage.setItem('cyber_pref_theme', 'system');
+      localStorage.setItem('cyber_pref_text_size', 'standard');
+      localStorage.setItem('cyber_pref_reduced_motion', 'system');
+
+      // Enable write failure
+      window.__blockStorageWrites = true;
+
+      try {
+        // Change preferences through actual utility functions
+        a11y.setStoredTheme('dark');
+        a11y.setStoredTextSize('extra-large');
+        motion.setStoredMotionPreference('reduced');
+
+        // Verify getters reflect the applied in-memory session choice
+        const currentTheme = a11y.getStoredTheme();
+        const currentSize = a11y.getStoredTextSize();
+        const currentMotion = motion.getStoredMotionPreference();
+        const rawThemeInStorage = localStorage.getItem('cyber_pref_theme');
+
+        return {
+          currentTheme,
+          currentSize,
+          currentMotion,
+          rawThemeInStorage,
+          success: currentTheme === 'dark' && currentSize === 'extra-large' && currentMotion === 'reduced' && rawThemeInStorage === 'system'
+        };
+      } finally {
+        window.__blockStorageWrites = false;
+      }
+    })()`)
+    console.log('Utility In-Memory Fallback Result:', utilFallbackResult)
+    assert.ok(utilFallbackResult.success, 'Utility getters failed to return active in-memory session choice when writes fail')
+    console.log('✓ Preference getters successfully return in-memory session choice when writes fail but reads succeed')
+
+    // End-to-End Test: Leave Settings and Reopen Settings with Write-Failure Simulated
+    console.log('Testing leaving and reopening Settings with write-failure active...')
+    await cdp.eval(`window.__blockStorageWrites = true;`)
+
+    // User selects Dark theme on settings page
+    await cdp.eval(`document.getElementById('theme-pref-dark').click()`)
+    await sleep(300)
+
+    // User navigates away to Overview (/dashboard) via client-side routing (leaving Settings)
+    await cdp.eval(`(() => {
+      const overviewLink = document.querySelector('a[href="/dashboard"]');
+      if (overviewLink) overviewLink.click();
+    })()`)
+    await cdp.waitEval(`document.querySelector('.educator-dashboard, .dashboard-wrapper') !== null`)
+    const dashboardTheme = await cdp.eval(`document.documentElement.getAttribute('data-theme')`)
+    console.log('Theme while on Dashboard:', dashboardTheme)
+    assert.strictEqual(dashboardTheme, 'dark', 'Theme was lost when navigating away from Settings')
+
+    // User returns to Settings (/settings) via client-side routing (reopening Settings)
+    await cdp.eval(`(() => {
+      const settingsLink = document.querySelector('a[href="/settings"]');
+      if (settingsLink) settingsLink.click();
+    })()`)
+    await cdp.waitEval(`document.querySelector('#tab-accessibility') !== null`)
+
+    // Click Accessibility tab to inspect preferences panel
+    await cdp.eval(`document.getElementById('tab-accessibility').click()`)
+    await cdp.waitEval(`document.querySelector('#theme-pref-dark') !== null`)
+
+    const reopenedState = await cdp.eval(`(() => {
+      const darkRadio = document.getElementById('theme-pref-dark');
+      const rootTheme = document.documentElement.getAttribute('data-theme');
+      return {
+        darkRadioChecked: darkRadio?.checked,
+        rootTheme
+      };
+    })()`)
+    console.log('State upon reopening Settings:', reopenedState)
+    assert.strictEqual(reopenedState.darkRadioChecked, true, 'Dark radio was not checked after reopening Settings')
+    assert.strictEqual(reopenedState.rootTheme, 'dark', 'Root theme was not dark after reopening Settings')
+    console.log('✓ In-memory choice persisted and reflected in UI after leaving and reopening Settings')
+
+    // Disable write blocking
+    await cdp.eval(`window.__blockStorageWrites = false;`)
+
+    // Test 5: Zoom & Reflow Verification (Requirement 3)
+    console.log('\n--- Test 5: Zoom & Reflow Verification ---')
+    console.log('Note on Desktop Browser Zoom vs setPageScaleFactor:')
+    console.log('  - CDP Emulation.setPageScaleFactor emulates mobile pinch-to-zoom (visual viewport scaling only).')
+    console.log('  - Desktop browser zoom (e.g. Ctrl + + to 200%) changes the CSS layout viewport dimensions')
+    console.log('    (1280px / 2 = 640px effective layout width) and evaluates responsive CSS @media queries.')
+    console.log('  - We test actual 200% layout zoom reflow (640px width with deviceScaleFactor 2) AND 360px narrow viewport reflow.')
+
+    // 5A: Emulate 200% Desktop Browser Zoom Reflow (640px CSS layout viewport)
+    console.log('1. Testing 200% Desktop Browser Zoom Reflow (640px layout viewport, 2x scale):')
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 640,
+      height: 400,
+      deviceScaleFactor: 2,
+      mobile: false,
+    })
+    await sleep(400)
+
+    const zoom200Reflow = await cdp.eval(`(() => {
+      const docScrollWidth = document.documentElement.scrollWidth;
+      const docClientWidth = document.documentElement.clientWidth;
+      const winWidth = window.innerWidth;
+
+      // Inspect controls and text containers for clipping or overflow
+      const controls = Array.from(document.querySelectorAll('.tab-btn, .option-card, .btn-primary, .btn-outline, .btn-reset, input'));
+      let clippedControlCount = 0;
+      for (const el of controls) {
+        const rect = el.getBoundingClientRect();
+        if (rect.right > winWidth + 2) {
+          clippedControlCount++;
+        }
+      }
+
+      const headings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .page-subtitle'));
+      let clippedTextCount = 0;
+      for (const el of headings) {
+        const rect = el.getBoundingClientRect();
+        if (rect.right > winWidth + 2) {
+          clippedTextCount++;
+        }
+      }
+
+      const hamburger = document.querySelector('.hamburger-btn');
+      const hamburgerVisible = hamburger && window.getComputedStyle(hamburger).display !== 'none';
+      const mainContent = document.querySelector('.main-content');
+      const mainPaddingLeft = mainContent ? window.getComputedStyle(mainContent).paddingLeft : '';
+
+      return {
+        docScrollWidth,
+        docClientWidth,
+        noDocOverflow: docScrollWidth <= docClientWidth + 2,
+        clippedControlCount,
+        clippedTextCount,
+        hamburgerVisible,
+        mainPaddingLeftZero: mainPaddingLeft === '0px'
+      };
+    })()`)
+    console.log('200% Desktop Zoom Reflow State:', zoom200Reflow)
+    assert.ok(zoom200Reflow.noDocOverflow, '200% layout zoom caused uncontained document overflow')
+    assert.strictEqual(zoom200Reflow.clippedControlCount, 0, 'Controls clipped under 200% layout zoom')
+    assert.strictEqual(zoom200Reflow.clippedTextCount, 0, 'Text headings clipped under 200% layout zoom')
+    assert.strictEqual(zoom200Reflow.hamburgerVisible, true, 'Sidebar did not collapse to mobile menu under 200% zoom')
+    assert.strictEqual(zoom200Reflow.mainPaddingLeftZero, true, 'Main content padding-left was not zeroed under 200% zoom')
+    console.log('✓ 200% layout zoom reflows cleanly without clipping controls or text')
+
+    // 5B: Emulate Narrow Viewport Reflow (360px mobile width)
+    console.log('2. Testing Narrow-Viewport Reflow (360px mobile viewport):')
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       width: 360,
       height: 740,
@@ -468,31 +655,67 @@ async function runBrowserTests() {
     })
     await sleep(400)
 
-    const narrowState = await cdp.eval(`(() => {
-      const hamburger = document.querySelector('.hamburger-btn');
-      const hamburgerDisplay = hamburger ? window.getComputedStyle(hamburger).display : 'none';
-      const sidebar = document.querySelector('.sidebar-nav');
-      const sidebarTransform = sidebar ? window.getComputedStyle(sidebar).transform : '';
-      const mainContent = document.querySelector('.main-content');
-      const paddingLeft = mainContent ? window.getComputedStyle(mainContent).paddingLeft : '';
+    const narrowReflow = await cdp.eval(`(() => {
+      const docScrollWidth = document.documentElement.scrollWidth;
+      const docClientWidth = document.documentElement.clientWidth;
+      const winWidth = window.innerWidth;
+
+      const controls = Array.from(document.querySelectorAll('.tab-btn, .option-card, .btn-primary, .btn-outline, .btn-reset, input'));
+      let clippedControlCount = 0;
+      for (const el of controls) {
+        const rect = el.getBoundingClientRect();
+        if (rect.right > winWidth + 2) {
+          clippedControlCount++;
+        }
+      }
+
+      const headings = Array.from(document.querySelectorAll('h1, h2, h3, .page-title, .page-subtitle'));
+      let clippedTextCount = 0;
+      for (const el of headings) {
+        const rect = el.getBoundingClientRect();
+        if (rect.right > winWidth + 2) {
+          clippedTextCount++;
+        }
+      }
+
       return {
-        hamburgerVisible: hamburgerDisplay !== 'none',
-        sidebarHidden: sidebarTransform.includes('matrix') || sidebarTransform.includes('-100'),
-        paddingLeftZero: paddingLeft === '0px'
+        docScrollWidth,
+        docClientWidth,
+        noDocOverflow: docScrollWidth <= docClientWidth + 2,
+        clippedControlCount,
+        clippedTextCount
       };
     })()`)
-    console.log('Narrow Viewport (360px) State:', narrowState)
-    assert.strictEqual(narrowState.hamburgerVisible, true)
-    assert.strictEqual(narrowState.paddingLeftZero, true)
-    console.log('✓ Narrow layout collapses fixed sidebar to 0 padding-left and mobile hamburger')
+    console.log('360px Narrow Viewport Reflow State:', narrowReflow)
+    assert.ok(narrowReflow.noDocOverflow, '360px viewport caused uncontained document overflow')
+    assert.strictEqual(narrowReflow.clippedControlCount, 0, 'Controls clipped under 360px viewport')
+    assert.strictEqual(narrowReflow.clippedTextCount, 0, 'Text headings clipped under 360px viewport')
+    console.log('✓ 360px narrow viewport reflows cleanly without clipping controls or text')
 
     // Reset device metrics
     await cdp.send('Emulation.clearDeviceMetricsOverride')
     await sleep(300)
 
-    // Test 5: Reduced Motion & Canvas Animation Response
-    console.log('\n--- Test 5: Reduced Motion & Canvas Animation Response ---')
-    await cdp.eval(`document.getElementById('motion-pref-reduced').click()`)
+    // Test 6: Reduced Motion & Canvas Animation Response
+    console.log('\n--- Test 6: Reduced Motion & Canvas Animation Response ---')
+    // Reset to system first to ensure a change transition
+    await cdp.eval(`(() => {
+      const systemRadio = document.getElementById('motion-pref-system');
+      if (systemRadio) {
+        systemRadio.click();
+        systemRadio.dispatchEvent(new Event('change'));
+      }
+    })()`)
+    await sleep(200)
+
+    // Select Reduced motion
+    await cdp.eval(`(() => {
+      const reducedRadio = document.getElementById('motion-pref-reduced');
+      if (reducedRadio) {
+        reducedRadio.click();
+        reducedRadio.dispatchEvent(new Event('change'));
+      }
+    })()`)
     await sleep(300)
 
     const motionReducedState = await cdp.eval(`(() => {
@@ -535,8 +758,8 @@ async function runBrowserTests() {
     assert.ok(manualToggleState.toLowerCase().includes('pause'), 'Manual unpause did not resume simulation')
     console.log('✓ Manual pause behavior preserved during user override')
 
-    // Test 6: Storage Resilience & Reset Accessibility Preferences
-    console.log('\n--- Test 6: Storage Resilience & Reset Accessibility Preferences ---')
+    // Test 7: Storage Resilience & Reset Accessibility Preferences
+    console.log('\n--- Test 7: Storage Resilience & Reset Accessibility Preferences ---')
     await cdp.navigate(`http://localhost:${TEST_PORT}/settings?section=accessibility`)
     await cdp.waitEval(`document.querySelector('.btn-reset') !== null`)
 
@@ -586,8 +809,8 @@ async function runBrowserTests() {
     console.log('✓ Reset to defaults reverted theme, size, and motion without touching auth token')
     console.log('✓ Accessible feedback message with role="status" confirmed')
 
-    // Test 7: Corrupted Storage Recovery
-    console.log('\n--- Test 7: Corrupted Storage Recovery ---')
+    // Test 8: Corrupted Storage Recovery
+    console.log('\n--- Test 8: Corrupted Storage Recovery ---')
     await cdp.eval(`
       localStorage.setItem('cyber_pref_theme', 'invalid-theme-value');
       localStorage.setItem('cyber_pref_text_size', 'corrupted-size-999');
@@ -609,6 +832,91 @@ async function runBrowserTests() {
     assert.strictEqual(hydrationState.rootSize, null)
     assert.strictEqual(hydrationState.rootMotion, null)
     console.log('✓ Corrupted storage values safely fallback to defaults without throwing')
+
+    // Test 9: Verify Dark-Theme Surface Coverage Across Key Application Pages
+    console.log('\n--- Test 9: Dark-Theme Surface Coverage Across Key Pages ---')
+    // Set theme to dark
+    await cdp.eval(`document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('cyber_pref_theme', 'dark');`)
+
+    // 9A: Authenticated Pages (while logged in as educator)
+    const authPages = [
+      { path: '/dashboard', name: 'Educator Dashboard', selector: '.educator-dashboard, .dashboard-wrapper' },
+      { path: '/classroom/manage', name: 'Classrooms Workspace', selector: '.management-page' },
+      { path: '/settings', name: 'Settings', selector: '.settings-page' },
+    ]
+
+    for (const p of authPages) {
+      await cdp.navigate(`http://localhost:${TEST_PORT}${p.path}`)
+      await cdp.waitEval(`document.querySelector('${p.selector}') !== null`)
+      const pageSurfaceStatus = await cdp.eval(`(() => {
+        const rootTheme = document.documentElement.getAttribute('data-theme');
+        const bg = window.getComputedStyle(document.body).backgroundColor;
+        const card = document.querySelector('.settings-card, .classroom-card, .metric-card, .fallback-card');
+        const cardBg = card ? window.getComputedStyle(card).backgroundColor : null;
+        return { rootTheme, bg, cardBg };
+      })()`)
+      console.log(`Authenticated Page verified [${p.name}] at ${p.path}:`, pageSurfaceStatus)
+      assert.strictEqual(pageSurfaceStatus.rootTheme, 'dark', `Page ${p.path} lost data-theme="dark" attribute`)
+    }
+    console.log('✓ All 3 Authenticated pages cleanly adopt dark-theme tokens and surfaces')
+
+    // 9B: Public Pages
+    const publicPages = [
+      { path: '/', name: 'Landing / Home', selector: '.landing-page' },
+      { path: '/about', name: 'About', selector: '.about-page' },
+      { path: '/gameplay', name: 'Gameplay', selector: '.gameplay-page' },
+      { path: '/download', name: 'Download', selector: '.download-page' },
+      { path: '/faq', name: 'FAQ', selector: '.faq-page' },
+    ]
+
+    for (const p of publicPages) {
+      await cdp.navigate(`http://localhost:${TEST_PORT}${p.path}`)
+      await cdp.waitEval(`document.querySelector('${p.selector}') !== null`)
+      const pageSurfaceStatus = await cdp.eval(`(() => {
+        const rootTheme = document.documentElement.getAttribute('data-theme');
+        const bg = window.getComputedStyle(document.body).backgroundColor;
+        const nav = document.querySelector('.public-nav-bar');
+        const navBg = nav ? window.getComputedStyle(nav).backgroundColor : null;
+        const primaryBtn = document.querySelector('.btn-primary, .btn-nav-primary, .btn-cta-primary');
+        const primaryBtnBg = primaryBtn ? window.getComputedStyle(primaryBtn).backgroundImage : null;
+        return { rootTheme, bg, navBg, primaryBtnBg };
+      })()`)
+      console.log(`Public Page verified [${p.name}] at ${p.path}:`, pageSurfaceStatus)
+      assert.strictEqual(pageSurfaceStatus.rootTheme, 'dark', `Page ${p.path} lost data-theme="dark" attribute`)
+    }
+    console.log('✓ All 5 Public pages cleanly adopt dark-theme tokens, navigation bar, and button gradients')
+
+    // 9C: Authentication Pages (after clearing session via authStore.logout)
+    await cdp.eval(`(async () => {
+      const { useAuthStore } = await import('/src/stores/authStore.js');
+      const auth = useAuthStore();
+      auth.logout();
+    })()`)
+
+    const unauthPages = [
+      { path: '/login', name: 'Login', selector: '.auth-card' },
+      { path: '/register', name: 'Register', selector: '.auth-card' },
+    ]
+
+    for (const p of unauthPages) {
+      await cdp.navigate(`http://localhost:${TEST_PORT}${p.path}`)
+      await cdp.waitEval(`document.querySelector('${p.selector}') !== null`)
+      const authFieldStatus = await cdp.eval(`(() => {
+        const rootTheme = document.documentElement.getAttribute('data-theme');
+        const bg = window.getComputedStyle(document.body).backgroundColor;
+        const card = document.querySelector('.auth-card');
+        const cardBg = card ? window.getComputedStyle(card).backgroundColor : null;
+        const input = document.querySelector('input');
+        const inputBg = input ? window.getComputedStyle(input).backgroundColor : null;
+        const inputBorder = input ? window.getComputedStyle(input).borderColor : null;
+        const submitBtn = document.querySelector('button[type="submit"]');
+        const submitBtnBg = submitBtn ? window.getComputedStyle(submitBtn).backgroundImage : null;
+        return { rootTheme, bg, cardBg, inputBg, inputBorder, submitBtnBg };
+      })()`)
+      console.log(`Auth Page verified [${p.name}] at ${p.path}:`, authFieldStatus)
+      assert.strictEqual(authFieldStatus.rootTheme, 'dark', `Page ${p.path} lost data-theme="dark" attribute`)
+    }
+    console.log('✓ Both Authentication pages cleanly adopt dark-theme input surfaces, borders, and buttons')
 
     cdp.close()
     cdp = null

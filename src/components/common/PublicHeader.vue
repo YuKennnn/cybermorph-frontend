@@ -3,6 +3,7 @@ import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import AppIcon from './AppIcon.vue'
+import { openA11yModal } from '../../utils/accessibilityModal.js'
 
 const authStore = useAuthStore()
 const isMobileNavOpen = ref(false)
@@ -17,6 +18,12 @@ const toggleMobileNav = () => {
 
 const closeMobileNav = () => {
   isMobileNavOpen.value = false
+}
+
+const handleOpenA11y = (event) => {
+  const trigger = event.currentTarget
+  closeMobileNav()
+  openA11yModal(trigger)
 }
 
 const trapFocus = (event) => {
@@ -177,6 +184,17 @@ onUnmounted(() => {
           <RouterLink to="/faq" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
             FAQ
           </RouterLink>
+          <button
+            type="button"
+            class="mobile-nav-link btn-mobile-a11y"
+            aria-label="Open accessibility preferences"
+            @click="handleOpenA11y"
+          >
+            <span class="mobile-a11y-label">
+              <AppIcon name="settings" :size="16" />
+              <span>Accessibility</span>
+            </span>
+          </button>
         </nav>
 
         <div class="mobile-drawer-footer">
@@ -215,7 +233,7 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 40;
-  background-color: rgba(255, 255, 255, 0.94);
+  background-color: var(--color-card);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--color-border);
@@ -277,14 +295,14 @@ onUnmounted(() => {
 }
 
 .nav-link:hover {
-  color: var(--color-text);
-  background-color: var(--color-bg-alt);
+  color: var(--color-text-main);
+  background-color: var(--color-bg-subtle);
 }
 
 .nav-link.active {
-  color: var(--color-purple);
+  color: var(--color-primary);
   font-weight: 600;
-  background-color: var(--color-purple-light);
+  background-color: var(--color-violet-subtle);
 }
 
 .nav-auth {
@@ -301,16 +319,15 @@ onUnmounted(() => {
   font-size: 0.875rem;
   font-weight: 600;
   color: #ffffff;
-  background-color: var(--color-purple);
-  border: 1px solid var(--color-purple);
+  background: var(--btn-gradient);
+  border: 1px solid transparent;
   border-radius: 6px;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
 .btn-nav-primary:hover {
-  background-color: var(--color-purple-hover);
-  border-color: var(--color-purple-hover);
+  background: var(--btn-gradient-hover);
 }
 
 .btn-nav-secondary {
@@ -320,17 +337,17 @@ onUnmounted(() => {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-purple);
-  background-color: var(--color-purple-light);
-  border: 1px solid rgba(109, 40, 217, 0.2);
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 6px;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
 .btn-nav-secondary:hover {
-  background-color: rgba(109, 40, 217, 0.15);
-  border-color: var(--color-purple);
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
 }
 
 .mobile-menu-toggle {
@@ -339,10 +356,12 @@ onUnmounted(() => {
   justify-content: center;
   padding: 0.4rem;
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 6px;
-  color: var(--color-text);
+  color: var(--color-text-main);
   cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 @media (min-width: 768px) {
@@ -365,7 +384,7 @@ onUnmounted(() => {
 .mobile-drawer {
   width: 290px;
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -392,11 +411,16 @@ onUnmounted(() => {
 
 .mobile-close-btn {
   background: none;
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 6px;
   padding: 0.35rem;
   cursor: pointer;
-  color: var(--color-text-muted);
+  color: var(--color-text-main);
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-nav-links {
@@ -417,7 +441,7 @@ onUnmounted(() => {
   font-family: var(--font-body);
   font-size: 0.95rem;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--color-text-main);
   text-decoration: none;
   border-radius: 6px;
   cursor: pointer;
@@ -425,13 +449,27 @@ onUnmounted(() => {
 }
 
 .mobile-nav-link:hover {
-  background-color: var(--color-bg-alt);
+  background-color: var(--color-bg-subtle);
 }
 
 .mobile-nav-link.active {
-  color: var(--color-purple);
+  color: var(--color-primary);
   font-weight: 600;
-  background-color: var(--color-purple-light);
+  background-color: var(--color-violet-subtle);
+}
+
+.btn-mobile-a11y {
+  border-top: 1px solid var(--color-border);
+  margin-top: 0.5rem;
+  padding-top: 0.875rem;
+  display: flex;
+  align-items: center;
+}
+
+.mobile-a11y-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .mobile-drawer-footer {
@@ -457,22 +495,22 @@ onUnmounted(() => {
 
 .btn-mobile-primary {
   color: #ffffff;
-  background-color: var(--color-primary);
-  border: 1px solid var(--color-primary);
+  background: var(--btn-gradient);
+  border: 1px solid transparent;
 }
 
 .btn-mobile-primary:hover {
-  background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  background: var(--btn-gradient-hover);
 }
 
 .btn-mobile-secondary {
   color: var(--color-primary);
   background-color: var(--color-violet-subtle);
-  border: 1px solid var(--color-violet-border);
+  border: 1.5px solid var(--color-border-control);
 }
 
 .btn-mobile-secondary:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
 }
 </style>

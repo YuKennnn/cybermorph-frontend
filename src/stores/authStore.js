@@ -8,6 +8,7 @@ import {
   fetchPlayerProfile,
 } from '../api/auth.js'
 import { useClassroomStore } from './classroomStore.js'
+import { stopNarration } from '../utils/speech.js'
 
 export const useAuthStore = defineStore('auth', () => {
   // ==========================================
@@ -131,6 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Clear all auth session data and tokens.
    */
   const logout = () => {
+    stopNarration()
     token.value = null
     user.value = null
     userRole.value = null

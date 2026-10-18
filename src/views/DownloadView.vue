@@ -1,11 +1,47 @@
 <script setup>
-import { onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
 import AppIcon from '../components/common/AppIcon.vue'
+import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
+import { getStoredReadAloud } from '../utils/accessibility.js'
+import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
 const route = useRoute()
+
+const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
+
+const btnRefRequirements = ref(null)
+const btnRefInstall = ref(null)
+
+const DOWNLOAD_SECTIONS = {
+  requirements: {
+    title: 'System Requirements',
+    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Awaiting confirmation. Architecture: ARM64. Memory: Awaiting confirmation. Free Storage: Awaiting confirmation. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
+  },
+  install: {
+    title: 'Beta Installation Guide',
+    text: 'How to install during the beta: Step 1: Download package. Download the CyberMorph APK file directly to your Android device once published. Step 2: Allow installation. If prompted by Android, enable "Install unknown apps" for your browser in system settings. Step 3: Install application. Tap the downloaded file in your notifications or downloads folder and select Install. Step 4: Sign in and play. Launch CyberMorph, sign in with your player account, and start exploring missions offline.',
+  },
+}
+
+const handleReadSection = (ownerId, title, text, triggerEl) => {
+  startNarration({
+    ownerId,
+    title,
+    text,
+    triggerEl,
+    triggerMode: 'explicit',
+  })
+}
+
+onUnmounted(() => {
+  const currentOwner = getSpeechState().activeOwnerId
+  if (currentOwner && currentOwner.startsWith('download-')) {
+    stopNarration(currentOwner)
+  }
+})
 
 const scrollToSection = (id) => {
   const el = document.getElementById(id)
@@ -55,7 +91,25 @@ onMounted(() => {
       <section id="requirements" class="full-section">
         <div class="page-container">
           <div class="section-header">
-            <h2 class="section-title">System requirements</h2>
+            <div class="header-with-action">
+              <h2 class="section-title">System requirements</h2>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefRequirements"
+                type="button"
+                class="btn-read-section"
+                aria-label="Read System Requirements aloud"
+                @click="handleReadSection('download-requirements', DOWNLOAD_SECTIONS.requirements.title, DOWNLOAD_SECTIONS.requirements.text, btnRefRequirements)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
+            <InlineSpeechPlayer
+              v-if="isReadAloudEnabled"
+              owner-id="download-requirements"
+              :trigger-ref="btnRefRequirements"
+            />
             <p class="section-lead">
               Device specifications and compatibility information for Android devices.
             </p>
@@ -221,8 +275,26 @@ onMounted(() => {
 
           <!-- Existing APK Installation Guide -->
           <div class="install-guide-panel">
-            <h3 class="guide-title">How to install during the beta:</h3>
-            <ol class="guide-steps">
+            <div class="header-with-action">
+              <h3 class="guide-title" style="margin-bottom: 0;">How to install during the beta:</h3>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefInstall"
+                type="button"
+                class="btn-read-section"
+                aria-label="Read installation guide aloud"
+                @click="handleReadSection('download-install', DOWNLOAD_SECTIONS.install.title, DOWNLOAD_SECTIONS.install.text, btnRefInstall)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
+            <InlineSpeechPlayer
+              v-if="isReadAloudEnabled"
+              owner-id="download-install"
+              :trigger-ref="btnRefInstall"
+            />
+            <ol class="guide-steps" style="margin-top: 1.25rem;">
               <li>
                 <strong>Download package:</strong> Download the CyberMorph APK file directly to your Android device once published.
               </li>
@@ -313,7 +385,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
@@ -398,7 +470,7 @@ onMounted(() => {
 }
 
 .platform-card-disabled {
-  background-color: #fbfbfc;
+  background-color: var(--color-bg-subtle);
   opacity: 0.95;
 }
 
@@ -652,5 +724,41 @@ onMounted(() => {
 .text-pending {
   font-style: italic;
   color: #854d0e;
+}
+
+.header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.btn-read-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.btn-read-section:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-read-section:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 </style>

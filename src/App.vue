@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useRoute, RouterView } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import SidebarNav from './components/SidebarNav.vue'
+import AccessibilityFloatingButton from './components/common/AccessibilityFloatingButton.vue'
+import AccessibilityModal from './components/common/AccessibilityModal.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -10,10 +12,12 @@ const authStore = useAuthStore()
 const isPublicLayout = computed(() => {
   return (
     !!route.meta?.isPublic ||
+    route.path === '/' ||
     route.name === 'landing' ||
     route.name === 'about' ||
     route.name === 'gameplay' ||
     route.name === 'download' ||
+    route.name === 'faq' ||
     route.name === 'login' ||
     route.name === 'register'
   )
@@ -37,6 +41,12 @@ const showSidebar = computed(() => {
         <RouterView />
       </div>
     </main>
+
+    <!-- Public Accessibility Controls (Floating button + Accessible modal) -->
+    <template v-if="isPublicLayout">
+      <AccessibilityFloatingButton />
+      <AccessibilityModal />
+    </template>
   </div>
 </template>
 

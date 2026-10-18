@@ -1,5 +1,13 @@
 <script setup>
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { openA11yModal } from '../../utils/accessibilityModal.js'
+
+const footerBtnRef = ref(null)
+
+const handleFooterClick = () => {
+  openA11yModal(footerBtnRef.value)
+}
 </script>
 
 <template>
@@ -37,6 +45,16 @@ import { RouterLink } from 'vue-router'
               <li><RouterLink to="/login" class="footer-link">Sign in</RouterLink></li>
               <li><RouterLink to="/register" class="footer-link">Create account</RouterLink></li>
               <li><RouterLink to="/about#classrooms" class="footer-link">Classroom features</RouterLink></li>
+              <li>
+                <button
+                  ref="footerBtnRef"
+                  type="button"
+                  class="footer-link btn-footer-a11y footer-a11y-btn"
+                  @click="handleFooterClick"
+                >
+                  Accessibility preferences
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -56,7 +74,7 @@ import { RouterLink } from 'vue-router'
 
 <style scoped>
 .public-footer {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border-top: 1px solid var(--color-border);
   padding: 3rem 1.5rem 2rem;
   margin-top: auto;
@@ -112,7 +130,7 @@ import { RouterLink } from 'vue-router'
 .brand-disclaimer {
   font-size: 0.8rem;
   line-height: 1.5;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .footer-nav-groups {
@@ -126,7 +144,7 @@ import { RouterLink } from 'vue-router'
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text);
+  color: var(--color-text-main);
   margin-bottom: 0.875rem;
 }
 
@@ -147,7 +165,16 @@ import { RouterLink } from 'vue-router'
 }
 
 .footer-link:hover {
-  color: var(--color-purple);
+  color: var(--color-primary);
+}
+
+.btn-footer-a11y {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .footer-bottom {
@@ -168,6 +195,6 @@ import { RouterLink } from 'vue-router'
 }
 
 .platform-note {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 </style>

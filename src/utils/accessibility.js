@@ -14,6 +14,7 @@
  * - Backward compatibility with motion.js.
  */
 
+import { ref } from 'vue'
 import {
   getStoredMotionPreference,
   setStoredMotionPreference,
@@ -21,6 +22,8 @@ import {
   initMotionPreference,
   isReducedMotionActive,
   onMotionChange,
+  isMotionWriteFailed,
+  resetMotionWriteFailed,
 } from './motion.js'
 
 export {
@@ -34,10 +37,25 @@ export {
 
 const THEME_KEY = 'cyber_pref_theme'
 const TEXT_SIZE_KEY = 'cyber_pref_text_size'
+const READ_ALOUD_KEY = 'cyber_pref_read_aloud'
+const READ_SPEED_KEY = 'cyber_pref_read_speed'
+
+export {
+  THEME_KEY,
+  TEXT_SIZE_KEY,
+  READ_ALOUD_KEY,
+  READ_SPEED_KEY,
+}
 
 // In-memory fallbacks if localStorage is unavailable
-let memoryTheme = 'system'
+let memoryTheme = 'light'
 let memoryTextSize = 'standard'
+let memoryReadAloud = 'off'
+let memoryReadSpeed = '1'
+let themeWriteFailed = false
+let textSizeWriteFailed = false
+let readAloudWriteFailed = false
+let readSpeedWriteFailed = false
 
 // Clean event listener reference for system theme changes
 let systemThemeMediaQuery = null
@@ -54,16 +72,20 @@ export const getSystemPrefersDark = () => {
 
 /**
  * Retrieve the current theme preference from localStorage, falling back to memory.
+ * When writes fail in this browser session, returns the active in-memory choice.
  * Invalid or corrupted stored values default to 'system'.
  * @returns {'system' | 'light' | 'dark'}
  */
 export const getStoredTheme = () => {
+  if (themeWriteFailed) {
+    return memoryTheme
+  }
   try {
     const stored = localStorage.getItem(THEME_KEY)
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       return stored
     }
-    return 'system'
+    return 'light'
   } catch {
     return memoryTheme
   }
@@ -114,6 +136,7 @@ export const applyTheme = (theme) => {
 
 /**
  * Store and apply theme preference.
+ * When writes fail, preserves the active choice in memory for this session.
  * @param {'system' | 'light' | 'dark'} theme
  * @returns {'system' | 'light' | 'dark'}
  */
@@ -122,8 +145,13 @@ export const setStoredTheme = (theme) => {
   memoryTheme = validTheme
   try {
     localStorage.setItem(THEME_KEY, validTheme)
+    if (localStorage.getItem(THEME_KEY) === validTheme) {
+      themeWriteFailed = false
+    } else {
+      themeWriteFailed = true
+    }
   } catch {
-    // localStorage unavailable, keep in memory
+    themeWriteFailed = true
   }
   applyTheme(validTheme)
   return validTheme
@@ -131,10 +159,14 @@ export const setStoredTheme = (theme) => {
 
 /**
  * Retrieve text sizing preference from localStorage, falling back to memory.
+ * When writes fail in this browser session, returns the active in-memory choice.
  * Invalid or corrupted stored values default to 'standard'.
  * @returns {'standard' | 'large' | 'extra-large'}
  */
 export const getStoredTextSize = () => {
+  if (textSizeWriteFailed) {
+    return memoryTextSize
+  }
   try {
     const stored = localStorage.getItem(TEXT_SIZE_KEY)
     if (stored === 'standard' || stored === 'large' || stored === 'extra-large') {
@@ -165,6 +197,7 @@ export const applyTextSize = (size) => {
 
 /**
  * Store and apply text size preference.
+ * When writes fail, preserves the active choice in memory for this session.
  * @param {'standard' | 'large' | 'extra-large'} size
  * @returns {'standard' | 'large' | 'extra-large'}
  */
@@ -173,36 +206,185 @@ export const setStoredTextSize = (size) => {
   memoryTextSize = validSize
   try {
     localStorage.setItem(TEXT_SIZE_KEY, validSize)
+    if (localStorage.getItem(TEXT_SIZE_KEY) === validSize) {
+      textSizeWriteFailed = false
+    } else {
+      textSizeWriteFailed = true
+    }
   } catch {
-    // localStorage unavailable, keep in memory
+    textSizeWriteFailed = true
   }
   applyTextSize(validSize)
   return validSize
 }
 
 /**
+ * Valid reading speed rates supported by the speech synthesis engine.
+ */
+export const VALID_READ_SPEEDS = ['0.75', '1', '1.25', '1.5']
+
+/**
+ * Reactive ref holding the active read-aloud state so Vue computeds/templates automatically update.
+ */
+export const activeReadAloud = ref('off')
+
+/**
+ * Retrieve the current read-aloud preference from localStorage, falling back to memory.
+ * When writes fail in this browser session, returns the active in-memory choice.
+ * Defaults to 'off'.
+ * @returns {'off' | 'on'}
+ */
+export const getStoredReadAloud = () => {
+  // Subscribe active Vue effect if present
+  void activeReadAloud.value
+  if (readAloudWriteFailed) {
+    return memoryReadAloud
+  }
+  try {
+    const stored = localStorage.getItem(READ_ALOUD_KEY)
+    if (stored === 'on' || stored === 'off') {
+      return stored
+    }
+    return 'off'
+  } catch {
+    return memoryReadAloud
+  }
+}
+
+/**
+ * Store read-aloud preference.
+ * When writes fail, preserves the active choice in memory for this session.
+ * @param {'off' | 'on'} val
+ * @returns {'off' | 'on'}
+ */
+export const setStoredReadAloud = (val) => {
+  const valid = val === 'on' ? 'on' : 'off'
+  memoryReadAloud = valid
+  try {
+    localStorage.setItem(READ_ALOUD_KEY, valid)
+    if (localStorage.getItem(READ_ALOUD_KEY) === valid) {
+      readAloudWriteFailed = false
+    } else {
+      readAloudWriteFailed = true
+    }
+  } catch {
+    readAloudWriteFailed = true
+  }
+
+  activeReadAloud.value = valid
+  return valid
+}
+
+/**
+ * Retrieve the current reading speed from localStorage, falling back to memory.
+ * Defaults to '1'.
+ * @returns {'0.75' | '1' | '1.25' | '1.5'}
+ */
+export const getStoredReadSpeed = () => {
+  if (readSpeedWriteFailed) {
+    return memoryReadSpeed
+  }
+  try {
+    const stored = localStorage.getItem(READ_SPEED_KEY)
+    if (stored && VALID_READ_SPEEDS.includes(stored)) {
+      return stored
+    }
+    return '1'
+  } catch {
+    return memoryReadSpeed
+  }
+}
+
+/**
+ * Store reading speed preference.
+ * When writes fail, preserves the active choice in memory for this session.
+ * @param {'0.75' | '1' | '1.25' | '1.5' | number} speed
+ * @returns {'0.75' | '1' | '1.25' | '1.5'}
+ */
+export const setStoredReadSpeed = (speed) => {
+  const normalized = String(speed)
+  const valid = VALID_READ_SPEEDS.includes(normalized) ? normalized : '1'
+  memoryReadSpeed = valid
+  try {
+    localStorage.setItem(READ_SPEED_KEY, valid)
+    if (localStorage.getItem(READ_SPEED_KEY) === valid) {
+      readSpeedWriteFailed = false
+    } else {
+      readSpeedWriteFailed = true
+    }
+  } catch {
+    readSpeedWriteFailed = true
+  }
+  return valid
+}
+
+/**
+ * Test whether browser storage is available and functioning for persistence.
+ * Returns false if localStorage threw an exception or writing failed.
+ * @returns {boolean}
+ */
+export const isStoragePersistenceAvailable = () => {
+  if (
+    themeWriteFailed ||
+    textSizeWriteFailed ||
+    readAloudWriteFailed ||
+    readSpeedWriteFailed ||
+    isMotionWriteFailed()
+  ) {
+    return false
+  }
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return false
+  }
+  try {
+    const testKey = '__cyber_storage_test__'
+    localStorage.setItem(testKey, '1')
+    const item = localStorage.getItem(testKey)
+    localStorage.removeItem(testKey)
+    return item === '1'
+  } catch {
+    return false
+  }
+}
+
+/**
  * Reset all accessibility preferences to defaults without modifying authentication storage.
- * Defaults: theme = 'system', textSize = 'standard', motion = 'system'.
+ * Defaults: theme = 'light', textSize = 'standard', motion = 'system', readAloud = 'off', readSpeed = '1'.
  */
 export const resetAccessibilityPreferences = () => {
-  memoryTheme = 'system'
+  memoryTheme = 'light'
   memoryTextSize = 'standard'
+  memoryReadAloud = 'off'
+  memoryReadSpeed = '1'
+  themeWriteFailed = false
+  textSizeWriteFailed = false
+  readAloudWriteFailed = false
+  readSpeedWriteFailed = false
+  resetMotionWriteFailed()
 
   try {
     localStorage.removeItem(THEME_KEY)
     localStorage.removeItem(TEXT_SIZE_KEY)
+    localStorage.removeItem(READ_ALOUD_KEY)
+    localStorage.removeItem(READ_SPEED_KEY)
+    localStorage.removeItem('cyber_pref_hover_narration')
+    localStorage.removeItem('cyber_pref_hover_delay')
   } catch {
     // ignore storage exceptions
   }
 
-  setStoredTheme('system')
+  setStoredTheme('light')
   setStoredTextSize('standard')
   setStoredMotionPreference('system')
+  setStoredReadAloud('off')
+  setStoredReadSpeed('1')
 
   return {
-    theme: 'system',
+    theme: 'light',
     textSize: 'standard',
     motion: 'system',
+    readAloud: 'off',
+    readSpeed: '1',
   }
 }
 
@@ -214,14 +396,24 @@ export const initAccessibilityPreferences = () => {
   const theme = getStoredTheme()
   const textSize = getStoredTextSize()
   const motion = getStoredMotionPreference()
+  const readAloud = getStoredReadAloud()
+  const readSpeed = getStoredReadSpeed()
+
+  memoryTheme = theme
+  memoryTextSize = textSize
+  memoryReadAloud = readAloud
+  memoryReadSpeed = readSpeed
 
   applyTheme(theme)
   applyTextSize(textSize)
   applyMotionPreference(motion)
+  activeReadAloud.value = readAloud
 
   return {
     theme,
     textSize,
     motion,
+    readAloud,
+    readSpeed,
   }
 }

@@ -1,14 +1,61 @@
 <script setup>
+import { ref, computed, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
 import InteractiveHeroPreview from '../components/landing/InteractiveHeroPreview.vue'
 import AppIcon from '../components/common/AppIcon.vue'
+import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
+import { getStoredReadAloud } from '../utils/accessibility.js'
+import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
 import homeImg from '../assets/maps/home.png'
 import officeImg from '../assets/maps/office.png'
 import internetCafeImg from '../assets/maps/internet-cafe.png'
 import publicParkImg from '../assets/maps/public-park.png'
+
+const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
+
+const btnRefHero = ref(null)
+const btnRefAudience = ref(null)
+const btnRefMaps = ref(null)
+const btnRefDownload = ref(null)
+
+const LANDING_SECTIONS = {
+  hero: {
+    title: 'Overview',
+    text: 'Learn to recognise cyber threats through play. Practice cybersecurity decisions in an Android game. Use the web portal to view progress and manage classrooms.',
+  },
+  audience: {
+    title: 'How It Works',
+    text: 'Play, learn, and track your progress. Play independently at your own pace, or connect with a teacher through optional classroom features. For players: Play offline. The game runs locally on your Android device without requiring continuous internet access. Practice real defense: Identify phishing scams, spot rogue Wi-Fi networks, and protect accounts in interactive missions. Personal progress: Sync completed missions to this web portal to view scores and threat summaries. No classroom required: Anyone can download and finish the full game independently. Optional classroom features: Connect with teachers and classmates. Join with a class code: Enter your teacher\'s 6-character code to share your mission progress with them. Classroom management: Instructors can create classrooms and monitor student completion rates. Identify common mistakes: Teachers review which threat types students find most difficult to tailor their instruction. Institutional accounts: Educators register with verified institutional email addresses.',
+  },
+  maps: {
+    title: 'Simulation Maps',
+    text: 'Four realistic gameplay environments. Explore familiar locations to practice identifying and responding to digital threats. Home: Personal Wi-Fi and email phishing. Office: Workplace security and visitor protocol. Internet Cafe: Shared PC credential safety. Public Park: Open hotspots and rogue portals.',
+  },
+  download: {
+    title: 'Get Started',
+    text: 'Get started with CyberMorph. CyberMorph is currently available for Android devices as an APK package. The companion web portal lets you view synced scores and join optional classrooms.',
+  },
+}
+
+const handleReadSection = (ownerId, title, text, triggerEl) => {
+  startNarration({
+    ownerId,
+    title,
+    text,
+    triggerEl,
+    triggerMode: 'explicit',
+  })
+}
+
+onUnmounted(() => {
+  const currentOwner = getSpeechState().activeOwnerId
+  if (currentOwner && currentOwner.startsWith('landing-')) {
+    stopNarration(currentOwner)
+  }
+})
 
 const mapPreviews = [
   { name: 'Home', image: homeImg, desc: 'Personal Wi-Fi and email phishing' },
@@ -27,13 +74,32 @@ const mapPreviews = [
       <section class="hero-section">
         <div class="hero-inner">
           <div class="hero-text-column">
-            <span class="badge-subtle">Educational Cybersecurity Game</span>
+            <div class="header-with-action">
+              <span class="badge-subtle">Educational Cybersecurity Game</span>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefHero"
+                type="button"
+                class="btn-read-section"
+                :aria-label="`Read section: ${LANDING_SECTIONS.hero.title}`"
+                @click="handleReadSection('landing-hero', LANDING_SECTIONS.hero.title, LANDING_SECTIONS.hero.text, btnRefHero)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
             <h1 class="hero-headline">
               Learn to recognise cyber threats through play.
             </h1>
             <p class="hero-description">
               Practice cybersecurity decisions in an Android game. Use the web portal to view progress and manage classrooms.
             </p>
+
+            <InlineSpeechPlayer
+              owner-id="landing-hero"
+              :title="LANDING_SECTIONS.hero.title"
+              :trigger-ref="btnRefHero"
+            />
 
             <div class="hero-cta-group">
               <RouterLink to="/download" class="btn-cta-primary">
@@ -58,11 +124,31 @@ const mapPreviews = [
       <section class="content-section section-bg-alt">
         <div class="section-container">
           <div class="section-header">
-            <span class="section-kicker">How It Works</span>
-            <h2 class="section-title">Play, learn, and track your progress</h2>
+            <div class="header-with-action">
+              <div>
+                <span class="section-kicker">How It Works</span>
+                <h2 class="section-title">Play, learn, and track your progress</h2>
+              </div>
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefAudience"
+                type="button"
+                class="btn-read-section"
+                :aria-label="`Read section: ${LANDING_SECTIONS.audience.title}`"
+                @click="handleReadSection('landing-audience', LANDING_SECTIONS.audience.title, LANDING_SECTIONS.audience.text, btnRefAudience)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+            </div>
             <p class="section-lead">
               Play independently at your own pace, or connect with a teacher through optional classroom features.
             </p>
+            <InlineSpeechPlayer
+              owner-id="landing-audience"
+              :title="LANDING_SECTIONS.audience.title"
+              :trigger-ref="btnRefAudience"
+            />
           </div>
 
           <div class="editorial-split">
@@ -146,11 +232,30 @@ const mapPreviews = [
                 Explore familiar locations to practice identifying and responding to digital threats.
               </p>
             </div>
-            <RouterLink to="/gameplay" class="btn-section-header">
-              <span>View full gameplay guide</span>
-              <AppIcon name="arrow-right" :size="16" />
-            </RouterLink>
+            <div class="header-actions-group">
+              <button
+                v-if="isReadAloudEnabled"
+                ref="btnRefMaps"
+                type="button"
+                class="btn-read-section"
+                :aria-label="`Read section: ${LANDING_SECTIONS.maps.title}`"
+                @click="handleReadSection('landing-maps', LANDING_SECTIONS.maps.title, LANDING_SECTIONS.maps.text, btnRefMaps)"
+              >
+                <AppIcon name="volume-2" :size="16" />
+                <span>Read section</span>
+              </button>
+              <RouterLink to="/gameplay" class="btn-section-header">
+                <span>View full gameplay guide</span>
+                <AppIcon name="arrow-right" :size="16" />
+              </RouterLink>
+            </div>
           </div>
+
+          <InlineSpeechPlayer
+            owner-id="landing-maps"
+            :title="LANDING_SECTIONS.maps.title"
+            :trigger-ref="btnRefMaps"
+          />
 
           <div class="preview-map-grid">
             <div
@@ -180,11 +285,30 @@ const mapPreviews = [
         <div class="section-container">
           <div class="home-download-card">
             <div class="home-download-text">
-              <span class="badge-subtle">Android Beta</span>
+              <div class="header-with-action">
+                <span class="badge-subtle">Android Beta</span>
+                <button
+                  v-if="isReadAloudEnabled"
+                  ref="btnRefDownload"
+                  type="button"
+                  class="btn-read-section"
+                  :aria-label="`Read section: ${LANDING_SECTIONS.download.title}`"
+                  @click="handleReadSection('landing-download', LANDING_SECTIONS.download.title, LANDING_SECTIONS.download.text, btnRefDownload)"
+                >
+                  <AppIcon name="volume-2" :size="16" />
+                  <span>Read section</span>
+                </button>
+              </div>
               <h2 class="download-banner-title">Get started with CyberMorph</h2>
               <p class="download-banner-lead">
                 CyberMorph is currently available for Android devices as an APK package. The companion web portal lets you view synced scores and join optional classrooms.
               </p>
+
+              <InlineSpeechPlayer
+                owner-id="landing-download"
+                :title="LANDING_SECTIONS.download.title"
+                :trigger-ref="btnRefDownload"
+              />
             </div>
             <div class="home-download-actions">
               <RouterLink to="/download" class="btn-cta-primary">
@@ -472,7 +596,7 @@ const mapPreviews = [
 }
 
 .audience-column {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 2.25rem;
@@ -586,7 +710,7 @@ const mapPreviews = [
 }
 
 .preview-map-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   overflow: hidden;
@@ -634,7 +758,7 @@ const mapPreviews = [
 
 /* 4. Home Download Card */
 .home-download-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 2.5rem;
@@ -681,5 +805,48 @@ const mapPreviews = [
   .home-download-actions {
     flex-direction: row;
   }
+}
+
+.header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-read-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.btn-read-section:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.btn-read-section:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 </style>

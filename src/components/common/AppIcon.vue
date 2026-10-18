@@ -107,8 +107,8 @@ const sizePixels = computed(() => {
       <line x1="12" y1="16" x2="12.01" y2="16" />
     </template>
 
-    <!-- Refresh / Reload -->
-    <template v-else-if="name === 'refresh'">
+    <!-- Refresh / Reload / Loader -->
+    <template v-else-if="name === 'refresh' || name === 'loader'">
       <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
       <path d="M21 3v5h-5" />
       <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
@@ -193,6 +193,29 @@ const sizePixels = computed(() => {
       <circle cx="15.5" cy="8.5" r="2.5" />
       <circle cx="8.5" cy="15.5" r="2" />
       <line x1="13.7" y1="9.8" x2="10" y2="14" />
+    </template>
+
+    <!-- Volume / Speaker / Read Aloud -->
+    <template v-else-if="name === 'volume-2' || name === 'speaker' || name === 'read'">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </template>
+
+    <!-- Play -->
+    <template v-else-if="name === 'play'">
+      <polygon points="6 4 19 12 6 20 6 4" fill="currentColor" />
+    </template>
+
+    <!-- Pause -->
+    <template v-else-if="name === 'pause'">
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
+    </template>
+
+    <!-- Stop / Square -->
+    <template v-else-if="name === 'stop' || name === 'square'">
+      <rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor" />
     </template>
   </svg>
 </template>
