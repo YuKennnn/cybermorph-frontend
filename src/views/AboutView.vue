@@ -326,14 +326,20 @@ onUnmounted(() => {
 }
 
 .page-container {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
 
+@media (max-width: 640px) {
+  .page-container {
+    padding: 0 1rem;
+  }
+}
+
 .about-hero {
   padding: 4rem 0 3rem;
-  background: linear-gradient(180deg, rgba(245, 243, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -604,8 +610,8 @@ onUnmounted(() => {
   display: flex;
   gap: 0.875rem;
   align-items: flex-start;
-  background-color: var(--color-purple-light);
-  border: 1px solid rgba(109, 40, 217, 0.2);
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1rem 1.25rem;
 }
@@ -708,7 +714,7 @@ onUnmounted(() => {
 }
 
 .btn-cta-secondary:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-muted);
   border-color: var(--color-primary);
   color: var(--color-primary-hover);
 }

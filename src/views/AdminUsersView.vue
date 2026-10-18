@@ -190,38 +190,40 @@ onUnmounted(() => {
 
     <!-- Users Table Card -->
     <div v-else-if="users.length > 0" class="table-card">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Registered</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.user_id">
-            <td class="username-cell">
-              <span :class="['user-display', { 'not-applicable': !user.username?.trim() }]">
-                {{ formatUsername(user.username) }}
-              </span>
-            </td>
-            <td class="email-cell">{{ user.email }}</td>
-            <td>
-              <span :class="['role-pill', getRoleClass(user.role)]">
-                {{ formatRole(user.role) }}
-              </span>
-            </td>
-            <td>
-              <span :class="['status-badge', user.is_active ? 'active' : 'inactive']">
-                {{ user.is_active ? 'Active' : 'Inactive' }}
-              </span>
-            </td>
-            <td class="date-cell">{{ formatDate(user.created_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Registered</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.user_id">
+              <td class="username-cell">
+                <span :class="['user-display', { 'not-applicable': !user.username?.trim() }]">
+                  {{ formatUsername(user.username) }}
+                </span>
+              </td>
+              <td class="email-cell">{{ user.email }}</td>
+              <td>
+                <span :class="['role-pill', getRoleClass(user.role)]">
+                  {{ formatRole(user.role) }}
+                </span>
+              </td>
+              <td>
+                <span :class="['status-badge', user.is_active ? 'active' : 'inactive']">
+                  {{ user.is_active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+              <td class="date-cell">{{ formatDate(user.created_at) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Pagination Bar -->
       <div v-if="totalCount > 0" class="pagination-bar">
@@ -589,5 +591,16 @@ tr:hover {
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .search-input-wrapper {
+    min-width: 100%;
+  }
+
+  .filter-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
 }
 </style>

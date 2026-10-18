@@ -183,41 +183,43 @@ onUnmounted(() => {
       </div>
 
       <div v-else-if="students.length > 0" class="table-card">
-        <table class="roster-table">
-          <thead>
-            <tr>
-              <th>Student name</th>
-              <th>Map progress</th>
-              <th>Last synced</th>
-              <th class="text-right">Student progress</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="student in students" :key="student.profile_id">
-              <td class="username-cell">
-                <span class="student-name">{{ student.username }}</span>
-              </td>
-              <td>
-                <span class="progress-badge">{{ formatMapProgress(student.map_progress) }}</span>
-              </td>
-              <td class="date-cell">{{ formatLastSynced(student.last_synced_at) }}</td>
-              <td class="text-right">
-                <router-link
-                  :to="{
-                    path: `/classroom/students/${codeId}/progress/${student.profile_id}`,
-                    query: {
-                      origin: 'students',
-                      roster_page: page
-                    }
-                  }"
-                  class="btn-inspect-link"
-                >
-                  View progress
-                </router-link>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="roster-table">
+            <thead>
+              <tr>
+                <th>Student name</th>
+                <th>Map progress</th>
+                <th>Last synced</th>
+                <th class="text-right">Student progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="student in students" :key="student.profile_id">
+                <td class="username-cell">
+                  <span class="student-name">{{ student.username }}</span>
+                </td>
+                <td>
+                  <span class="progress-badge">{{ formatMapProgress(student.map_progress) }}</span>
+                </td>
+                <td class="date-cell">{{ formatLastSynced(student.last_synced_at) }}</td>
+                <td class="text-right">
+                  <router-link
+                    :to="{
+                      path: `/classroom/students/${codeId}/progress/${student.profile_id}`,
+                      query: {
+                        origin: 'students',
+                        roster_page: page
+                      }
+                    }"
+                    class="btn-inspect-link"
+                  >
+                    View progress
+                  </router-link>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <!-- Pagination Controls -->
         <div v-if="totalCount > 0" class="pagination-bar">

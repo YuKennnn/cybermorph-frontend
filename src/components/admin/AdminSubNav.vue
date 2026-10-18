@@ -28,6 +28,9 @@ defineProps({
   gap: 0.5rem;
   border-bottom: 1px solid var(--color-border);
   margin-bottom: 1.75rem;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .subnav-tab {
@@ -43,6 +46,8 @@ defineProps({
   border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
   margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .subnav-tab:hover {

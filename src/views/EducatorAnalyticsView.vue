@@ -1201,4 +1201,18 @@ onUnmounted(() => {
   background: var(--btn-gradient-hover);
   transform: translateY(-1px);
 }
+
+@media (max-width: 640px) {
+  .section-card {
+    padding: 1.25rem 1rem;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .threat-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

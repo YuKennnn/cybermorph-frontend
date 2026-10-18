@@ -312,4 +312,15 @@ const handleAdminAction = (action) => {
   border-radius: 8px;
   font-size: 0.9rem;
 }
+
+@media (max-width: 640px) {
+  .content-section {
+    padding: 1.25rem 1rem;
+  }
+
+  .actions-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

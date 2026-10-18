@@ -436,6 +436,13 @@ onMounted(() => {
   gap: 1.25rem;
 }
 
+@media (max-width: 640px) {
+  .classrooms-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .empty-state {
   background-color: var(--color-card);
   border: 1px dashed var(--color-border);

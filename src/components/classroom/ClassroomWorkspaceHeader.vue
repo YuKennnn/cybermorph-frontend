@@ -333,6 +333,8 @@ onUnmounted(() => {
   padding: 1.5rem 1.75rem 0 1.75rem;
   margin-bottom: 2rem;
   box-shadow: var(--shadow-card, 0 1px 3px 0 rgba(15, 23, 42, 0.06));
+  min-width: 0;
+  max-width: 100%;
 }
 
 .breadcrumb-bar {
@@ -439,6 +441,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
+  flex-wrap: wrap;
 }
 
 .code-label {
@@ -551,6 +554,10 @@ onUnmounted(() => {
   display: flex;
   gap: 1.5rem;
   margin-top: 0.35rem;
+  overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .nav-link {
@@ -565,6 +572,7 @@ onUnmounted(() => {
   border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .nav-link:hover:not(.nav-link-disabled) {
@@ -589,6 +597,9 @@ onUnmounted(() => {
   .identity-banner {
     flex-direction: column;
     align-items: stretch;
+  }
+  .workspace-nav {
+    gap: 1rem;
   }
 }
 </style>

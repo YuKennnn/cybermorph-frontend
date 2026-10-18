@@ -116,42 +116,44 @@ onMounted(() => {
           </div>
 
           <div class="requirements-card">
-            <table class="requirements-table">
-              <tbody>
-                <tr>
-                  <th scope="row">Platform</th>
-                  <td>Android</td>
-                </tr>
-                <tr>
-                  <th scope="row">Android Version</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Architecture</th>
-                  <td>ARM64</td>
-                </tr>
-                <tr>
-                  <th scope="row">Memory (RAM)</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Free Storage</th>
-                  <td>
-                    <span class="text-pending">Awaiting confirmation</span>
-                  </td>
-                </tr>
-                <tr>
-                  <th scope="row">Network</th>
-                  <td>
-                    Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="table-scroll">
+              <table class="requirements-table">
+                <tbody>
+                  <tr>
+                    <th scope="row">Platform</th>
+                    <td>Android</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Android Version</th>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Architecture</th>
+                    <td>ARM64</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Memory (RAM)</th>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Free Storage</th>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Network</th>
+                    <td>
+                      Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -331,15 +333,21 @@ onMounted(() => {
 }
 
 .page-container {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 0 1rem;
+  }
 }
 
 /* Hero & Local Navigation */
 .download-hero {
   padding: 3.5rem 0 2.5rem;
-  background: linear-gradient(180deg, rgba(245, 243, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -349,8 +357,8 @@ onMounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-purple);
-  background-color: var(--color-purple-light);
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   margin-bottom: 1rem;
@@ -524,9 +532,9 @@ onMounted(() => {
   display: inline-block;
   font-size: 0.725rem;
   font-weight: 600;
-  color: #64748b;
-  background-color: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
 }
@@ -566,9 +574,9 @@ onMounted(() => {
 .status-badge-pending {
   font-size: 0.725rem;
   font-weight: 700;
-  color: #854d0e;
-  background-color: #fef9c3;
-  border: 1px solid #fde047;
+  color: var(--color-warning);
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
@@ -589,9 +597,9 @@ onMounted(() => {
 
 .disabled-status-note {
   font-size: 0.8rem;
-  color: #64748b;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.75rem 0.875rem;
   margin-bottom: 1.5rem;
@@ -641,9 +649,9 @@ onMounted(() => {
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #94a3b8;
-  background-color: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  color: var(--color-text-dim);
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   cursor: not-allowed;
   opacity: 0.85;
@@ -723,7 +731,7 @@ onMounted(() => {
 
 .text-pending {
   font-style: italic;
-  color: #854d0e;
+  color: var(--color-warning);
 }
 
 .header-with-action {

@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useRoute, RouterView } from 'vue-router'
 import { useAuthStore } from './stores/authStore'
 import SidebarNav from './components/SidebarNav.vue'
-import AccessibilityFloatingButton from './components/common/AccessibilityFloatingButton.vue'
 import AccessibilityModal from './components/common/AccessibilityModal.vue'
 
 const route = useRoute()
@@ -42,9 +41,8 @@ const showSidebar = computed(() => {
       </div>
     </main>
 
-    <!-- Public Accessibility Controls (Floating button + Accessible modal) -->
+    <!-- Public Accessibility Preferences Modal -->
     <template v-if="isPublicLayout">
-      <AccessibilityFloatingButton />
       <AccessibilityModal />
     </template>
   </div>
@@ -68,9 +66,11 @@ const showSidebar = computed(() => {
 }
 
 .content-wrapper {
-  max-width: 1040px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .content-wrapper.full-width {

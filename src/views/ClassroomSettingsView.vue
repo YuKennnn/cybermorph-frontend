@@ -607,7 +607,7 @@ onMounted(() => {
 .settings-workspace-page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem 1rem;
+  padding: 0 0 2.5rem 0;
 }
 
 .settings-container {
@@ -620,8 +620,14 @@ onMounted(() => {
   background-color: var(--color-card, #ffffff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 12px;
-  padding: 1.75rem 2rem;
+  padding: 1.75rem 1.5rem;
   box-shadow: var(--shadow-card, 0 1px 3px 0 rgba(15, 23, 42, 0.06));
+}
+
+@media (max-width: 640px) {
+  .settings-card {
+    padding: 1.25rem 1rem;
+  }
 }
 
 .card-header {

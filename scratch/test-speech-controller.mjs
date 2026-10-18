@@ -565,19 +565,35 @@ async function runBrowserIntegrationTests() {
     console.log('Initial document data-theme:', rootTheme)
     assert.strictEqual(rootTheme, 'light', 'Root data-theme must be light by default')
 
-    // 2. Verify Floating Accessibility Button on public landing page
-    console.log('2. Verifying floating accessibility button on landing page:')
-    let hasFloatingBtn = false
+    // 2. Verify Floating Accessibility Button is REMOVED and Header Accessibility Button is present
+    console.log('2. Verifying floating button removal and header accessibility button presence:')
+    const hasFloatingBtn = await cdp.eval(`!!document.querySelector('.a11y-floating-btn')`)
+    assert.strictEqual(hasFloatingBtn, false, 'Floating accessibility button must be removed from the DOM')
+
+    let hasHeaderA11yBtn = false
     for (let i = 0; i < 20; i++) {
-      hasFloatingBtn = await cdp.eval(`!!document.querySelector('.a11y-floating-btn')`)
-      if (hasFloatingBtn) break
+      hasHeaderA11yBtn = await cdp.eval(`!!document.querySelector('.btn-nav-a11y')`)
+      if (hasHeaderA11yBtn) break
       await new Promise((resolve) => setTimeout(resolve, 200))
     }
-    assert.strictEqual(hasFloatingBtn, true, 'Floating accessibility button must be mounted on public pages')
+    assert.strictEqual(hasHeaderA11yBtn, true, 'Header accessibility button must be mounted in public navigation')
 
-    // 3. Open Public Accessibility Preferences Modal
-    console.log('3. Opening accessibility modal from floating button:')
-    await cdp.eval(`document.querySelector('.a11y-floating-btn')?.click()`)
+    const a11yBtnAttrs = await cdp.eval(`({
+      ariaLabel: document.querySelector('.btn-nav-a11y')?.getAttribute('aria-label'),
+      hasTooltip: !!document.querySelector('.btn-nav-a11y .nav-tooltip'),
+      tooltipText: document.querySelector('.btn-nav-a11y .nav-tooltip')?.textContent?.trim(),
+      width: Math.round(document.querySelector('.btn-nav-a11y')?.getBoundingClientRect()?.width || 0),
+      height: Math.round(document.querySelector('.btn-nav-a11y')?.getBoundingClientRect()?.height || 0)
+    })`)
+    assert.strictEqual(a11yBtnAttrs.ariaLabel, 'Accessibility settings', 'Header button must have aria-label="Accessibility settings"')
+    assert.strictEqual(a11yBtnAttrs.hasTooltip, true, 'Header button must have tooltip element')
+    assert.strictEqual(a11yBtnAttrs.tooltipText, 'Accessibility settings', 'Tooltip must contain Accessibility settings')
+    assert.strictEqual(a11yBtnAttrs.width, 44, 'Header button must have 44px target width')
+    assert.strictEqual(a11yBtnAttrs.height, 44, 'Header button must have 44px target height')
+
+    // 3. Open Public Accessibility Preferences Modal from Header Button
+    console.log('3. Opening accessibility modal from header accessibility button:')
+    await cdp.eval(`document.querySelector('.btn-nav-a11y')?.click()`)
     let isModalVisible = false
     for (let i = 0; i < 15; i++) {
       isModalVisible = await cdp.eval(`!!document.querySelector('.a11y-modal')`)
@@ -611,8 +627,8 @@ async function runBrowserIntegrationTests() {
     }
     assert.strictEqual(themeAfterReset, 'light', 'Reset must return theme to light')
 
-    // 6. Test Escape key dismissal and focus restoration
-    console.log('6. Dismissing modal with Escape key and verifying focus restoration:')
+    // 6. Test Escape key dismissal and focus restoration to Header Button
+    console.log('6. Dismissing modal with Escape key and verifying focus restoration to header button:')
     await cdp.eval(`
       document.querySelector('.a11y-modal')?.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
@@ -622,10 +638,10 @@ async function runBrowserIntegrationTests() {
     const isModalClosed = await cdp.eval(`!document.querySelector('.a11y-modal')`)
     assert.strictEqual(isModalClosed, true, 'Modal must close on Escape')
 
-    const isFloatingBtnFocused = await cdp.eval(`document.activeElement?.classList?.contains('a11y-floating-btn')`)
-    assert.strictEqual(isFloatingBtnFocused, true, 'Focus must be restored to floating accessibility button')
+    const isHeaderBtnFocused = await cdp.eval(`document.activeElement?.classList?.contains('btn-nav-a11y')`)
+    assert.strictEqual(isHeaderBtnFocused, true, 'Focus must be restored to header accessibility button')
 
-    // 7. Verify Public Footer link opens modal
+    // 7. Verify Public Footer link opens modal and preserves focus restoration
     console.log('7. Verifying public footer link opens modal:')
     await cdp.eval(`document.querySelector('.footer-a11y-btn')?.click()`)
     let isModalOpenedFromFooter = false
@@ -657,6 +673,21 @@ async function runBrowserIntegrationTests() {
     await new Promise((resolve) => setTimeout(resolve, 300))
     assert.strictEqual(await cdp.eval(`!document.querySelector('.a11y-modal')`), true, 'Modal must close on Done button click')
 
+    // 8B. Verify Mobile Drawer Accessibility Button
+    console.log('8B. Verifying mobile drawer accessibility entry:')
+    await cdp.eval(`document.querySelector('.mobile-menu-toggle')?.click()`)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    const hasMobileA11yBtn = await cdp.eval(`!!document.querySelector('.btn-mobile-a11y')`)
+    assert.strictEqual(hasMobileA11yBtn, true, 'Mobile drawer must provide labeled accessibility entry')
+    // Click mobile accessibility button to test modal opening from mobile drawer
+    await cdp.eval(`document.querySelector('.btn-mobile-a11y')?.click()`)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const isModalOpenFromMobile = await cdp.eval(`!!document.querySelector('.a11y-modal')`)
+    assert.strictEqual(isModalOpenFromMobile, true, 'Accessibility modal must open from mobile drawer')
+    // Close modal via Done button
+    await cdp.eval(`document.querySelector('.btn-modal-done')?.click()`)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
     // 9. Verify Section Reading Controls on Landing Page (Home)
     console.log('9. Verifying Section Reading Controls on Landing Page:')
     let landingReadingBtns = 0
@@ -681,7 +712,7 @@ async function runBrowserIntegrationTests() {
 
     // 9B. Disabling Read aloud immediately hides all buttons and stops active speech without refresh
     console.log('9B. Disabling Read aloud immediately hides reading buttons and stops active speech without refresh:')
-    await cdp.eval(`document.querySelector('.a11y-floating-btn')?.click()`)
+    await cdp.eval(`document.querySelector('.btn-nav-a11y')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 300))
 
     // Verify introductory persistence message when storage is available
@@ -714,7 +745,7 @@ async function runBrowserIntegrationTests() {
 
     // 9C. Re-enabling Read aloud restores buttons without starting speech
     console.log('9C. Re-enabling Read aloud shows buttons immediately without starting speech:')
-    await cdp.eval(`document.querySelector('.a11y-floating-btn')?.click()`)
+    await cdp.eval(`document.querySelector('.btn-nav-a11y')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 300))
     await cdp.eval(`document.querySelector('#m-narration-on')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -729,7 +760,7 @@ async function runBrowserIntegrationTests() {
 
     // 9D. Reset to defaults in modal turns narration off and hides buttons
     console.log('9D. Reset in modal turns narration off and hides reading buttons immediately:')
-    await cdp.eval(`document.querySelector('.a11y-floating-btn')?.click()`)
+    await cdp.eval(`document.querySelector('.btn-nav-a11y')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 300))
     await cdp.eval(`document.querySelector('.btn-reset-a11y')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -740,7 +771,7 @@ async function runBrowserIntegrationTests() {
     assert.strictEqual(buttonsAfterReset, 0, 'Reset must turn narration off and hide buttons immediately')
 
     // Re-enable Read aloud so subsequent page checks can verify section reading buttons
-    await cdp.eval(`document.querySelector('.a11y-floating-btn')?.click()`)
+    await cdp.eval(`document.querySelector('.btn-nav-a11y')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 300))
     await cdp.eval(`document.querySelector('#m-narration-on')?.click()`)
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -809,6 +840,84 @@ async function runBrowserIntegrationTests() {
     // Confirm floating button is not present on dashboard pages
     const hasFloatingOnDashboard = await cdp.eval(`!!document.querySelector('.a11y-floating-btn')`)
     assert.strictEqual(hasFloatingOnDashboard, false, 'Floating button must NOT be present on dashboard layout')
+
+    // 15. Viewport Responsiveness, Container Bounding & Horizontal Scroll Check
+    console.log('15. Verifying Viewport Responsiveness and Container Bounding across representative widths:')
+    const testViewports = [
+      { name: 'Mobile Mini', width: 320, height: 568 },
+      { name: 'Mobile Standard', width: 390, height: 844 },
+      { name: 'Tablet Portrait', width: 768, height: 1024 },
+      { name: 'Tablet Landscape / Compact Laptop', width: 1024, height: 768 },
+      { name: 'Standard Laptop (Short screen)', width: 1280, height: 600 },
+      { name: 'Desktop HD', width: 1440, height: 900 },
+      { name: 'Ultrawide Desktop', width: 1920, height: 1080 },
+    ]
+
+    // Clear mock session to test public visitor unauthenticated navigation
+    await cdp.eval(`
+      localStorage.removeItem('cyber_token');
+      localStorage.removeItem('cyber_role');
+      localStorage.removeItem('cyber_user');
+    `)
+
+    for (const vp of testViewports) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', {
+        width: vp.width,
+        height: vp.height,
+        deviceScaleFactor: 1,
+        mobile: vp.width < 768,
+      })
+      await new Promise((resolve) => setTimeout(resolve, 200))
+
+      await cdp.send('Page.navigate', { url: `http://localhost:${ISOLATED_VITE_PORT}/` })
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      const landingScroll = await cdp.eval(`({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        hasHorizontalScroll: document.documentElement.scrollWidth > document.documentElement.clientWidth
+      })`)
+      if (landingScroll.hasHorizontalScroll) {
+        const overflowing = await cdp.eval(`
+          Array.from(document.querySelectorAll('*'))
+            .filter(el => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+            .map(el => ({ tag: el.tagName, class: String(el.className), right: Math.round(el.getBoundingClientRect().right) }))
+            .slice(0, 10)
+        `)
+        console.log('Overflowing elements at ' + vp.width + 'px:', overflowing)
+        const navChildren = await cdp.eval(`
+          Array.from(document.querySelector('.nav-auth')?.children || []).map(el => ({
+            tag: el.tagName,
+            class: el.className,
+            display: window.getComputedStyle(el).display,
+            width: Math.round(el.getBoundingClientRect().width)
+          }))
+        `)
+        console.log('Nav auth children:', navChildren)
+      }
+      assert.strictEqual(
+        landingScroll.hasHorizontalScroll,
+        false,
+        `No horizontal scroll on Landing at ${vp.width}px (scroll: ${landingScroll.scrollWidth}, client: ${landingScroll.clientWidth})`
+      )
+
+      if (vp.width >= 1024) {
+        const align = await cdp.eval(`({
+          headerLeft: Math.round(document.querySelector('.brand-link')?.getBoundingClientRect()?.left || 0),
+          heroLeft: Math.round(document.querySelector('.hero-headline')?.getBoundingClientRect()?.left || 0),
+          a11yWidth: Math.round(document.querySelector('.btn-nav-a11y')?.getBoundingClientRect()?.width || 0),
+          a11yHeight: Math.round(document.querySelector('.btn-nav-a11y')?.getBoundingClientRect()?.height || 0),
+          signInHeight: Math.round(document.querySelector('.btn-nav-secondary')?.getBoundingClientRect()?.height || 0),
+          registerHeight: Math.round(document.querySelector('.btn-nav-primary')?.getBoundingClientRect()?.height || 0)
+        })`)
+        assert.strictEqual(align.a11yWidth, 44, 'A11y button must be 44px wide')
+        assert.strictEqual(align.a11yHeight, 44, 'A11y button must be 44px high')
+        assert.strictEqual(align.signInHeight, 40, 'Sign in button must be 40px high')
+        assert.strictEqual(align.registerHeight, 40, 'Register button must be 40px high')
+        const diff = Math.abs(align.headerLeft - align.heroLeft)
+        assert.ok(diff <= 4, `Header brand left (${align.headerLeft}) and Hero left (${align.heroLeft}) must align horizontally on 1120px grid`)
+      }
+    }
 
     await cdp.close()
     console.log('✓ Suite 3 Isolated Browser Integration Tests Passed!\n')

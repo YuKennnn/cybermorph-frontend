@@ -371,6 +371,10 @@ const formatDate = (isoString) => {
 }
 
 @media (max-width: 480px) {
+  .classroom-card {
+    padding: 1.25rem 1rem;
+  }
+
   .primary-actions {
     grid-template-columns: 1fr;
   }

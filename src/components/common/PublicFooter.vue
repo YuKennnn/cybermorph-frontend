@@ -80,8 +80,14 @@ const handleFooterClick = () => {
   margin-top: auto;
 }
 
+@media (max-width: 640px) {
+  .public-footer {
+    padding: 2.5rem 1rem 1.5rem;
+  }
+}
+
 .footer-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
 }
 

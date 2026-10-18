@@ -343,23 +343,37 @@ const mapPreviews = [
 
 /* 1. Hero Section */
 .hero-section {
-  padding: 3.5rem 1.5rem 4.5rem;
-  background: linear-gradient(180deg, rgba(245, 243, 255, 0.5) 0%, rgba(255, 255, 255, 0) 100%);
+  padding: 3.5rem 0 4rem;
+  background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
+}
+
+@media (max-width: 640px) {
+  .hero-section {
+    padding: 2rem 0 2.5rem;
+  }
 }
 
 .hero-inner {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 3rem;
+  gap: 2.5rem;
   align-items: center;
+}
+
+@media (max-width: 640px) {
+  .hero-inner {
+    padding: 0 1rem;
+  }
 }
 
 @media (min-width: 1024px) {
   .hero-inner {
-    grid-template-columns: 1.15fr 0.85fr;
-    gap: 3.5rem;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 2.5rem;
   }
 }
 
@@ -383,33 +397,33 @@ const mapPreviews = [
 }
 
 .hero-headline {
-  font-family: var(--font-body);
-  font-size: 2.75rem;
+  font-family: var(--font-display, var(--font-sans));
+  font-size: 2.25rem;
   font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
-  color: var(--color-text);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  color: var(--color-text-main);
   margin-bottom: 1.25rem;
 }
 
 @media (min-width: 640px) {
   .hero-headline {
-    font-size: 3.25rem;
+    font-size: 2.65rem;
   }
 }
 
 @media (min-width: 1024px) {
   .hero-headline {
-    font-size: 3.5rem;
+    font-size: 2.85rem;
   }
 }
 
 .hero-description {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   line-height: 1.6;
   color: var(--color-text-muted);
-  margin-bottom: 2rem;
-  max-width: 580px;
+  margin-bottom: 1.75rem;
+  max-width: 520px;
 }
 
 .hero-cta-group {
@@ -472,7 +486,7 @@ const mapPreviews = [
 }
 
 .btn-cta-secondary:hover {
-  background-color: #ede9fe;
+  background-color: var(--color-bg-muted);
   border-color: var(--color-primary);
   color: var(--color-primary-hover);
 }
@@ -494,11 +508,19 @@ const mapPreviews = [
 
 .hero-visual-column {
   width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 /* 2. Content Sections */
 .content-section {
-  padding: 4.5rem 1.5rem;
+  padding: 4rem 0;
+}
+
+@media (max-width: 640px) {
+  .content-section {
+    padding: 2.5rem 0;
+  }
 }
 
 .section-bg-alt {
@@ -508,8 +530,16 @@ const mapPreviews = [
 }
 
 .section-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .section-container {
+    padding: 0 1rem;
+  }
 }
 
 .section-header {
@@ -538,18 +568,19 @@ const mapPreviews = [
   gap: 0.5rem;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-purple);
+  color: var(--color-primary);
   text-decoration: none;
   padding: 0.5rem 1rem;
   border-radius: 6px;
-  background-color: var(--color-purple-light);
-  border: 1px solid rgba(109, 40, 217, 0.2);
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-border);
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .btn-section-header:hover {
-  background-color: rgba(109, 40, 217, 0.15);
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
 }
 
 .section-kicker {
@@ -722,7 +753,7 @@ const mapPreviews = [
 .preview-img-wrap {
   width: 100%;
   aspect-ratio: 16 / 10;
-  background-color: #0f172a;
+  background-color: var(--color-bg-muted);
   overflow: hidden;
 }
 

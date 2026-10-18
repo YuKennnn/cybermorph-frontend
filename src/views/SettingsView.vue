@@ -18,12 +18,10 @@ import {
 } from '../utils/accessibility'
 import {
   getVoiceLoadingStatus,
-  getAvailableVoices,
   startNarration,
   stopNarration,
   changeNarrationSpeed,
   addVoicesChangedListener,
-  retryLoadingVoices,
 } from '../utils/speech'
 import AppIcon from '../components/common/AppIcon.vue'
 import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
@@ -98,7 +96,6 @@ const currentMotion = ref(getStoredMotionPreference())
 const currentReadAloud = ref(getStoredReadAloud())
 const currentReadSpeed = ref(getStoredReadSpeed())
 const voiceEngineStatus = ref(getVoiceLoadingStatus())
-const voiceCount = ref(getAvailableVoices().length)
 const sampleBtnRef = ref(null)
 const resetFeedbackMessage = ref('')
 
@@ -108,9 +105,8 @@ const SAMPLE_NARRATION_TEXT =
 let removeVoicesListener = null
 
 onMounted(() => {
-  removeVoicesListener = addVoicesChangedListener((voices, status) => {
+  removeVoicesListener = addVoicesChangedListener((_, status) => {
     voiceEngineStatus.value = status
-    voiceCount.value = voices.length
   })
 })
 
@@ -146,10 +142,6 @@ const handleTestSampleNarration = () => {
     rate: currentReadSpeed.value,
     triggerEl: sampleBtnRef.value,
   })
-}
-
-const handleRetryVoices = () => {
-  retryLoadingVoices()
 }
 
 // Switching away from the Accessibility section counts as disposing the sample narration
@@ -647,31 +639,6 @@ const webUserEmail = computed(() => {
               </div>
             </div>
 
-            <div class="engine-status-row">
-              <span class="engine-label">Speech engine:</span>
-              <span v-if="voiceEngineStatus === 'unsupported'" class="engine-badge unsupported">
-                Web Speech is not supported in this browser
-              </span>
-              <span v-else-if="voiceEngineStatus === 'loading'" class="engine-badge loading">
-                Loading browser voices...
-              </span>
-              <span v-else-if="voiceEngineStatus === 'ready'" class="engine-badge ready">
-                Ready ({{ voiceCount }} voice{{ voiceCount === 1 ? '' : 's' }} available)
-              </span>
-              <span v-else class="engine-badge unavailable">
-                No voice list loaded (browser default voice will be attempted if supported)
-              </span>
-              <button
-                v-if="voiceEngineStatus === 'unavailable'"
-                type="button"
-                class="btn-retry-voices"
-                aria-label="Retry loading browser voices"
-                @click="handleRetryVoices"
-              >
-                Retry
-              </button>
-            </div>
-
             <div class="sample-narration-row">
               <button
                 ref="sampleBtnRef"
@@ -729,6 +696,8 @@ const webUserEmail = computed(() => {
 <style scoped>
 .settings-page {
   max-width: 840px;
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: 1rem 0 3rem 0;
 }
@@ -1027,6 +996,7 @@ const webUserEmail = computed(() => {
 .speed-selector {
   display: flex;
   gap: 0.375rem;
+  flex-wrap: wrap;
 }
 
 .speed-btn {
@@ -1056,99 +1026,6 @@ const webUserEmail = computed(() => {
 .speed-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.engine-status-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  flex-wrap: wrap;
-}
-
-.engine-label {
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.engine-badge {
-  display: inline-block;
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.engine-badge.ready {
-  background-color: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-
-.engine-badge.loading {
-  background-color: #eff6ff;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
-}
-
-.engine-badge.unsupported,
-.engine-badge.empty {
-  background-color: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-}
-
-.engine-badge.unavailable {
-  background-color: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
-}
-
-:root[data-theme="dark"] .engine-badge.ready {
-  background-color: #052e16;
-  border-color: #166534;
-  color: #86efac;
-}
-
-:root[data-theme="dark"] .engine-badge.loading {
-  background-color: #172554;
-  border-color: #1e40af;
-  color: #93c5fd;
-}
-
-:root[data-theme="dark"] .engine-badge.unsupported,
-:root[data-theme="dark"] .engine-badge.empty {
-  background-color: #450a0a;
-  border-color: #991b1b;
-  color: #fca5a5;
-}
-
-:root[data-theme="dark"] .engine-badge.unavailable {
-  background-color: #451a03;
-  border-color: #92400e;
-  color: #fcd34d;
-}
-
-.btn-retry-voices {
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid var(--color-border-control);
-  background-color: var(--color-card);
-  color: var(--color-primary);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-retry-voices:hover {
-  background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
-}
-
-.btn-retry-voices:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
 }
 
 .sample-narration-row {
@@ -1303,6 +1180,40 @@ const webUserEmail = computed(() => {
     background-color: #451a03;
     border-color: #92400e;
     color: #fcd34d;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-card {
+    padding: 1.25rem 1rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .settings-tabs {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .tab-btn {
+    padding: 0.75rem 0.85rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .pref-options-grid,
+  .pref-options-grid.two-column,
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-subrow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .speed-btn {
+    padding: 0.375rem 0.55rem;
   }
 }
 </style>

@@ -96,13 +96,15 @@ const handleBack = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 75vh;
-  padding: 1.5rem;
+  min-height: calc(100vh - 120px);
+  padding: 2rem 1.5rem;
+  box-sizing: border-box;
 }
 
 .join-card {
   width: 100%;
   max-width: 460px;
+  margin: auto;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;

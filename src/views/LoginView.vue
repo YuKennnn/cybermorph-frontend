@@ -125,13 +125,15 @@ onUnmounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 85vh;
-  padding: 1.5rem;
+  min-height: calc(100vh - 80px);
+  padding: 2rem 1.5rem;
+  box-sizing: border-box;
 }
 
 .auth-card {
   width: 100%;
   max-width: 420px;
+  margin: auto;
   padding: 2.25rem;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);

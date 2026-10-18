@@ -191,38 +191,40 @@ onUnmounted(() => {
 
       <!-- Data Table -->
       <div v-else-if="leaderboardItems.length > 0" class="table-card">
-        <table class="leaderboard-table">
-          <thead>
-            <tr>
-              <th class="rank-col">Rank</th>
-              <th>Player</th>
-              <th>Map</th>
-              <th class="score-col">High score</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="entry in leaderboardItems"
-              :key="entry.score_id || entry.id || entry.rank"
-              :class="{ 'top-entry': entry.rank <= 3 }"
-            >
-              <td class="rank-col">
-                <span :class="['rank-badge', `rank-${entry.rank}`]">
-                  {{ entry.rank }}
-                </span>
-              </td>
-              <td class="username-col">
-                <span class="agent-name">{{ entry.username }}</span>
-              </td>
-              <td>
-                <span class="map-badge">{{ entry.map_name }}</span>
-              </td>
-              <td class="score-col">
-                <span class="score-value">{{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }} PTS</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="leaderboard-table">
+            <thead>
+              <tr>
+                <th class="rank-col">Rank</th>
+                <th>Player</th>
+                <th>Map</th>
+                <th class="score-col">High score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="entry in leaderboardItems"
+                :key="entry.score_id || entry.id || entry.rank"
+                :class="{ 'top-entry': entry.rank <= 3 }"
+              >
+                <td class="rank-col">
+                  <span :class="['rank-badge', `rank-${entry.rank}`]">
+                    {{ entry.rank }}
+                  </span>
+                </td>
+                <td class="username-col">
+                  <span class="agent-name">{{ entry.username }}</span>
+                </td>
+                <td>
+                  <span class="map-badge">{{ entry.map_name }}</span>
+                </td>
+                <td class="score-col">
+                  <span class="score-value">{{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }} PTS</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Empty State -->

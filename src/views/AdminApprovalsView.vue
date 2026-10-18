@@ -315,64 +315,66 @@ onUnmounted(() => {
 
     <!-- Approvals Table Card -->
     <div v-else-if="approvals.length > 0" class="table-card">
-      <table class="approvals-table">
-        <thead>
-          <tr>
-            <th>Educator Email</th>
-            <th>Requested Date</th>
-            <th>Status</th>
-            <th class="text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in approvals" :key="item.user_id">
-            <td class="email-cell">
-              <strong>{{ item.email }}</strong>
-            </td>
-            <td class="date-cell">{{ formatDate(item.created_at) }}</td>
-            <td>
-              <span :class="['status-badge', item.approval_status]">
-                {{ item.approval_status }}
-              </span>
-            </td>
-            <td class="text-right actions-cell">
-              <!-- When Status is Pending: Can Approve or Reject -->
-              <template v-if="item.approval_status === 'pending'">
-                <button
-                  class="btn-action-approve"
-                  :disabled="actionInProgressId === item.user_id"
-                  @click="handleApprove(item)"
-                >
-                  {{ actionInProgressId === item.user_id ? 'Saving…' : 'Approve' }}
-                </button>
-                <button
-                  class="btn-action-reject"
-                  :disabled="actionInProgressId === item.user_id"
-                  @click="openRejectionModal(item, $event)"
-                >
-                  Reject
-                </button>
-              </template>
+      <div class="table-scroll">
+        <table class="approvals-table">
+          <thead>
+            <tr>
+              <th>Educator Email</th>
+              <th>Requested Date</th>
+              <th>Status</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in approvals" :key="item.user_id">
+              <td class="email-cell">
+                <strong>{{ item.email }}</strong>
+              </td>
+              <td class="date-cell">{{ formatDate(item.created_at) }}</td>
+              <td>
+                <span :class="['status-badge', item.approval_status]">
+                  {{ item.approval_status }}
+                </span>
+              </td>
+              <td class="text-right actions-cell">
+                <!-- When Status is Pending: Can Approve or Reject -->
+                <template v-if="item.approval_status === 'pending'">
+                  <button
+                    class="btn-action-approve"
+                    :disabled="actionInProgressId === item.user_id"
+                    @click="handleApprove(item)"
+                  >
+                    {{ actionInProgressId === item.user_id ? 'Saving…' : 'Approve' }}
+                  </button>
+                  <button
+                    class="btn-action-reject"
+                    :disabled="actionInProgressId === item.user_id"
+                    @click="openRejectionModal(item, $event)"
+                  >
+                    Reject
+                  </button>
+                </template>
 
-              <!-- When Status is Rejected: Can Re-Approve -->
-              <template v-else-if="item.approval_status === 'rejected'">
-                <button
-                  class="btn-action-approve"
-                  :disabled="actionInProgressId === item.user_id"
-                  @click="handleApprove(item)"
-                >
-                  {{ actionInProgressId === item.user_id ? 'Saving…' : 'Re-Approve' }}
-                </button>
-              </template>
+                <!-- When Status is Rejected: Can Re-Approve -->
+                <template v-else-if="item.approval_status === 'rejected'">
+                  <button
+                    class="btn-action-approve"
+                    :disabled="actionInProgressId === item.user_id"
+                    @click="handleApprove(item)"
+                  >
+                    {{ actionInProgressId === item.user_id ? 'Saving…' : 'Re-Approve' }}
+                  </button>
+                </template>
 
-              <!-- When Status is Approved: Read-only per contract rules -->
-              <template v-else>
-                <span class="text-muted-status">Authorized</span>
-              </template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                <!-- When Status is Approved: Read-only per contract rules -->
+                <template v-else>
+                  <span class="text-muted-status">Authorized</span>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Pagination Bar -->
       <div v-if="totalCount > 0" class="pagination-bar">
@@ -477,6 +479,9 @@ onUnmounted(() => {
   padding: 0.25rem;
   border-radius: 8px;
   border: 1px solid var(--color-border);
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .status-tab {
@@ -490,6 +495,8 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .status-tab:hover {

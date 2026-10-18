@@ -135,14 +135,20 @@ onUnmounted(() => {
 }
 
 .page-container {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
 
+@media (max-width: 640px) {
+  .page-container {
+    padding: 0 1rem;
+  }
+}
+
 .faq-hero {
   padding: 3.5rem 0 2.5rem;
-  background: linear-gradient(180deg, rgba(245, 243, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border);
 }
 

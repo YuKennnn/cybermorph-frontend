@@ -264,6 +264,12 @@ onMounted(() => {
   gap: 1.25rem;
 }
 
+@media (max-width: 640px) {
+  .classroom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .empty-state {
   text-align: center;
   padding: 3.5rem 1.5rem;

@@ -325,14 +325,20 @@ const learningTopics = [
 }
 
 .page-container {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
 
+@media (max-width: 640px) {
+  .page-container {
+    padding: 0 1rem;
+  }
+}
+
 .gameplay-hero {
   padding: 4rem 0 3rem;
-  background: linear-gradient(180deg, rgba(245, 243, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -342,8 +348,8 @@ const learningTopics = [
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-purple);
-  background-color: var(--color-purple-light);
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   margin-bottom: 1rem;
@@ -436,7 +442,7 @@ const learningTopics = [
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background-color: #0f172a;
+  background-color: var(--color-bg-muted);
   overflow: hidden;
 }
 

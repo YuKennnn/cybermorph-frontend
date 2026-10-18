@@ -9,6 +9,7 @@ const authStore = useAuthStore()
 const isMobileNavOpen = ref(false)
 const drawerCloseBtnRef = ref(null)
 const menuToggleBtnRef = ref(null)
+const desktopA11yBtnRef = ref(null)
 const drawerRef = ref(null)
 let previousActiveElement = null
 
@@ -95,21 +96,34 @@ onUnmounted(() => {
 <template>
   <header class="public-nav-bar">
     <div class="nav-container">
-      <RouterLink to="/" class="brand-link" @click="closeMobileNav">
+      <RouterLink :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand-link" @click="closeMobileNav">
         <span class="brand-name">CYBERMORPH</span>
       </RouterLink>
 
       <!-- Desktop Navigation Links -->
       <nav class="desktop-nav" aria-label="Main Navigation">
-        <RouterLink to="/" class="nav-link" exact-active-class="active">Home</RouterLink>
+        <RouterLink v-if="!authStore.isAuthenticated" to="/" class="nav-link" exact-active-class="active">Home</RouterLink>
         <RouterLink to="/about" class="nav-link" active-class="active">About</RouterLink>
         <RouterLink to="/gameplay" class="nav-link" active-class="active">Gameplay</RouterLink>
         <RouterLink to="/download" class="nav-link" active-class="active">Download</RouterLink>
         <RouterLink to="/faq" class="nav-link" active-class="active">FAQ</RouterLink>
       </nav>
 
-      <!-- Auth Action Link -->
+      <!-- Auth & Accessibility Action Links -->
       <div class="nav-auth">
+        <!-- Accessibility preferences button -->
+        <button
+          ref="desktopA11yBtnRef"
+          type="button"
+          class="btn-nav-a11y"
+          aria-label="Accessibility and appearance settings"
+          aria-describedby="a11y-tooltip"
+          @click="handleOpenA11y"
+        >
+          <AppIcon name="settings" :size="20" />
+          <span id="a11y-tooltip" class="nav-tooltip" role="tooltip">Accessibility and appearance settings</span>
+        </button>
+
         <RouterLink
           v-if="authStore.isAuthenticated"
           to="/dashboard"
@@ -169,7 +183,7 @@ onUnmounted(() => {
         </div>
 
         <nav class="mobile-nav-links" aria-label="Mobile Navigation">
-          <RouterLink to="/" class="mobile-nav-link" exact-active-class="active" @click="closeMobileNav">
+          <RouterLink v-if="!authStore.isAuthenticated" to="/" class="mobile-nav-link" exact-active-class="active" @click="closeMobileNav">
             Home
           </RouterLink>
           <RouterLink to="/about" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
@@ -187,12 +201,12 @@ onUnmounted(() => {
           <button
             type="button"
             class="mobile-nav-link btn-mobile-a11y"
-            aria-label="Open accessibility preferences"
+            aria-label="Accessibility and appearance settings"
             @click="handleOpenA11y"
           >
             <span class="mobile-a11y-label">
-              <AppIcon name="settings" :size="16" />
-              <span>Accessibility</span>
+              <AppIcon name="settings" :size="18" />
+              <span>Accessibility and appearance settings</span>
             </span>
           </button>
         </nav>
@@ -240,12 +254,19 @@ onUnmounted(() => {
 }
 
 .nav-container {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 0.875rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .nav-container {
+    padding: 0.75rem 1rem;
+  }
 }
 
 .brand-link {
@@ -258,6 +279,7 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
   color: var(--color-primary);
   transition: opacity 0.15s ease;
+  flex-shrink: 0;
 }
 
 .brand-link:hover {
@@ -271,10 +293,10 @@ onUnmounted(() => {
 .desktop-nav {
   display: none;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .desktop-nav {
     display: flex;
   }
@@ -283,8 +305,8 @@ onUnmounted(() => {
 .nav-link {
   background: none;
   border: none;
-  padding: 0.5rem 0.875rem;
-  font-family: var(--font-body);
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--color-text-muted);
@@ -292,6 +314,7 @@ onUnmounted(() => {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -308,46 +331,169 @@ onUnmounted(() => {
 .nav-auth {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
+  flex-shrink: 0;
 }
 
-.btn-nav-primary {
+/* Header Accessibility Button (Compact 44x44 Icon-Only Target) */
+.btn-nav-a11y {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1.125rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #ffffff;
-  background: var(--btn-gradient);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text-muted);
+  background: transparent;
   border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  flex-shrink: 0;
+}
+
+.btn-nav-a11y:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-border-subtle);
+  color: var(--color-primary);
+}
+
+.btn-nav-a11y:active {
+  background-color: var(--color-bg-muted);
+}
+
+.btn-nav-a11y:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Tooltip for Accessibility Button on Hover and Focus */
+.nav-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--color-text-main);
+  color: var(--color-card);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0.35rem 0.65rem;
   border-radius: 6px;
-  text-decoration: none;
-  transition: all 0.15s ease;
+  box-shadow: var(--shadow-card);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 100;
 }
 
-.btn-nav-primary:hover {
-  background: var(--btn-gradient-hover);
+.nav-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: transparent transparent var(--color-text-main) transparent;
 }
 
+.btn-nav-a11y:hover .nav-tooltip,
+.btn-nav-a11y:focus-visible .nav-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Secondary Action Button (Sign in) - Restrained */
 .btn-nav-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.5rem 1rem;
+  min-height: 40px;
+  height: auto;
+  padding: 0.5rem 0.875rem;
+  line-height: 1.25;
+  font-family: var(--font-sans);
   font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  background-color: var(--color-violet-subtle);
-  border: 1.5px solid var(--color-border-control);
+  font-weight: 500;
+  color: var(--color-text-main);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 6px;
   text-decoration: none;
-  transition: all 0.15s ease;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .btn-nav-secondary:hover {
   background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
+  color: var(--color-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.btn-nav-secondary:active {
+  background-color: var(--color-bg-muted);
+}
+
+.btn-nav-secondary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Primary Action Button (Register / Dashboard) - Filled */
+.btn-nav-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  height: auto;
+  padding: 0.5rem 1rem;
+  line-height: 1.25;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--btn-gradient);
+  background-color: #7c3aed;
+  border: 1px solid #7c3aed;
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.btn-nav-primary:hover {
+  background: var(--btn-gradient-hover);
+  background-color: #6d28d9;
+  border-color: #6d28d9;
+  color: #ffffff;
+}
+
+.btn-nav-primary:active {
+  transform: translateY(1px);
+}
+
+.btn-nav-primary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .btn-nav-a11y,
+  .btn-nav-primary,
+  .btn-nav-secondary {
+    display: none;
+  }
 }
 
 .mobile-menu-toggle {
@@ -356,15 +502,26 @@ onUnmounted(() => {
   justify-content: center;
   padding: 0.4rem;
   background: none;
-  border: 1.5px solid var(--color-border-control);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   color: var(--color-text-main);
   cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 40px;
+  min-height: 40px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-@media (min-width: 768px) {
+.mobile-menu-toggle:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-border-hover);
+}
+
+.mobile-menu-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
   .mobile-menu-toggle {
     display: none;
   }
@@ -504,13 +661,14 @@ onUnmounted(() => {
 }
 
 .btn-mobile-secondary {
-  color: var(--color-primary);
-  background-color: var(--color-violet-subtle);
-  border: 1.5px solid var(--color-border-control);
+  color: var(--color-text-main);
+  background-color: transparent;
+  border: 1px solid var(--color-border);
 }
 
 .btn-mobile-secondary:hover {
   background-color: var(--color-bg-subtle);
-  border-color: var(--color-primary);
+  border-color: var(--color-border-hover);
+  color: var(--color-primary);
 }
 </style>
