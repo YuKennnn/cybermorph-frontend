@@ -86,11 +86,10 @@ onUnmounted(() => {
 <template>
   <div class="auth-page-wrapper">
     <PublicHeader />
-    <div class="auth-container">
-      <div class="auth-card">
 
-        <h2 class="title">Create Account</h2>
-        <p class="subtitle">Register a player or educator account for CyberMorph</p>
+    <main class="auth-container">
+      <section class="auth-card">
+        <h1 class="title">Create Account</h1>
 
         <div v-if="errorMessage" class="error-banner">
           {{ errorMessage }}
@@ -104,18 +103,40 @@ onUnmounted(() => {
           Connecting to backend server... This may take up to 45 seconds after idle.
         </div>
 
-        <form @submit.prevent="handleRegister">
-          <div class="form-group">
-            <label for="role">Account Type</label>
-            <select id="role" v-model="role" class="select-input">
-              <option value="player">Player</option>
-              <option value="educator">Educator</option>
-            </select>
-            <small v-if="role === 'educator'" class="field-hint">
-              Requires institutional @dnsc.edu.ph address. Subject to admin approval.
-            </small>
+        <!-- Role Selector: Segmented Pill Control -->
+        <div class="role-selector-wrap">
+          <label id="role-label">Account Type</label>
+          <div class="role-tabs" role="radiogroup" aria-labelledby="role-label">
+            <button
+              type="button"
+              class="role-tab-btn"
+              :class="{ active: role === 'player' }"
+              role="radio"
+              :aria-checked="role === 'player'"
+              @click="role = 'player'"
+            >
+              <AppIcon name="play" :size="15" />
+              <span>Player</span>
+            </button>
+            <button
+              type="button"
+              class="role-tab-btn"
+              :class="{ active: role === 'educator' }"
+              role="radio"
+              :aria-checked="role === 'educator'"
+              @click="role = 'educator'"
+            >
+              <AppIcon name="classrooms" :size="15" />
+              <span>Educator</span>
+            </button>
           </div>
+          <small v-if="role === 'educator'" class="field-hint">
+            Requires institutional @dnsc.edu.ph address. Subject to admin approval.
+          </small>
+        </div>
 
+        <!-- Inner Form Container (capped to max-w 340px centered) -->
+        <form class="auth-form" @submit.prevent="handleRegister">
           <div class="form-group">
             <label for="email">Email Address</label>
             <input
@@ -165,7 +186,7 @@ onUnmounted(() => {
               </button>
             </div>
             <small class="field-hint">
-              Must be at least 12 characters with uppercase, lowercase, number, and special character.
+              Must be at least 12 characters with uppercase, lowercase, numbers, and symbols.
             </small>
           </div>
 
@@ -178,18 +199,26 @@ onUnmounted(() => {
           Already registered?
           <RouterLink to="/login" class="link-primary">Sign in here</RouterLink>
         </p>
-      </div>
-    </div>
+      </section>
+    </main>
   </div>
 </template>
 
 <style scoped>
+.auth-page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+}
+
 .auth-container {
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: calc(100vh - 80px);
-  padding: 2rem 1.5rem;
+  min-height: 0;
+  padding: 1.25rem 1.5rem;
   box-sizing: border-box;
 }
 
@@ -197,87 +226,103 @@ onUnmounted(() => {
   width: 100%;
   max-width: 440px;
   margin: auto;
-  padding: 2.25rem;
+  padding: 2rem 2.25rem;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-purple);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px -4px rgba(124, 58, 237, 0.09), 0 2px 8px -2px rgba(0, 0, 0, 0.04);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.auth-card:hover {
-  box-shadow: var(--shadow-purple-hover);
-}
-
-.card-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+.title {
+  max-width: 340px;
+  margin: 0 auto 1.25rem auto;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--color-primary);
-  background-color: var(--color-bg-muted);
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  margin-bottom: 1.25rem;
-  letter-spacing: 0.05em;
+  text-align: left;
+  line-height: 1.2;
 }
 
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
+.role-selector-wrap {
+  max-width: 340px;
+  margin: 0 auto 1.15rem auto;
 }
 
-.title {
-  margin: 0 0 0.35rem 0;
-  font-size: 1.65rem;
-  color: var(--color-primary);
+.role-selector-wrap label {
+  display: block;
+  text-align: left;
+  margin-bottom: 0.25rem;
 }
 
-.subtitle {
+.role-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  margin-top: 0.25rem;
+}
+
+.role-tab-btn {
+  padding: 0.55rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.92rem;
-  margin-bottom: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  transition: all 0.2s ease;
+}
+
+.role-tab-btn.active {
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}
+
+.auth-form {
+  max-width: 340px;
+  margin: 0 auto;
 }
 
 .form-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   display: flex;
   flex-direction: column;
 }
 
 label {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-text-main);
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.25rem;
 }
 
-input,
-.select-input {
-  padding: 0.75rem 1rem;
+input {
+  padding: 0.65rem 0.9rem;
   background-color: var(--color-bg);
   border: 1.5px solid var(--color-border-control);
   border-radius: 8px;
   color: var(--color-text-main);
   font-family: var(--font-sans);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   outline: none;
   transition: all 0.2s ease;
 }
 
-.select-input option {
-  background-color: var(--color-card);
-  color: var(--color-text-main);
-}
-
-input:focus,
-.select-input:focus {
+input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
 .password-input-wrapper {
@@ -320,16 +365,16 @@ input:focus,
 
 .btn-primary {
   width: 100%;
-  padding: 0.8rem;
-  margin-top: 0.5rem;
+  padding: 0.72rem;
+  margin-top: 20px;
   background: var(--btn-gradient);
   color: #ffffff;
   border: none;
   border-radius: 8px;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
   transition: all 0.2s ease;
@@ -346,47 +391,46 @@ input:focus,
   cursor: not-allowed;
 }
 
+.error-banner,
+.success-banner,
+.info-banner {
+  max-width: 340px;
+  margin: 0 auto 0.75rem auto;
+  padding: 0.55rem 0.85rem;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
 .error-banner {
   background-color: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   color: var(--color-danger);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
 }
 
 .success-banner {
   background-color: var(--color-success-bg);
   border: 1px solid var(--color-success-border);
   color: var(--color-success);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
 }
 
 .info-banner {
   background-color: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
   color: var(--color-warning);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
 }
 
 .field-hint {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--color-text-muted);
   margin-top: 0.35rem;
-  line-height: 1.3;
+  line-height: 1.35;
+  text-align: left;
 }
 
 .footer-text {
-  margin-top: 1.5rem;
+  margin-top: 1.15rem;
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   color: var(--color-text-muted);
 }
 
@@ -399,5 +443,51 @@ input:focus,
 
 .link-primary:hover {
   text-decoration: underline;
+}
+
+/* Height-adaptive tuning for short viewports (laptops with browser toolbars) */
+@media (max-height: 720px) {
+  .auth-container {
+    padding: 0.65rem 1rem;
+  }
+  .auth-card {
+    padding: 1.5rem 1.85rem;
+  }
+  .title {
+    font-size: 1.4rem;
+    margin-bottom: 0.85rem;
+  }
+  .form-group {
+    margin-bottom: 0.8rem;
+  }
+  input {
+    padding: 0.55rem 0.8rem;
+    font-size: 0.86rem;
+  }
+  .btn-primary {
+    padding: 0.65rem;
+    margin-top: 16px;
+  }
+  .footer-text {
+    margin-top: 0.85rem;
+  }
+}
+
+/* Mobile screen width responsiveness */
+@media (max-width: 440px) {
+  .auth-container {
+    padding: 0.75rem 0.85rem;
+  }
+  .auth-card {
+    padding: 1.5rem 1.25rem;
+  }
+  .title,
+  .auth-form,
+  .role-selector-wrap,
+  .error-banner,
+  .success-banner,
+  .info-banner {
+    max-width: 100%;
+  }
 }
 </style>
