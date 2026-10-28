@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { useClassroomStore } from '../stores/classroomStore'
 import { fetchMyClassrooms } from '../api/classroom'
 import { extractErrorMessage } from '../api/client'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
@@ -10,6 +11,7 @@ import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const classroomStore = useClassroomStore()
 
 const classrooms = ref([])
 const totalStudents = ref(0)
@@ -67,7 +69,11 @@ const handleManageClassrooms = () => {
 }
 
 onMounted(() => {
+  authStore.ensureWebProfileLoaded().catch(() => {})
   loadDashboardData()
+  if (classroomStore.consumeReopenCreateModal('/dashboard')) {
+    isCreateModalOpen.value = true
+  }
 })
 </script>
 
@@ -100,6 +106,27 @@ onMounted(() => {
         </button>
       </div>
     </header>
+
+    <!-- Missing Educator Display Name Notice -->
+    <div
+      v-if="authStore.isEducatorMissingDisplayName"
+      class="display-name-notice"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="notice-text">
+        <strong>Set your display name</strong>
+        <span>
+          Add the name players see as their teacher in Account settings before creating a classroom.
+        </span>
+      </div>
+      <router-link
+        :to="{ path: '/settings', query: { section: 'account', returnTo: '/dashboard' } }"
+        class="btn-notice-action"
+      >
+        Set display name in Settings
+      </router-link>
+    </div>
 
     <!-- Success Feedback Banner -->
     <div v-if="successMessage" class="success-banner" role="status">
@@ -486,6 +513,54 @@ onMounted(() => {
   text-align: center;
   padding: 4rem 1.5rem;
   color: var(--color-text-muted);
+}
+
+.display-name-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.9rem 1.15rem;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+:root[data-theme="dark"] .display-name-notice {
+  background-color: #451a03;
+  border-color: #92400e;
+  color: #fde68a;
+}
+
+.notice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.btn-notice-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.9rem;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.btn-notice-action:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.btn-notice-action:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 @media (max-width: 768px) {

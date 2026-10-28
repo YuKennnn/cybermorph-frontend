@@ -84,7 +84,8 @@ Request body:
 ```json
 {
   "email": "instructor@dnsc.edu.ph",
-  "password": "Password123!#"
+  "password": "Password123!#",
+  "display_name": "Prof. Maria Santos"
 }
 ```
 
@@ -93,6 +94,7 @@ Response:
 
 Backend behavior:
 - Validates institutional domain (`@dnsc.edu.ph`).
+- Requires `display_name` (trimmed, single-line string of 1–100 Unicode code points).
 - Account starts with `is_active: false` and `approval_status: "pending"`.
 - Cannot log in until administrative approval is granted.
 
@@ -150,8 +152,24 @@ Retrieve the authenticated player's Threat Index.
 Authentication:
 Player.
 
+Response:
+```json
+[
+  {
+    "threat_name": "Phishing",
+    "is_unlocked": true,
+    "unlocked_at": "2026-09-28T14:00:00+08:00"
+  },
+  {
+    "threat_name": "Smishing",
+    "is_unlocked": false,
+    "unlocked_at": null
+  }
+]
+```
+
 Backend behavior:
-If the player has no Threat Index records, the backend creates the eight standard threat entries before returning them.
+If the player has no Threat Index records, the backend creates the eight standard threat entries (`is_unlocked: false, unlocked_at: null`) before returning them. Entries are unlocked when the CyberMorph game syncs via `POST /sync/threat-index`.
 
 Canonical threat order:
 
@@ -165,7 +183,7 @@ Canonical threat order:
 8. Ransomware
 
 Status:
-PLANNED / BACKEND-DEFINED
+CONFIRMED
 
 ## 5. Session Endpoints
 
@@ -274,7 +292,8 @@ Web user with appropriate portal access.
 Backend behavior:
 
 - Generates a unique six-character classroom code.
-- Requires active portal access.
+- Requires active portal access and a non-null `display_name` on the educator's web profile.
+- Returns `409 { "detail": { "field": "display_name", "message": "Set your display name before creating a class" } }` if the educator's `display_name` is `null`.
 - Records the action in the activity log.
 
 ### GET /classroom/my-codes
@@ -292,18 +311,47 @@ Response includes:
 ### POST /classroom/join
 
 Purpose:
-Allow a Player to join a classroom using its code.
+Allow a Player to join a classroom using its code (at most one classroom per player).
+
+Authentication:
+Player.
+
+Request body:
+`{ "code_value": "CYB101" }` (6 characters; spaces/dashes/case normalized)
+
+Possible backend outcomes:
+
+- `201`: `{ "profile_id": "...", "code_id": "...", "name": "...", "joined_at": "..." }`
+- `404`: classroom code not found
+- `409`: nested `detail.field === "code_value"` (`"This classroom is not accepting new students"`, `"You are already in a classroom"`, or `"You have already joined this classroom"`)
+
+Successful requests create a Player-Classroom association and activity-log entry.
+
+### GET /classroom/mine
+
+Purpose:
+Retrieve the authenticated player's current classroom membership (`MyClassroomResponse`).
 
 Authentication:
 Player.
 
 Possible backend outcomes:
 
-- 404: classroom code not found
-- 409: classroom code inactive
-- 409: player already joined
+- `200`: `{ "code_id": "...", "name": "...", "educator_name": "...", "joined_at": "...", "member_count": 5, "members": [{ "username": "...", "map_progress": 3 }] }`
+- `404`: `{ "detail": "You are not in a classroom" }`
 
-Successful requests create a Player-Classroom association and activity-log entry.
+### DELETE /classroom/mine
+
+Purpose:
+Leave the authenticated player's current classroom.
+
+Authentication:
+Player.
+
+Possible backend outcomes:
+
+- `204`: No content (player is removed from classroom; may join again later)
+- `404`: `{ "detail": "You are not in a classroom" }`
 
 ### GET /classroom/{code_id}/students
 
@@ -364,14 +412,37 @@ Response:
   "user_id": "...",
   "email": "educator@dnsc.edu.ph",
   "role": "educator",
-  "display_name": null,
+  "display_name": "Prof. Maria Santos",
   "portal_access": true,
   "approval_status": "approved",
   "last_login_at": "2026-09-28T14:00:00+08:00"
 }
 ```
 
-*Note: `display_name` is currently always `null` on the backend. No endpoints currently exist for updating `display_name`, uploading avatars, or password reset.*
+*Note: `display_name` is `string | null` (`null` for legacy educator accounts created before `display_name` was required).*
+
+Status:
+CONFIRMED
+
+### PATCH /web-users/me
+
+Purpose:
+Update the authenticated web user's `display_name`.
+
+Authentication:
+Web user token required (`Authorization: Bearer <access_token>`).
+
+Request body:
+```json
+{
+  "display_name": "Prof. Maria Santos"
+}
+```
+
+Response:
+`200` with the updated `WebUserResponse` object.
+
+*Validation*: `display_name` is trimmed of leading/trailing Unicode whitespace, must be 1–100 Unicode code points, and must be a single line (no control or line-separator characters). Cannot be cleared to `null` or blank (`422`).
 
 Status:
 CONFIRMED
@@ -497,7 +568,7 @@ The backend integration guide (`API_GUIDE.md`) documents 9 active administrative
 | `GET` | `/admin/stats` | None | `200 { total_users, sessions_last_24h, threats_detected, uptime_seconds }` |
 
 ### Documented Behavior Details
-- **User Accounts (`/admin/users`)**: Lists all live accounts. `username` is present for players; `display_name` is present for web users (currently always `null`). `search` filters email, username, or display name case-insensitively.
+- **User Accounts (`/admin/users`)**: Lists all live accounts. `username` is present for players; `display_name` is present for web users (`string | null`). `search` filters email, username, or display name case-insensitively.
 - **Approval Review Queue (`/admin/approvals`)**: `pending` by default, ordered oldest first. Rejecting an account leaves the email registered so the user cannot re-register; an admin can approve previously rejected accounts later. Approve accepts `pending` or `rejected` registrations; Reject accepts `pending` only.
 - **Classroom Oversight (`/admin/classrooms`)**: Lists all live classrooms across all educators. Admins can deactivate a class or transfer ownership to another approved educator via `PATCH`. An admin cannot rename a class. `DELETE` soft-deletes the classroom (`204`).
 - **Audit Logs (`/admin/logs`)**: Paginated audit trail, newest first. Filterable by `user_id` (the actor) and `action_type`.
@@ -511,7 +582,7 @@ The backend integration guide (`API_GUIDE.md`) documents 9 active administrative
 Per `API_GUIDE.md`, the following endpoints are **not yet built** on the backend:
 - Modifying or deleting user accounts (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
 - Deleted-records inspection and restore screens (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
-- Profile mutations (updating `display_name`, uploading avatars, self-service password reset)
+- Uploading avatars or self-service password reset
 
 ## 11. Synchronization Endpoints
 
@@ -562,6 +633,7 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 - Player registration (`POST /auth/register`) & Educator registration (`POST /auth/register-web` with `@dnsc.edu.ph`)
 - Seeded test accounts (`admin@cybermorph.local`, `educator@cybermorph.local`)
 - Player profile & Threat Index (`GET /players/me`, `GET /players/threat-index`)
+- Web user profile read & display name update (`GET /web-users/me`, `PATCH /web-users/me`)
 - Session submission (`POST /sessions` with client UUID) and history (`GET /sessions/history`)
 - Leaderboard scores (`GET /leaderboard` with `map_name`, `page`, `page_size`; top 50 cap)
 - Classroom management (`POST /classroom/generate`, `GET /classroom/my-codes`, `POST /classroom/join`, `GET /classroom/{code_id}/students`, `PATCH /classroom/{code_id}`, `DELETE /classroom/{code_id}`)
@@ -572,4 +644,4 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 ### Explicitly Unbuilt on Backend (Do Not Implement or Assume)
 - User profile modification or deletion (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
 - Deleted records log and restoration views (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
-- Profile mutations (editing `display_name`, uploading profile avatars, self-service password reset)
+- Uploading profile avatars or self-service password reset

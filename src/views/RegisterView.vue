@@ -1,8 +1,15 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, reactive, computed, nextTick } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import { extractErrorMessage } from '../api/client'
+import { validateDisplayName } from '../utils/displayName'
+import {
+  validateEmailField,
+  validateUsernameField,
+  validateRegistrationPasswordField,
+  mapAuthApiError,
+  joinDescribedBy,
+} from '../utils/authValidation'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 
@@ -11,76 +18,205 @@ const authStore = useAuthStore()
 
 const email = ref('')
 const username = ref('')
+const displayName = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const role = ref('player')
-const errorMessage = ref('')
+
+const formError = ref('')
 const successMessage = ref('')
 const isLoading = ref(false)
-const isServerWakingUp = ref(false)
-let wakeUpTimer = null
 
-const handleRegister = async () => {
-  errorMessage.value = ''
+const fieldErrors = reactive({
+  displayName: '',
+  email: '',
+  username: '',
+  password: '',
+})
+
+const invalidatedFields = reactive({
+  displayName: false,
+  email: false,
+  username: false,
+  password: false,
+})
+
+const displayNameInputRef = ref(null)
+const emailInputRef = ref(null)
+const usernameInputRef = ref(null)
+const passwordInputRef = ref(null)
+
+const displayNameDescribedBy = computed(() =>
+  joinDescribedBy(
+    'register-display-name-hint',
+    fieldErrors.displayName ? 'register-display-name-error' : null,
+  ),
+)
+
+const emailDescribedBy = computed(() =>
+  joinDescribedBy(
+    role.value === 'educator' ? 'register-role-hint' : null,
+    fieldErrors.email ? 'register-email-error' : null,
+  ),
+)
+
+const usernameDescribedBy = computed(() =>
+  joinDescribedBy(fieldErrors.username ? 'register-username-error' : null),
+)
+
+const passwordDescribedBy = computed(() =>
+  joinDescribedBy(
+    'register-password-hint',
+    fieldErrors.password ? 'register-password-error' : null,
+  ),
+)
+
+const clearAllErrors = () => {
+  formError.value = ''
+  fieldErrors.displayName = ''
+  fieldErrors.email = ''
+  fieldErrors.username = ''
+  fieldErrors.password = ''
+  invalidatedFields.displayName = false
+  invalidatedFields.email = false
+  invalidatedFields.username = false
+  invalidatedFields.password = false
+}
+
+const selectRole = (nextRole) => {
+  if (role.value === nextRole) return
+  role.value = nextRole
   successMessage.value = ''
+  clearAllErrors()
+}
 
-  const trimmedEmail = email.value.trim()
-
-  // Educator institutional domain validation per API contract
-  if (role.value === 'educator' && !trimmedEmail.toLowerCase().endsWith('@dnsc.edu.ph')) {
-    errorMessage.value = 'Educator registration requires a verified institutional email ending in @dnsc.edu.ph.'
-    return
+const validateSingleField = (field) => {
+  if (field === 'displayName') {
+    if (role.value !== 'educator') {
+      fieldErrors.displayName = ''
+      return { valid: true, trimmed: '' }
+    }
+    const res = validateDisplayName(displayName.value)
+    fieldErrors.displayName = res.valid ? '' : res.error
+    return res
   }
 
-  // Password length validation (backend requires >= 12 chars, upper, lower, digit, special)
-  if (password.value.length < 12) {
-    errorMessage.value = 'Passcode must be at least 12 characters and contain uppercase, lowercase, number, and special character.'
+  if (field === 'email') {
+    const res = validateEmailField(email.value, {
+      requireEducatorDomain: role.value === 'educator',
+    })
+    fieldErrors.email = res.valid ? '' : res.error
+    return res
+  }
+
+  if (field === 'username') {
+    if (role.value !== 'player') {
+      fieldErrors.username = ''
+      return { valid: true, trimmed: '' }
+    }
+    const res = validateUsernameField(username.value)
+    fieldErrors.username = res.valid ? '' : res.error
+    return res
+  }
+
+  if (field === 'password') {
+    const res = validateRegistrationPasswordField(password.value)
+    fieldErrors.password = res.valid ? '' : res.error
+    return res
+  }
+
+  return { valid: true }
+}
+
+const handleFieldInput = (field) => {
+  if (formError.value) {
+    formError.value = ''
+  }
+  if (invalidatedFields[field]) {
+    validateSingleField(field)
+  }
+}
+
+const focusFirstInvalidField = async () => {
+  await nextTick()
+  if (role.value === 'educator' && fieldErrors.displayName) {
+    displayNameInputRef.value?.focus()
+    return
+  }
+  if (fieldErrors.email) {
+    emailInputRef.value?.focus()
+    return
+  }
+  if (role.value === 'player' && fieldErrors.username) {
+    usernameInputRef.value?.focus()
+    return
+  }
+  if (fieldErrors.password) {
+    passwordInputRef.value?.focus()
+  }
+}
+
+const handleRegister = async () => {
+  if (isLoading.value) return
+
+  formError.value = ''
+  successMessage.value = ''
+
+  const nameRes = validateSingleField('displayName')
+  const emailRes = validateSingleField('email')
+  const usernameRes = validateSingleField('username')
+  const passwordRes = validateSingleField('password')
+
+  if (!nameRes.valid) invalidatedFields.displayName = true
+  if (!emailRes.valid) invalidatedFields.email = true
+  if (!usernameRes.valid) invalidatedFields.username = true
+  if (!passwordRes.valid) invalidatedFields.password = true
+
+  if (!nameRes.valid || !emailRes.valid || !usernameRes.valid || !passwordRes.valid) {
+    await focusFirstInvalidField()
     return
   }
 
   isLoading.value = true
-  isServerWakingUp.value = false
-
-  wakeUpTimer = setTimeout(() => {
-    if (isLoading.value) {
-      isServerWakingUp.value = true
-    }
-  }, 4000)
 
   try {
     if (role.value === 'player') {
       await authStore.registerPlayer({
-        email: trimmedEmail,
-        username: username.value.trim(),
+        email: emailRes.trimmed,
+        username: usernameRes.trimmed,
         password: password.value,
       })
       router.push('/login')
     } else {
-      // Educator accounts send only email and password to /auth/register-web
       await authStore.registerWeb({
-        email: trimmedEmail,
+        email: emailRes.trimmed,
         password: password.value,
+        display_name: nameRes.trimmed,
       })
-      successMessage.value = 'Educator profile submitted! Account is pending administrative approval before portal activation.'
+      successMessage.value =
+        'Educator profile submitted! Account is pending administrative approval before portal activation.'
       setTimeout(() => {
         router.push('/login')
       }, 3500)
     }
   } catch (error) {
-    errorMessage.value = extractErrorMessage(
-      error,
-      'Registration request failed. Please check your connection and try again.',
-    )
+    const mapped = mapAuthApiError(error, {
+      mode: 'register',
+      role: role.value,
+    })
+
+    for (const key of ['displayName', 'email', 'username', 'password']) {
+      if (mapped.fieldErrors[key]) {
+        fieldErrors[key] = mapped.fieldErrors[key]
+        invalidatedFields[key] = true
+      }
+    }
+
+    formError.value = mapped.formError
   } finally {
-    if (wakeUpTimer) clearTimeout(wakeUpTimer)
     isLoading.value = false
-    isServerWakingUp.value = false
   }
 }
-
-onUnmounted(() => {
-  if (wakeUpTimer) clearTimeout(wakeUpTimer)
-})
 </script>
 
 <template>
@@ -91,16 +227,13 @@ onUnmounted(() => {
       <section class="auth-card">
         <h1 class="title">Create Account</h1>
 
-        <div v-if="errorMessage" class="error-banner">
-          {{ errorMessage }}
-        </div>
-
-        <div v-if="successMessage" class="success-banner">
+        <div
+          v-if="successMessage"
+          class="success-banner"
+          role="status"
+          aria-live="polite"
+        >
           {{ successMessage }}
-        </div>
-
-        <div v-if="isServerWakingUp" class="info-banner">
-          Connecting to backend server... This may take up to 45 seconds after idle.
         </div>
 
         <!-- Role Selector: Segmented Pill Control -->
@@ -113,7 +246,7 @@ onUnmounted(() => {
               :class="{ active: role === 'player' }"
               role="radio"
               :aria-checked="role === 'player'"
-              @click="role = 'player'"
+              @click="selectRole('player')"
             >
               <AppIcon name="play" :size="15" />
               <span>Player</span>
@@ -124,43 +257,97 @@ onUnmounted(() => {
               :class="{ active: role === 'educator' }"
               role="radio"
               :aria-checked="role === 'educator'"
-              @click="role = 'educator'"
+              @click="selectRole('educator')"
             >
               <AppIcon name="classrooms" :size="15" />
               <span>Educator</span>
             </button>
           </div>
-          <small v-if="role === 'educator'" class="field-hint">
-            Requires institutional @dnsc.edu.ph address. Subject to admin approval.
-          </small>
         </div>
 
         <!-- Inner Form Container (capped to max-w 340px centered) -->
-        <form class="auth-form" @submit.prevent="handleRegister">
+        <form
+          class="auth-form"
+          novalidate
+          :aria-busy="isLoading ? 'true' : 'false'"
+          @submit.prevent="handleRegister"
+        >
+          <div v-if="role === 'educator'" class="form-group">
+            <label for="displayName">Display name</label>
+            <input
+              id="displayName"
+              ref="displayNameInputRef"
+              v-model="displayName"
+              type="text"
+              :class="{ 'input-invalid': !!fieldErrors.displayName }"
+              :aria-invalid="fieldErrors.displayName ? 'true' : 'false'"
+              :aria-describedby="displayNameDescribedBy"
+              placeholder="Maria Santos"
+              required
+              autocomplete="name"
+              @input="handleFieldInput('displayName')"
+            />
+            <p
+              v-if="fieldErrors.displayName"
+              id="register-display-name-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="13" class="field-error-icon" />
+              <span>{{ fieldErrors.displayName }}</span>
+            </p>
+          </div>
+
           <div class="form-group">
             <label for="email">Email Address</label>
             <input
               id="email"
+              ref="emailInputRef"
               v-model="email"
               type="email"
+              :class="{ 'input-invalid': !!fieldErrors.email }"
+              :aria-invalid="fieldErrors.email ? 'true' : 'false'"
+              :aria-describedby="emailDescribedBy"
               :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
               required
               autocomplete="email"
+              @input="handleFieldInput('email')"
             />
+            <p
+              v-if="fieldErrors.email"
+              id="register-email-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="13" class="field-error-icon" />
+              <span>{{ fieldErrors.email }}</span>
+            </p>
           </div>
 
           <div v-if="role === 'player'" class="form-group">
             <label for="username">Username</label>
             <input
               id="username"
+              ref="usernameInputRef"
               v-model="username"
               type="text"
+              :class="{ 'input-invalid': !!fieldErrors.username }"
+              :aria-invalid="fieldErrors.username ? 'true' : 'false'"
+              :aria-describedby="usernameDescribedBy"
               placeholder="Choose a username"
               required
-              minlength="3"
-              maxlength="50"
               autocomplete="username"
+              @input="handleFieldInput('username')"
             />
+            <p
+              v-if="fieldErrors.username"
+              id="register-username-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="13" class="field-error-icon" />
+              <span>{{ fieldErrors.username }}</span>
+            </p>
           </div>
 
           <div class="form-group">
@@ -168,12 +355,16 @@ onUnmounted(() => {
             <div class="password-input-wrapper">
               <input
                 id="password"
+                ref="passwordInputRef"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
+                :class="{ 'input-invalid': !!fieldErrors.password }"
+                :aria-invalid="fieldErrors.password ? 'true' : 'false'"
+                :aria-describedby="passwordDescribedBy"
                 placeholder="Minimum 12 characters"
                 required
-                minlength="12"
                 autocomplete="new-password"
+                @input="handleFieldInput('password')"
               />
               <button
                 type="button"
@@ -185,13 +376,38 @@ onUnmounted(() => {
                 <AppIcon :name="showPassword ? 'eye-off' : 'eye'" :size="18" />
               </button>
             </div>
-            <small class="field-hint">
+            <small id="register-password-hint" class="field-hint">
               Must be at least 12 characters with uppercase, lowercase, numbers, and symbols.
             </small>
+            <p
+              v-if="fieldErrors.password"
+              id="register-password-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="13" class="field-error-icon" />
+              <span>{{ fieldErrors.password }}</span>
+            </p>
           </div>
 
-          <button type="submit" class="btn-primary" :disabled="isLoading">
-            {{ isLoading ? 'Creating Account...' : 'Create Account' }}
+          <div
+            v-if="formError"
+            id="register-form-error"
+            class="error-banner form-error-banner"
+            role="alert"
+          >
+            <AppIcon name="alert" :size="15" class="field-error-icon" />
+            <span>{{ formError }}</span>
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary"
+            :disabled="isLoading"
+            :aria-busy="isLoading ? 'true' : 'false'"
+          >
+            <AppIcon v-if="isLoading" name="loader" :size="16" class="btn-spinner" />
+            <span>{{ isLoading ? 'Creating account…' : 'Create Account' }}</span>
           </button>
         </form>
 
@@ -218,26 +434,26 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   min-height: 0;
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
   box-sizing: border-box;
 }
 
 .auth-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 405px;
   margin: auto;
-  padding: 2rem 2.25rem;
+  padding: 1.5rem 1.85rem;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: 0 10px 30px -4px rgba(124, 58, 237, 0.09), 0 2px 8px -2px rgba(0, 0, 0, 0.04);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .title {
-  max-width: 340px;
-  margin: 0 auto 1.25rem auto;
-  font-size: 1.5rem;
+  max-width: 310px;
+  margin: 0 auto 0.9rem auto;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--color-primary);
   text-align: left;
@@ -245,33 +461,34 @@ onUnmounted(() => {
 }
 
 .role-selector-wrap {
-  max-width: 340px;
-  margin: 0 auto 1.15rem auto;
+  max-width: 310px;
+  margin: 0 auto 0.85rem auto;
 }
 
 .role-selector-wrap label {
   display: block;
   text-align: left;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
 }
 
 .role-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.35rem;
-  padding: 0.2rem;
+  padding: 0.18rem;
   background-color: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: 9px;
-  margin-top: 0.25rem;
+  border-radius: 8px;
+  margin-top: 0.2rem;
 }
 
 .role-tab-btn {
-  padding: 0.55rem 0.85rem;
+  min-height: 44px;
+  padding: 0.42rem 0.75rem;
   font-family: var(--font-sans);
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -280,6 +497,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
+  box-sizing: border-box;
   transition: all 0.2s ease;
 }
 
@@ -291,38 +509,49 @@ onUnmounted(() => {
 }
 
 .auth-form {
-  max-width: 340px;
+  max-width: 310px;
   margin: 0 auto;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   display: flex;
   flex-direction: column;
 }
 
 label {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--color-text-main);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.18rem;
 }
 
 input {
-  padding: 0.65rem 0.9rem;
+  min-height: 44px;
+  padding: 0.48rem 0.78rem;
   background-color: var(--color-bg);
   border: 1.5px solid var(--color-border-control);
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--color-text-main);
   font-family: var(--font-sans);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   outline: none;
-  transition: all 0.2s ease;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 input:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+input.input-invalid {
+  border-color: var(--color-danger);
+}
+
+input.input-invalid:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-border);
 }
 
 .password-input-wrapper {
@@ -334,17 +563,19 @@ input:focus {
 
 .password-input-wrapper input {
   width: 100%;
-  padding-right: 2.75rem;
+  padding-right: 2.5rem;
 }
 
 .btn-toggle-password {
   position: absolute;
-  right: 0.75rem;
+  right: 0.4rem;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  padding: 0.25rem;
+  padding: 0.2rem;
+  min-height: 44px;
+  min-width: 44px;
   color: var(--color-text-dim);
   cursor: pointer;
   display: inline-flex;
@@ -363,19 +594,43 @@ input:focus {
   outline-offset: 2px;
 }
 
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin: 0.28rem 0 0 0;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.field-error-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
 .btn-primary {
   width: 100%;
-  padding: 0.72rem;
-  margin-top: 20px;
+  min-height: 44px;
+  padding: 0.6rem;
+  margin-top: 14px;
   background: var(--btn-gradient);
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
   font-family: var(--font-display);
-  font-size: 0.96rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
   transition: all 0.2s ease;
 }
@@ -387,18 +642,48 @@ input:focus {
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: not-allowed;
+  transform: none;
+}
+
+.btn-spinner {
+  animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner {
+    animation: none !important;
+  }
+}
+
+:global(:root[data-reduced-motion="true"]) .btn-spinner {
+  animation: none !important;
 }
 
 .error-banner,
-.success-banner,
-.info-banner {
-  max-width: 340px;
-  margin: 0 auto 0.75rem auto;
-  padding: 0.55rem 0.85rem;
+.success-banner {
+  max-width: 310px;
+  margin: 0 auto 0.65rem auto;
+  padding: 0.5rem 0.75rem;
   border-radius: 7px;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.form-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
 .error-banner {
@@ -413,24 +698,18 @@ input:focus {
   color: var(--color-success);
 }
 
-.info-banner {
-  background-color: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning);
-}
-
 .field-hint {
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   color: var(--color-text-muted);
-  margin-top: 0.35rem;
-  line-height: 1.35;
+  margin-top: 0.25rem;
+  line-height: 1.3;
   text-align: left;
 }
 
 .footer-text {
-  margin-top: 1.15rem;
+  margin-top: 0.85rem;
   text-align: center;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 
@@ -445,48 +724,44 @@ input:focus {
   text-decoration: underline;
 }
 
-/* Height-adaptive tuning for short viewports (laptops with browser toolbars) */
-@media (max-height: 720px) {
+/* Height-adaptive spacing for short laptop viewports (preserves control sizes and natural document scroll) */
+@media (max-height: 760px) {
   .auth-container {
-    padding: 0.65rem 1rem;
+    padding: 0.5rem 0.85rem;
   }
   .auth-card {
-    padding: 1.5rem 1.85rem;
+    padding: 1.15rem 1.65rem;
   }
   .title {
-    font-size: 1.4rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.6rem;
+  }
+  .role-selector-wrap {
+    margin-bottom: 0.6rem;
   }
   .form-group {
-    margin-bottom: 0.8rem;
-  }
-  input {
-    padding: 0.55rem 0.8rem;
-    font-size: 0.86rem;
+    margin-bottom: 0.55rem;
   }
   .btn-primary {
-    padding: 0.65rem;
-    margin-top: 16px;
+    margin-top: 0.65rem;
   }
   .footer-text {
-    margin-top: 0.85rem;
+    margin-top: 0.65rem;
   }
 }
 
 /* Mobile screen width responsiveness */
 @media (max-width: 440px) {
   .auth-container {
-    padding: 0.75rem 0.85rem;
+    padding: 0.5rem 0.75rem;
   }
   .auth-card {
-    padding: 1.5rem 1.25rem;
+    padding: 1.25rem 1.15rem;
   }
   .title,
   .auth-form,
   .role-selector-wrap,
   .error-banner,
-  .success-banner,
-  .info-banner {
+  .success-banner {
     max-width: 100%;
   }
 }

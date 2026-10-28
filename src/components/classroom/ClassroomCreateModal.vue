@@ -1,6 +1,12 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { generateClassroomCode } from '../../api/classroom'
+import { useAuthStore } from '../../stores/authStore'
+import {
+  useClassroomStore,
+  isAllowedClassroomReturnRoute,
+} from '../../stores/classroomStore'
 
 const props = defineProps({
   isOpen: {
@@ -15,13 +21,41 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'created'])
 
+const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const classroomStore = useClassroomStore()
+
 const modalRef = ref(null)
 const inputRef = ref(null)
 let previousActiveElement = null
 
-const newName = ref('')
 const isCreating = ref(false)
 const errorMessage = ref('')
+
+const newName = computed({
+  get: () => classroomStore.createDraftName,
+  set: (val) => classroomStore.setCreateDraftName(val),
+})
+
+const currentReturnRoute = computed(() =>
+  isAllowedClassroomReturnRoute(route.path) ? route.path : '/dashboard',
+)
+
+const showMissingDisplayNameNotice = computed(
+  () =>
+    classroomStore.createConflictNeedsDisplayName ||
+    authStore.isEducatorMissingDisplayName,
+)
+
+const settingsRecoveryRoute = computed(() => ({
+  path: '/settings',
+  query: {
+    section: 'account',
+    from: 'classroom-create',
+    returnTo: currentReturnRoute.value,
+  },
+}))
 
 const trapFocus = (event) => {
   if (event.key !== 'Tab' || !modalRef.value) return
@@ -60,8 +94,10 @@ watch(
   () => props.isOpen,
   (open, oldOpen) => {
     if (open) {
-      newName.value = ''
       errorMessage.value = ''
+      if (authStore.hasEducatorDisplayName) {
+        classroomStore.clearCreateConflict()
+      }
       previousActiveElement = document.activeElement
       document.body.style.overflow = 'hidden'
       nextTick(() => {
@@ -104,20 +140,48 @@ onUnmounted(() => {
   }
 })
 
+const handleGoToSettings = () => {
+  classroomStore.markDisplayNameConflict(currentReturnRoute.value)
+  emit('close')
+  router.push(settingsRecoveryRoute.value)
+}
+
 const handleSubmit = async () => {
-  if (!newName.value.trim()) return
+  const trimmedName = newName.value.trim()
+  if (!trimmedName) return
 
   isCreating.value = true
   errorMessage.value = ''
 
   try {
     const data = await generateClassroomCode({
-      name: newName.value.trim(),
+      name: trimmedName,
     })
+    classroomStore.clearCreateDraft()
     emit('created', data)
     emit('close')
-  } catch {
-    errorMessage.value = 'Failed to generate classroom. Please verify connection.'
+  } catch (err) {
+    const status = err?.response?.status
+    const detail = err?.response?.data?.detail
+
+    if (
+      status === 409 &&
+      detail &&
+      typeof detail === 'object' &&
+      detail.field === 'display_name'
+    ) {
+      classroomStore.markDisplayNameConflict(currentReturnRoute.value)
+      authStore.ensureWebProfileLoaded({ force: true }).catch(() => {})
+      return
+    }
+
+    if (typeof detail === 'string' && detail.trim()) {
+      errorMessage.value = detail
+    } else if (detail && typeof detail.message === 'string' && detail.message.trim()) {
+      errorMessage.value = detail.message
+    } else {
+      errorMessage.value = 'Failed to generate classroom. Please verify connection.'
+    }
   } finally {
     isCreating.value = false
   }
@@ -140,6 +204,24 @@ const handleSubmit = async () => {
         <button class="close-btn" aria-label="Close dialog" @click="emit('close')">✕</button>
       </div>
       <p class="modal-desc">Create a classroom and generate an access code for your students.</p>
+
+      <div
+        v-if="showMissingDisplayNameNotice"
+        class="display-name-conflict-banner"
+        role="alert"
+      >
+        <p class="conflict-title">Set your display name before creating a classroom</p>
+        <p class="conflict-desc">
+          Players see your display name as their teacher. Your classroom draft is saved while you update your account settings.
+        </p>
+        <button
+          type="button"
+          class="btn-settings-link"
+          @click="handleGoToSettings"
+        >
+          Set display name in Settings
+        </button>
+      </div>
 
       <div v-if="errorMessage" class="error-banner" role="alert">
         {{ errorMessage }}
@@ -229,6 +311,56 @@ const handleSubmit = async () => {
   color: var(--color-text-muted);
   font-size: 0.92rem;
   line-height: 1.5;
+}
+
+.display-name-conflict-banner {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+:root[data-theme="dark"] .display-name-conflict-banner {
+  background-color: #451a03;
+  border-color: #92400e;
+  color: #fde68a;
+}
+
+.conflict-title {
+  margin: 0 0 0.25rem 0;
+  font-weight: 600;
+}
+
+.conflict-desc {
+  margin: 0 0 0.65rem 0;
+}
+
+.btn-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-settings-link:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.btn-settings-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .form-group {

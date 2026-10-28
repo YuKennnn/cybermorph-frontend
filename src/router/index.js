@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { usePlayerClassroomStore } from '../stores/playerClassroomStore'
 import { isReducedMotionActive } from '../utils/accessibility.js'
 import { stopNarration } from '../utils/speech.js'
 
@@ -88,9 +89,21 @@ const routes = [
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
+    path: '/classroom',
+    name: 'player-classroom',
+    component: () => import('../views/PlayerClassroomView.vue'),
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
+  {
     path: '/classroom/join',
     name: 'classroom-join',
     component: () => import('../views/ClassroomJoinView.vue'),
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
+  {
+    path: '/threat-index',
+    name: 'threat-index',
+    component: () => import('../views/ThreatIndexView.vue'),
     meta: { requiresAuth: true, roles: ['player'] },
   },
   {
@@ -109,6 +122,12 @@ const routes = [
     path: '/admin/approvals',
     name: 'admin-approvals',
     component: () => import('../views/AdminApprovalsView.vue'),
+    meta: { requiresAuth: true, roles: ['admin'] },
+  },
+  {
+    path: '/admin/classrooms',
+    name: 'admin-classrooms',
+    component: () => import('../views/AdminClassroomsView.vue'),
     meta: { requiresAuth: true, roles: ['admin'] },
   },
   // Catch-all route for unrecognized paths
@@ -152,6 +171,18 @@ router.beforeEach((to, from, next) => {
     (!authStore.userRole || !to.meta.roles.includes(authStore.userRole))
   ) {
     next('/dashboard')
+  } else if (
+    authStore.isPlayer &&
+    (to.path === '/classroom' || to.path === '/classroom/join')
+  ) {
+    const playerClassroomStore = usePlayerClassroomStore()
+    playerClassroomStore.syncAccountScope()
+    const redirectTarget = playerClassroomStore.resolveRedirectForPath(to.path)
+    if (redirectTarget && redirectTarget !== to.path) {
+      next({ path: redirectTarget, replace: true })
+    } else {
+      next()
+    }
   } else {
     next()
   }

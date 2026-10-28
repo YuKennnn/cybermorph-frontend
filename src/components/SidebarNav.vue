@@ -1,12 +1,32 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { usePlayerClassroomStore } from '../stores/playerClassroomStore'
 import AppIcon from './common/AppIcon.vue'
 import LogoutModal from './common/LogoutModal.vue'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const playerClassroomStore = usePlayerClassroomStore()
+
+const isPlayerClassroomRoute = computed(
+  () => route.path === '/classroom' || route.path === '/classroom/join',
+)
+
+const ensurePlayerMembershipLoaded = () => {
+  if (authStore.isPlayer && authStore.token) {
+    playerClassroomStore.loadMembership().catch(() => {})
+  } else if (!authStore.token) {
+    playerClassroomStore.reset()
+  }
+}
+
+const handleRetryClassroomMembership = () => {
+  if (playerClassroomStore.isLoading || playerClassroomStore.isRefreshing) return
+  playerClassroomStore.loadMembership({ force: true }).catch(() => {})
+}
 
 const isMobileOpen = ref(false)
 const mobileCloseBtnRef = ref(null)
@@ -107,7 +127,15 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  ensurePlayerMembershipLoaded()
 })
+
+watch(
+  () => [authStore.token, authStore.userRole, authStore.user?.user_id],
+  () => {
+    ensurePlayerMembershipLoaded()
+  },
+)
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
@@ -226,16 +254,43 @@ const formatRole = (role) => {
           <span class="nav-label">Leaderboard</span>
         </router-link>
 
-        <!-- Player Specific Link -->
+        <!-- Player Specific Links -->
         <router-link
           v-if="authStore.isPlayer"
-          to="/classroom/join"
+          to="/threat-index"
           class="nav-item"
           @click="closeMobileMenu"
         >
-          <AppIcon name="join" :size="18" class="nav-icon" />
-          <span class="nav-label">Join classroom</span>
+          <AppIcon name="shield" :size="18" class="nav-icon" />
+          <span class="nav-label">Threat index</span>
         </router-link>
+
+        <div v-if="authStore.isPlayer" class="nav-item-group">
+          <router-link
+            :to="playerClassroomStore.navRoute"
+            :class="['nav-item', { 'router-link-active': isPlayerClassroomRoute }]"
+            @click="closeMobileMenu"
+          >
+            <AppIcon
+              :name="playerClassroomStore.isUnenrolled ? 'join' : 'classrooms'"
+              :size="18"
+              class="nav-icon"
+            />
+            <span class="nav-label">{{ playerClassroomStore.navLabel }}</span>
+          </router-link>
+          <button
+            v-if="playerClassroomStore.status === 'error'"
+            type="button"
+            class="nav-retry-btn"
+            :disabled="playerClassroomStore.isLoading || playerClassroomStore.isRefreshing"
+            aria-label="Retry loading classroom membership"
+            title="Retry loading classroom membership"
+            @click="handleRetryClassroomMembership"
+          >
+            <AppIcon name="refresh" :size="14" />
+            <span>Retry</span>
+          </button>
+        </div>
 
         <!-- Educator Specific Links -->
         <router-link
@@ -263,11 +318,25 @@ const formatRole = (role) => {
           v-if="authStore.isAdmin"
           to="/admin/users"
           class="nav-item"
-          :class="{ 'router-link-active': $route.path.startsWith('/admin') }"
+          :class="{
+            'router-link-active':
+              $route.path.startsWith('/admin/users') || $route.path.startsWith('/admin/approvals'),
+          }"
           @click="closeMobileMenu"
         >
           <AppIcon name="users" :size="18" class="nav-icon" />
           <span class="nav-label">Users</span>
+        </router-link>
+
+        <router-link
+          v-if="authStore.isAdmin"
+          to="/admin/classrooms"
+          class="nav-item"
+          :class="{ 'router-link-active': $route.path.startsWith('/admin/classrooms') }"
+          @click="closeMobileMenu"
+        >
+          <AppIcon name="classrooms" :size="18" class="nav-icon" />
+          <span class="nav-label">Classrooms</span>
         </router-link>
 
         <!-- Settings Link -->
@@ -569,6 +638,45 @@ const formatRole = (role) => {
 .logout-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+.nav-item-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nav-retry-btn {
+  align-self: flex-start;
+  margin-left: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-retry-btn:hover:not(:disabled) {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.nav-retry-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.nav-retry-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Responsive Breakpoints */

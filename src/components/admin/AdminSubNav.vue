@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <nav class="admin-subnav" aria-label="Admin User Navigation">
+  <nav class="admin-subnav" aria-label="Admin Management Navigation">
     <router-link to="/admin/users" class="subnav-tab">
       All users
     </router-link>

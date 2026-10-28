@@ -1,4 +1,4 @@
-import apiClient from './client'
+import apiClient from './client.js'
 
 /**
  * Submit or finalize a player game session.

@@ -1,0 +1,283 @@
+/* ==========================================================================
+   CyberMorph Auth Views (Login & Register) - Shared Responsive Styles
+   Scoped strictly under .auth-page-wrapper to prevent bleed into portal pages
+   ========================================================================== */
+
+.auth-page-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+}
+
+.auth-page-wrapper .auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1 0 auto;
+  min-height: calc(100vh - var(--public-header-height, 65px));
+  padding: 1.25rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.auth-page-wrapper .auth-card {
+  width: 100%;
+  max-width: 440px;
+  margin: auto 0;
+  padding: 1.35rem 1.75rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-purple);
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.auth-page-wrapper .auth-card:hover {
+  box-shadow: var(--shadow-purple-hover);
+}
+
+.auth-page-wrapper .card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-bg-muted);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.auth-page-wrapper .badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+}
+
+.auth-page-wrapper .title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+
+.auth-page-wrapper .subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  line-height: 1.35;
+}
+
+.auth-page-wrapper .form-group {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: calc(var(--public-header-height, 65px) + 12px);
+}
+
+.auth-page-wrapper label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  margin-bottom: 0.25rem;
+}
+
+.auth-page-wrapper input,
+.auth-page-wrapper .select-input {
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  background-color: var(--color-bg);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 8px;
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.auth-page-wrapper .select-input option {
+  background-color: var(--color-card);
+  color: var(--color-text-main);
+}
+
+.auth-page-wrapper input:focus,
+.auth-page-wrapper .select-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
+}
+
+.auth-page-wrapper .password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.auth-page-wrapper .password-input-wrapper input {
+  width: 100%;
+  padding-right: 2.75rem;
+}
+
+.auth-page-wrapper .btn-toggle-password {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease;
+}
+
+.auth-page-wrapper .btn-toggle-password:hover {
+  color: var(--color-primary);
+}
+
+.auth-page-wrapper .btn-toggle-password:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.auth-page-wrapper .btn-primary {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  margin-top: 0.4rem;
+  background: var(--btn-gradient);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease;
+  scroll-margin-top: calc(var(--public-header-height, 65px) + 12px);
+}
+
+.auth-page-wrapper .btn-primary:hover:not(:disabled) {
+  background: var(--btn-gradient-hover);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+  transform: translateY(-1px);
+}
+
+.auth-page-wrapper .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-page-wrapper .error-banner,
+.auth-page-wrapper .success-banner,
+.auth-page-wrapper .info-banner {
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  scroll-margin-top: calc(var(--public-header-height, 65px) + 12px);
+}
+
+.auth-page-wrapper .error-banner {
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.auth-page-wrapper .success-banner {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+}
+
+.auth-page-wrapper .info-banner {
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
+}
+
+.auth-page-wrapper .field-hint {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.25;
+}
+
+.auth-page-wrapper .footer-text {
+  margin-top: 0.85rem;
+  margin-bottom: 0;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  scroll-margin-top: calc(var(--public-header-height, 65px) + 12px);
+}
+
+.auth-page-wrapper .link-primary {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+.auth-page-wrapper .link-primary:hover {
+  text-decoration: underline;
+}
+
+/* Adaptive Compact Spacing for Short Viewports (Laptops 720p / 768p and netbooks) */
+@media (max-height: 720px) {
+  .auth-page-wrapper .auth-container {
+    padding: 0.75rem 1rem;
+  }
+
+  .auth-page-wrapper .auth-card {
+    padding: 1.1rem 1.5rem;
+  }
+
+  .auth-page-wrapper .title {
+    font-size: 1.35rem;
+    margin-bottom: 0.15rem;
+  }
+
+  .auth-page-wrapper .subtitle {
+    font-size: 0.82rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .auth-page-wrapper .form-group {
+    margin-bottom: 0.55rem;
+  }
+
+  .auth-page-wrapper .footer-text {
+    margin-top: 0.65rem;
+  }
+}
+
+/* Mobile Screen Adjustments */
+@media (max-width: 480px) {
+  .auth-page-wrapper .auth-container {
+    padding: 1rem 0.75rem;
+  }
+
+  .auth-page-wrapper .auth-card {
+    padding: 1.25rem 1.15rem;
+    border-radius: 10px;
+  }
+}

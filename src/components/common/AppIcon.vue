@@ -161,6 +161,12 @@ const sizePixels = computed(() => {
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </template>
 
+    <!-- Lock -->
+    <template v-else-if="name === 'lock'">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </template>
+
     <!-- Info / Details -->
     <template v-else-if="name === 'info'">
       <circle cx="12" cy="12" r="10" />

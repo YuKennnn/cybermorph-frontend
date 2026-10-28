@@ -1,10 +1,114 @@
 import MockAdapter from 'axios-mock-adapter'
 import apiClient from './client.js'
+import { stripDisplayNameWhitespace, validateDisplayName } from '../utils/displayName.js'
 
 const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 
+const MOCK_PROFILES_STORAGE_KEY = 'cyber_mock_web_profiles_v1'
+
+const createDefaultMockWebProfiles = () => ({
+  'u-001': {
+    web_profile_id: 'wp-001',
+    user_id: 'u-001',
+    email: 'educator@cybermorph.local',
+    role: 'educator',
+    display_name: 'Prof. CyberMorph',
+    portal_access: true,
+    approval_status: 'approved',
+    last_login_at: '2026-10-01T06:00:00Z',
+  },
+  'u-educator-legacy': {
+    web_profile_id: 'wp-legacy-01',
+    user_id: 'u-educator-legacy',
+    email: 'unnamed@dnsc.edu.ph',
+    role: 'educator',
+    display_name: null,
+    portal_access: true,
+    approval_status: 'approved',
+    last_login_at: '2026-10-01T06:00:00Z',
+  },
+  'u-admin-01': {
+    web_profile_id: 'wp-002',
+    user_id: 'u-admin-01',
+    email: 'admin@cybermorph.local',
+    role: 'admin',
+    display_name: 'SysAdmin',
+    portal_access: true,
+    approval_status: 'approved',
+    last_login_at: '2026-10-01T06:00:00Z',
+  },
+})
+
+const loadPersistedMockWebProfiles = () => {
+  const defaults = createDefaultMockWebProfiles()
+  if (typeof localStorage === 'undefined') return defaults
+  try {
+    const raw = localStorage.getItem(MOCK_PROFILES_STORAGE_KEY)
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return defaults
+    const merged = { ...defaults }
+    for (const [id, profile] of Object.entries(parsed)) {
+      if (profile && typeof profile === 'object') {
+        merged[id] = { ...defaults[id], ...profile }
+      }
+    }
+    return merged
+  } catch {
+    return defaults
+  }
+}
+
+let mockWebProfiles = loadPersistedMockWebProfiles()
+
+const savePersistedMockWebProfiles = () => {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(MOCK_PROFILES_STORAGE_KEY, JSON.stringify(mockWebProfiles))
+  } catch {
+    // Ignore storage quota errors in mock mode
+  }
+}
+
+const resolveMockWebProfileFromConfig = (config) => {
+  mockWebProfiles = loadPersistedMockWebProfiles()
+  const auth =
+    config?.headers?.Authorization ||
+    config?.headers?.authorization ||
+    (typeof localStorage !== 'undefined' ? `Bearer ${localStorage.getItem('cyber_token') || ''}` : '')
+
+  if (!auth || auth === 'Bearer ') return { status: 401, profile: null }
+  if (auth.includes('player')) return { status: 403, profile: null }
+
+  const explicitIdMatch = auth.match(/mock-jwt-token-(?:educator|admin):([^\s]+)/)
+  if (explicitIdMatch && mockWebProfiles[explicitIdMatch[1]]) {
+    return { status: 200, profile: mockWebProfiles[explicitIdMatch[1]] }
+  }
+
+  if (auth.includes('admin')) {
+    return { status: 200, profile: mockWebProfiles['u-admin-01'] }
+  }
+  if (auth.includes('unnamed') || auth.includes('legacy')) {
+    return { status: 200, profile: mockWebProfiles['u-educator-legacy'] }
+  }
+  return { status: 200, profile: mockWebProfiles['u-001'] }
+}
+
 export const mockControl = {
   failThreatIndexCount: 0,
+  delayThreatIndexMs: 0,
+  threatIndexOverride: undefined,
+  failMyClassroomCount: 0,
+  delayMyClassroomMs: 0,
+  failLeaveClassroomCount: 0,
+  delayLeaveClassroomMs: 0,
+  myClassroomOverride: undefined,
+  failSessionsHistoryCount: 0,
+  delaySessionsHistoryMs: 0,
+  sessionsHistoryOverride: undefined,
+  failPlayerProfileCount: 0,
+  delayPlayerProfileMs: 0,
+  playerProfileOverride: undefined,
   delayPlayerAnalyticsMs: 0,
   delayClassroomsMs: 0,
   delayClassroomAnalytics: {},
@@ -16,6 +120,107 @@ export const mockControl = {
   delayClassroomPatchMs: 0,
   failClassroomDeleteCount: 0,
   delayClassroomDeleteMs: 0,
+  failAdminClassroomsCount: 0,
+  delayAdminClassroomsMs: 0,
+  failAdminClassroomPatchCount: 0,
+  delayAdminClassroomPatchMs: 0,
+  failAdminClassroomDeleteCount: 0,
+  delayAdminClassroomDeleteMs: 0,
+  failProfilePatchCount: 0,
+  delayProfileGetMs: 0,
+  delayProfilePatchMs: 0,
+  delayAuthMs: 0,
+  resetProfiles() {
+    mockWebProfiles = createDefaultMockWebProfiles()
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(MOCK_PROFILES_STORAGE_KEY)
+    }
+    return mockWebProfiles
+  },
+  setEducatorDisplayName(displayName, userId = 'u-001') {
+    mockWebProfiles = loadPersistedMockWebProfiles()
+    if (mockWebProfiles[userId]) {
+      mockWebProfiles[userId] = {
+        ...mockWebProfiles[userId],
+        display_name: displayName,
+      }
+      savePersistedMockWebProfiles()
+    }
+  },
+  setThreatIndexOverride(payload) {
+    mockControl.threatIndexOverride = payload
+  },
+  resetThreatIndex() {
+    mockControl.failThreatIndexCount = 0
+    mockControl.delayThreatIndexMs = 0
+    mockControl.threatIndexOverride = undefined
+  },
+  setPlayerEnrollment(userIdOrUsername, classroomIdOrNull) {
+    setMockPlayerEnrollment(userIdOrUsername, classroomIdOrNull)
+  },
+  resetPlayerEnrollments() {
+    resetMockPlayerEnrollments()
+  },
+  setSessionsHistoryOverride(payload) {
+    mockControl.sessionsHistoryOverride = payload
+  },
+  resetSessionsHistory() {
+    mockControl.failSessionsHistoryCount = 0
+    mockControl.delaySessionsHistoryMs = 0
+    mockControl.sessionsHistoryOverride = undefined
+    mockControl.failPlayerProfileCount = 0
+    mockControl.delayPlayerProfileMs = 0
+    mockControl.playerProfileOverride = undefined
+  },
+  resetAdminClassrooms() {
+    mockControl.failAdminClassroomsCount = 0
+    mockControl.delayAdminClassroomsMs = 0
+    mockControl.failAdminClassroomPatchCount = 0
+    mockControl.delayAdminClassroomPatchMs = 0
+    mockControl.failAdminClassroomDeleteCount = 0
+    mockControl.delayAdminClassroomDeleteMs = 0
+    mockClassrooms = [
+      {
+        id: 'c1',
+        code_id: 'c1',
+        web_profile_id: 'wp-001',
+        code: 'CYB101',
+        code_value: 'CYB101',
+        name: 'BSIT 4A',
+        description: 'Cybersecurity fundamentals and threat defense.',
+        is_active: true,
+        student_count: 23,
+        created_at: '2026-08-20T10:00:00Z',
+        deleted_at: null,
+      },
+      {
+        id: 'c2',
+        code_id: 'c2',
+        web_profile_id: 'wp-001',
+        code: 'NET202',
+        code_value: 'NET202',
+        name: 'BSIT 3C',
+        description: null,
+        is_active: true,
+        student_count: 1,
+        created_at: '2026-08-22T14:30:00Z',
+        deleted_at: null,
+      },
+      {
+        id: 'c3',
+        code_id: 'c3',
+        web_profile_id: 'wp-legacy-01',
+        code: 'OLD303',
+        code_value: 'OLD303',
+        name: 'BSCS 2B (Archived)',
+        description: 'Archived 2025-2026 cohort.',
+        is_active: false,
+        student_count: 5,
+        created_at: '2026-06-10T08:00:00Z',
+        deleted_at: null,
+      },
+    ]
+  },
 }
 
 if (typeof window !== 'undefined') {
@@ -29,6 +234,7 @@ let mockClassrooms = [
   {
     id: 'c1',
     code_id: 'c1',
+    web_profile_id: 'wp-001',
     code: 'CYB101',
     code_value: 'CYB101',
     name: 'BSIT 4A',
@@ -41,6 +247,7 @@ let mockClassrooms = [
   {
     id: 'c2',
     code_id: 'c2',
+    web_profile_id: 'wp-001',
     code: 'NET202',
     code_value: 'NET202',
     name: 'BSIT 3C',
@@ -53,6 +260,7 @@ let mockClassrooms = [
   {
     id: 'c3',
     code_id: 'c3',
+    web_profile_id: 'wp-legacy-01',
     code: 'OLD303',
     code_value: 'OLD303',
     name: 'BSCS 2B (Archived)',
@@ -285,58 +493,210 @@ const mockLeaderboardEntries = [
 // ==========================================
 // Authentication Endpoints
 // ==========================================
-mock.onPost('/auth/login').reply((config) => {
+const applyMockAuthDelay = async () => {
+  let delay = mockControl.delayAuthMs || 0
+  if (!delay && typeof sessionStorage !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_AUTH__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+}
+
+mock.onPost('/auth/login').reply(async (config) => {
+  await applyMockAuthDelay()
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
   const { email, password } = data
 
   if (!email || !password || password === 'wrongpassword') {
-    return [401, { detail: 'Invalid credentials' }]
+    return [401, { detail: 'Incorrect email or password' }]
   }
 
-  const role = email.includes('admin') ? 'admin' : email.includes('educator') ? 'educator' : 'player'
+  mockWebProfiles = loadPersistedMockWebProfiles()
+  const lowerEmail = String(email).toLowerCase()
+
+  if (lowerEmail.includes('unknown') || lowerEmail.includes('nonexistent')) {
+    return [401, { detail: 'Incorrect email or password' }]
+  }
+
+  if (
+    lowerEmail === 'prof_smith@dnsc.edu.ph' ||
+    lowerEmail === 'instructor_lee@dnsc.edu.ph' ||
+    lowerEmail === 'rejected_candidate@dnsc.edu.ph' ||
+    lowerEmail.includes('pending') ||
+    lowerEmail.includes('inactive')
+  ) {
+    return [403, { detail: 'Account is not active' }]
+  }
+
+  if (lowerEmail.includes('admin')) {
+    return [
+      200,
+      {
+        access_token: 'mock-jwt-token-admin:u-admin-01',
+        token_type: 'bearer',
+      },
+    ]
+  }
+
+  if (lowerEmail.includes('unnamed') || lowerEmail.includes('legacy')) {
+    return [
+      200,
+      {
+        access_token: 'mock-jwt-token-educator:u-educator-legacy',
+        token_type: 'bearer',
+      },
+    ]
+  }
+
+  const matchedProfile = Object.values(mockWebProfiles).find(
+    (p) => p.email?.toLowerCase() === lowerEmail,
+  )
+  if (matchedProfile) {
+    if (matchedProfile.portal_access === false || matchedProfile.approval_status !== 'approved') {
+      return [403, { detail: 'Account is not active' }]
+    }
+    return [
+      200,
+      {
+        access_token: `mock-jwt-token-${matchedProfile.role}:${matchedProfile.user_id}`,
+        token_type: 'bearer',
+      },
+    ]
+  }
+
+  if (lowerEmail.includes('educator')) {
+    return [
+      200,
+      {
+        access_token: 'mock-jwt-token-educator:u-001',
+        token_type: 'bearer',
+      },
+    ]
+  }
+
+  if (lowerEmail.includes('playertwo') || lowerEmail.includes('unenrolled')) {
+    return [
+      200,
+      {
+        access_token: 'mock-jwt-token-player:u-202',
+        token_type: 'bearer',
+      },
+    ]
+  }
 
   return [
     200,
     {
-      access_token: `mock-jwt-token-${role}-12345`,
+      access_token: 'mock-jwt-token-player:u-101',
       token_type: 'bearer',
     },
   ]
 })
 
-mock.onPost('/auth/register').reply((config) => {
+mock.onPost('/auth/register').reply(async (config) => {
+  await applyMockAuthDelay()
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
   const { email, username, password } = data
 
   if (!email || !username || !password) {
-    return [400, { detail: 'Missing required registration fields' }]
+    const detail = []
+    if (!email) detail.push({ loc: ['body', 'email'], msg: 'Field required', type: 'missing' })
+    if (!username) detail.push({ loc: ['body', 'username'], msg: 'Field required', type: 'missing' })
+    if (!password) detail.push({ loc: ['body', 'password'], msg: 'Field required', type: 'missing' })
+    return [422, { detail }]
   }
 
-  if (email.includes('conflict') || username === 'existinguser') {
-    return [409, { detail: 'Username or email already registered' }]
+  if (String(email).toLowerCase().includes('conflict')) {
+    return [
+      409,
+      {
+        detail: {
+          field: 'email',
+          message: 'Email already registered',
+        },
+      },
+    ]
+  }
+
+  if (username === 'existinguser' || username === 'AgentZero') {
+    return [
+      409,
+      {
+        detail: {
+          field: 'username',
+          message: 'Username already taken',
+        },
+      },
+    ]
   }
 
   return [
     201,
     {
-      id: 101,
+      user_id: 'u-101',
       email,
       username,
-      role: 'player',
     },
   ]
 })
 
-mock.onPost('/auth/register-web').reply((config) => {
+mock.onPost('/auth/register-web').reply(async (config) => {
+  await applyMockAuthDelay()
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const { email, password } = data
+  const { email, password, display_name } = data
 
-  if (!email || !password) {
-    return [400, { detail: 'Missing required registration fields' }]
+  const nameValidation = validateDisplayName(display_name)
+  if (!nameValidation.valid) {
+    return [
+      422,
+      {
+        detail: [
+          {
+            loc: ['body', 'display_name'],
+            msg: nameValidation.error,
+            type: 'value_error',
+          },
+        ],
+      },
+    ]
   }
 
-  if (!email.toLowerCase().endsWith('@dnsc.edu.ph')) {
-    return [400, { detail: 'Invalid institutional email domain' }]
+  if (!email || !password) {
+    const detail = []
+    if (!email) detail.push({ loc: ['body', 'email'], msg: 'Field required', type: 'missing' })
+    if (!password) detail.push({ loc: ['body', 'password'], msg: 'Field required', type: 'missing' })
+    return [422, { detail }]
+  }
+
+  if (!String(email).toLowerCase().endsWith('@dnsc.edu.ph')) {
+    return [
+      422,
+      {
+        detail: [
+          {
+            loc: ['body', 'email'],
+            msg: 'Value error, Educator email must end in @dnsc.edu.ph',
+            type: 'value_error',
+          },
+        ],
+      },
+    ]
+  }
+
+  if (
+    String(email).toLowerCase().includes('conflict') ||
+    String(email).toLowerCase() === 'educator@dnsc.edu.ph'
+  ) {
+    return [
+      409,
+      {
+        detail: {
+          field: 'email',
+          message: 'Email already registered',
+        },
+      },
+    ]
   }
 
   return [
@@ -352,13 +712,173 @@ mock.onPost('/auth/register-web').reply((config) => {
 // ==========================================
 // Player Profile & Progress Endpoints
 // ==========================================
-mock.onGet('/players/me').reply(200, {
-  profile_id: 'p1',
-  user_id: 'u-101',
-  username: 'AgentZero',
-  email: 'player@example.com',
-  role: 'player',
-  map_progress: 3,
+const MOCK_PLAYER_ENROLLMENTS_KEY = 'cyber_mock_player_enrollments_v1'
+
+const createDefaultMockPlayerAccounts = () => ({
+  'u-101': {
+    profile_id: 'p1',
+    user_id: 'u-101',
+    username: 'AgentZero',
+    email: 'player@example.com',
+    role: 'player',
+    map_progress: 3,
+  },
+  'u-202': {
+    profile_id: 'p99',
+    user_id: 'u-202',
+    username: 'PlayerTwo',
+    email: 'playertwo@example.com',
+    role: 'player',
+    map_progress: 2,
+  },
+})
+
+const loadPersistedPlayerEnrollments = () => {
+  const defaults = { 'u-101': 'c1', 'u-202': null }
+  if (typeof localStorage === 'undefined') return defaults
+  try {
+    const raw = localStorage.getItem(MOCK_PLAYER_ENROLLMENTS_KEY)
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return defaults
+    return { ...defaults, ...parsed }
+  } catch {
+    return defaults
+  }
+}
+
+let mockPlayerEnrollmentByUserId = loadPersistedPlayerEnrollments()
+
+const savePersistedPlayerEnrollments = () => {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(
+      MOCK_PLAYER_ENROLLMENTS_KEY,
+      JSON.stringify(mockPlayerEnrollmentByUserId),
+    )
+  } catch {
+    // Ignore storage quota issues in mock mode
+  }
+}
+
+const syncPlayerRosterForAccount = (player, classroomIdOrNull) => {
+  mockStudentEnrollments = mockStudentEnrollments.filter(
+    (s) =>
+      s.profile_id !== player.profile_id &&
+      s.username.toLowerCase() !== player.username.toLowerCase(),
+  )
+  if (classroomIdOrNull) {
+    mockStudentEnrollments.push({
+      classroom_id: classroomIdOrNull,
+      profile_id: player.profile_id,
+      username: player.username,
+      map_progress: player.map_progress || 1,
+      joined_at: '2026-08-21T09:15:00Z',
+      last_synced_at: '2026-09-28T13:45:00Z',
+    })
+  }
+}
+
+const setMockPlayerEnrollment = (userIdOrUsername, classroomIdOrNull) => {
+  const accounts = createDefaultMockPlayerAccounts()
+  let targetUserId = userIdOrUsername || 'u-101'
+  for (const [id, acct] of Object.entries(accounts)) {
+    if (
+      id === userIdOrUsername ||
+      acct.username.toLowerCase() === String(userIdOrUsername).toLowerCase()
+    ) {
+      targetUserId = id
+      break
+    }
+  }
+  const player = accounts[targetUserId] || {
+    profile_id: `p-${targetUserId}`,
+    user_id: targetUserId,
+    username: String(userIdOrUsername),
+    map_progress: 1,
+  }
+  mockPlayerEnrollmentByUserId = loadPersistedPlayerEnrollments()
+  mockPlayerEnrollmentByUserId[targetUserId] = classroomIdOrNull || null
+  savePersistedPlayerEnrollments()
+  syncPlayerRosterForAccount(player, classroomIdOrNull || null)
+}
+
+const resetMockPlayerEnrollments = () => {
+  mockControl.failMyClassroomCount = 0
+  mockControl.delayMyClassroomMs = 0
+  mockControl.failLeaveClassroomCount = 0
+  mockControl.delayLeaveClassroomMs = 0
+  mockControl.myClassroomOverride = undefined
+  mockPlayerEnrollmentByUserId = { 'u-101': 'c1', 'u-202': null }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(MOCK_PLAYER_ENROLLMENTS_KEY)
+  }
+  const accounts = createDefaultMockPlayerAccounts()
+  syncPlayerRosterForAccount(accounts['u-101'], 'c1')
+  syncPlayerRosterForAccount(accounts['u-202'], null)
+}
+
+const resolveMockPlayerFromConfig = (config) => {
+  mockPlayerEnrollmentByUserId = loadPersistedPlayerEnrollments()
+  const accounts = createDefaultMockPlayerAccounts()
+  const auth =
+    config?.headers?.Authorization ||
+    config?.headers?.authorization ||
+    (typeof localStorage !== 'undefined'
+      ? `Bearer ${localStorage.getItem('cyber_token') || ''}`
+      : '')
+
+  const explicitMatch = auth.match(/mock-jwt-token-player:([^\s]+)/)
+  const userId = explicitMatch ? explicitMatch[1] : 'u-101'
+  const player = accounts[userId] || {
+    profile_id: `p-${userId}`,
+    user_id: userId,
+    username: `Player_${userId}`,
+    email: `${userId}@example.com`,
+    role: 'player',
+    map_progress: 1,
+  }
+  const enrolledClassroomId =
+    userId in mockPlayerEnrollmentByUserId
+      ? mockPlayerEnrollmentByUserId[userId]
+      : userId === 'u-101'
+        ? 'c1'
+        : null
+
+  syncPlayerRosterForAccount(player, enrolledClassroomId)
+  const enrolledClassroom = enrolledClassroomId
+    ? mockClassrooms.find(
+        (c) =>
+          !c.deleted_at &&
+          (c.id === enrolledClassroomId ||
+            c.code_id === enrolledClassroomId ||
+            c.code === enrolledClassroomId ||
+            c.code_value === enrolledClassroomId),
+      ) || null
+    : null
+
+  return { player, enrolledClassroom }
+}
+
+mock.onGet('/players/me').reply(async (config) => {
+  if (mockControl.delayPlayerProfileMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayPlayerProfileMs))
+  }
+  if (mockControl.failPlayerProfileCount > 0) {
+    mockControl.failPlayerProfileCount--
+    return [500, { detail: 'Temporary player profile failure' }]
+  }
+  if (mockControl.playerProfileOverride !== undefined) {
+    return [200, mockControl.playerProfileOverride]
+  }
+  const { player, enrolledClassroom } = resolveMockPlayerFromConfig(config)
+  return [
+    200,
+    {
+      ...player,
+      classroom_name: enrolledClassroom ? enrolledClassroom.name : null,
+    },
+  ]
 })
 
 const mockThreatIndex = [
@@ -372,7 +892,10 @@ const mockThreatIndex = [
   { threat_name: 'Ransomware', is_unlocked: false, unlocked_at: null },
 ]
 
-mock.onGet('/players/threat-index').reply(() => {
+mock.onGet('/players/threat-index').reply(async () => {
+  if (mockControl.delayThreatIndexMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayThreatIndexMs))
+  }
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_THREAT__') || '0', 10) : 0
   if (mockControl.failThreatIndexCount > 0 || sessionFail > 0) {
     if (mockControl.failThreatIndexCount > 0) mockControl.failThreatIndexCount--
@@ -381,160 +904,277 @@ mock.onGet('/players/threat-index').reply(() => {
     }
     return [500, { detail: 'Temporary threat index failure' }]
   }
+  if (mockControl.threatIndexOverride !== undefined) {
+    return [200, mockControl.threatIndexOverride]
+  }
   return [200, mockThreatIndex]
 })
 
 const mockPlayerSessions = [
   {
     session_id: 'sess-01',
+    profile_id: 'p1',
     map_name: 'Internet Cafe',
     duration_seconds: 145,
     credits_earned: 9200,
     credits_lost: 0,
+    credits_left: 9300,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-28T14:30:00Z',
+    created_at: '2026-09-28T14:31:00Z',
   },
   {
     session_id: 'sess-02',
+    profile_id: 'p1',
     map_name: 'Office',
     duration_seconds: 180,
     credits_earned: 8500,
     credits_lost: 200,
+    credits_left: 8400,
     false_positives: 1,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-27T11:15:00Z',
+    created_at: '2026-09-27T11:16:00Z',
   },
   {
     session_id: 'sess-03',
+    profile_id: 'p1',
     map_name: 'Home',
     duration_seconds: 120,
     credits_earned: 7800,
     credits_lost: 150,
+    credits_left: 7750,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-26T16:00:00Z',
+    created_at: '2026-09-26T16:01:00Z',
   },
   {
     session_id: 'sess-04',
+    profile_id: 'p1',
     map_name: 'Internet Cafe',
     duration_seconds: 210,
     credits_earned: 6900,
     credits_lost: 400,
+    credits_left: 6600,
     false_positives: 2,
     result: 'lose',
+    is_synced: true,
     played_at: '2026-09-25T13:45:00Z',
+    created_at: '2026-09-25T13:46:00Z',
   },
   {
     session_id: 'sess-05',
+    profile_id: 'p1',
     map_name: 'Public Park',
     duration_seconds: 160,
     credits_earned: 5400,
     credits_lost: 300,
+    credits_left: 5200,
     false_positives: 1,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-24T10:20:00Z',
+    created_at: '2026-09-24T10:21:00Z',
   },
   {
     session_id: 'sess-06',
+    profile_id: 'p1',
     map_name: 'Office',
     duration_seconds: 130,
     credits_earned: 7100,
     credits_lost: 100,
+    credits_left: 7100,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-23T15:10:00Z',
+    created_at: '2026-09-23T15:11:00Z',
   },
   {
     session_id: 'sess-07',
+    profile_id: 'p1',
     map_name: 'Home',
     duration_seconds: 95,
     credits_earned: 6200,
     credits_lost: 50,
+    credits_left: 6250,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-22T09:30:00Z',
+    created_at: '2026-09-22T09:31:00Z',
   },
   {
     session_id: 'sess-08',
+    profile_id: 'p1',
     map_name: 'Internet Cafe',
     duration_seconds: 200,
     credits_earned: 4500,
     credits_lost: 600,
+    credits_left: 4000,
     false_positives: 3,
     result: 'timeout',
+    is_synced: true,
     played_at: '2026-09-21T17:00:00Z',
+    created_at: '2026-09-21T17:01:00Z',
   },
   {
     session_id: 'sess-09',
+    profile_id: 'p1',
     map_name: 'Home',
     duration_seconds: 110,
     credits_earned: 5900,
     credits_lost: 120,
+    credits_left: 5880,
     false_positives: 1,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-20T14:40:00Z',
+    created_at: '2026-09-20T14:41:00Z',
   },
   {
     session_id: 'sess-10',
+    profile_id: 'p1',
     map_name: 'Office',
     duration_seconds: 150,
     credits_earned: 6800,
     credits_lost: 250,
+    credits_left: 6650,
     false_positives: 1,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-19T11:50:00Z',
+    created_at: '2026-09-19T11:51:00Z',
   },
   {
     session_id: 'sess-11',
+    profile_id: 'p1',
     map_name: 'Public Park',
     duration_seconds: 175,
     credits_earned: 7300,
     credits_lost: 180,
+    credits_left: 7220,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-18T16:25:00Z',
+    created_at: '2026-09-18T16:26:00Z',
   },
   {
     session_id: 'sess-12',
+    profile_id: 'p1',
     map_name: 'Internet Cafe',
     duration_seconds: 140,
     credits_earned: 8100,
     credits_lost: 90,
+    credits_left: 8110,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-17T13:10:00Z',
+    created_at: '2026-09-17T13:11:00Z',
   },
   {
     session_id: 'sess-13',
+    profile_id: 'p1',
     map_name: 'Office',
     duration_seconds: 165,
     credits_earned: 7600,
     credits_lost: 150,
+    credits_left: 7550,
     false_positives: 1,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-16T10:05:00Z',
+    created_at: '2026-09-16T10:06:00Z',
   },
   {
     session_id: 'sess-14',
+    profile_id: 'p1',
     map_name: 'Home',
     duration_seconds: 105,
     credits_earned: 6400,
     credits_lost: 80,
+    credits_left: 6420,
     false_positives: 0,
     result: 'win',
+    is_synced: true,
     played_at: '2026-09-15T15:35:00Z',
+    created_at: '2026-09-15T15:36:00Z',
   },
 ]
 
-mock.onGet('/sessions/history').reply((config) => {
+const mockPlayerTwoSessions = [
+  {
+    session_id: 'sess-p99-01',
+    profile_id: 'p99',
+    map_name: 'Office',
+    duration_seconds: 140,
+    credits_earned: 5100,
+    credits_lost: 100,
+    credits_left: 5100,
+    false_positives: 2,
+    result: 'win',
+    is_synced: true,
+    played_at: '2026-09-28T09:15:00Z',
+    created_at: '2026-09-28T09:16:00Z',
+  },
+  {
+    session_id: 'sess-p99-02',
+    profile_id: 'p99',
+    map_name: 'Home',
+    duration_seconds: 115,
+    credits_earned: 4600,
+    credits_lost: 50,
+    credits_left: 4650,
+    false_positives: 0,
+    result: 'win',
+    is_synced: true,
+    played_at: '2026-09-26T14:20:00Z',
+    created_at: '2026-09-26T14:21:00Z',
+  },
+]
+
+mock.onGet('/sessions/history').reply(async (config) => {
+  if (mockControl.delaySessionsHistoryMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delaySessionsHistoryMs))
+  }
+  const sessionFail =
+    typeof window !== 'undefined'
+      ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_SESSIONS__') || '0', 10)
+      : 0
+  if (mockControl.failSessionsHistoryCount > 0 || sessionFail > 0) {
+    if (mockControl.failSessionsHistoryCount > 0) mockControl.failSessionsHistoryCount--
+    if (sessionFail > 0 && typeof window !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_SESSIONS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Temporary session history failure' }]
+  }
+  if (mockControl.sessionsHistoryOverride !== undefined) {
+    return [200, mockControl.sessionsHistoryOverride]
+  }
+
+  const { player } = resolveMockPlayerFromConfig(config)
+  const sourceSessions =
+    player.profile_id === 'p99'
+      ? mockPlayerTwoSessions
+      : mockPlayerSessions.map((item) => ({
+          ...item,
+          profile_id: player.profile_id || 'p1',
+        }))
+
   const params = config.params || {}
   const page = Math.max(1, parseInt(params.page, 10) || 1)
   const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
 
-  const total_count = mockPlayerSessions.length
+  const total_count = sourceSessions.length
   const startIndex = (page - 1) * pageSize
-  const paginatedItems = mockPlayerSessions.slice(startIndex, startIndex + pageSize)
+  const paginatedItems = sourceSessions.slice(startIndex, startIndex + pageSize)
 
   return [
     200,
@@ -548,41 +1188,69 @@ mock.onGet('/sessions/history').reply((config) => {
 })
 
 // ==========================================
-// Web Users Profile Endpoint
+// Web Users Profile Endpoints (GET & PATCH)
 // ==========================================
-mock.onGet('/web-users/me').reply((config) => {
-  const auth = config.headers?.Authorization || config.headers?.authorization || ''
-  if (auth.includes('player')) {
+mock.onGet('/web-users/me').reply(async (config) => {
+  if (mockControl.delayProfileGetMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayProfileGetMs))
+  }
+  const { status, profile } = resolveMockWebProfileFromConfig(config)
+  if (status === 401) {
+    return [401, { detail: 'Missing authorization token' }]
+  }
+  if (status === 403 || !profile) {
     return [403, { detail: 'Not a web portal account' }]
   }
-  if (auth.includes('admin')) {
+  return [200, { ...profile }]
+})
+
+mock.onPatch('/web-users/me').reply(async (config) => {
+  if (mockControl.delayProfilePatchMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayProfilePatchMs))
+  }
+  if (mockControl.failProfilePatchCount > 0) {
+    mockControl.failProfilePatchCount--
+    return [500, { detail: 'Temporary profile update failure' }]
+  }
+
+  const { status, profile } = resolveMockWebProfileFromConfig(config)
+  if (status === 401) {
+    return [401, { detail: 'Missing authorization token' }]
+  }
+  if (status === 403 || !profile) {
+    return [403, { detail: 'Not a web portal account' }]
+  }
+
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+  const validation = validateDisplayName(data.display_name)
+  if (!validation.valid) {
     return [
-      200,
+      422,
       {
-        web_profile_id: 'wp-002',
-        user_id: 'u-admin-01',
-        email: 'admin@cybermorph.local',
-        role: 'admin',
-        display_name: 'SysAdmin',
-        portal_access: true,
-        approval_status: 'approved',
-        last_login_at: '2026-10-01T06:00:00Z',
+        detail: [
+          {
+            loc: ['body', 'display_name'],
+            msg: validation.error,
+            type: 'value_error',
+          },
+        ],
       },
     ]
   }
-  return [
-    200,
-    {
-      web_profile_id: 'wp-001',
-      user_id: 'u-001',
-      email: 'educator@cybermorph.local',
-      role: 'educator',
-      display_name: 'Prof. CyberMorph',
-      portal_access: true,
-      approval_status: 'approved',
-      last_login_at: '2026-10-01T06:00:00Z',
-    },
-  ]
+
+  const updated = {
+    ...profile,
+    display_name: validation.trimmed,
+  }
+  mockWebProfiles[profile.user_id] = updated
+  savePersistedMockWebProfiles()
+
+  const adminUserEntry = mockAdminUsers.find((u) => u.user_id === profile.user_id)
+  if (adminUserEntry) {
+    adminUserEntry.display_name = validation.trimmed
+  }
+
+  return [200, { ...updated }]
 })
 
 // ==========================================
@@ -655,8 +1323,28 @@ mock.onGet('/educator/classrooms').reply(() => {
 })
 
 mock.onPost('/classroom/generate').reply((config) => {
+  const { status, profile } = resolveMockWebProfileFromConfig(config)
+  if (status === 401) {
+    return [401, { detail: 'Missing authorization token' }]
+  }
+  if (status === 403 || !profile || profile.role !== 'educator') {
+    return [403, { detail: 'Educator privileges required' }]
+  }
+
+  if (!stripDisplayNameWhitespace(profile.display_name || '')) {
+    return [
+      409,
+      {
+        detail: {
+          field: 'display_name',
+          message: 'Set your display name before creating a class',
+        },
+      },
+    ]
+  }
+
   const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const { name} = data
+  const { name } = data
 
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let newCode = ''
@@ -681,55 +1369,152 @@ mock.onPost('/classroom/generate').reply((config) => {
   return [201, { ...newClassroom, student_count: 0 }]
 })
 
-mock.onPost('/classroom/join').reply((config) => {
-  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
-  const rawCode = (data.code_value || data.code || '').trim().toUpperCase()
-
-  if (!rawCode) {
-    return [400, { detail: 'Classroom code is required.' }]
+mock.onGet('/classroom/mine').reply(async (config) => {
+  if (mockControl.delayMyClassroomMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayMyClassroomMs))
+  }
+  if (mockControl.failMyClassroomCount > 0) {
+    mockControl.failMyClassroomCount--
+    return [500, { detail: 'Temporary classroom membership failure' }]
+  }
+  if (mockControl.myClassroomOverride !== undefined) {
+    return [200, mockControl.myClassroomOverride]
   }
 
+  const { player, enrolledClassroom } = resolveMockPlayerFromConfig(config)
+  if (!enrolledClassroom) {
+    return [404, { detail: 'You are not in a classroom' }]
+  }
+
+  mockWebProfiles = loadPersistedMockWebProfiles()
+  const educatorProfile = mockWebProfiles['u-001']
+  const educatorName = stripDisplayNameWhitespace(educatorProfile?.display_name || '') || null
+
+  const classMembers = mockStudentEnrollments
+    .filter(
+      (s) =>
+        s.classroom_id === enrolledClassroom.id ||
+        s.classroom_id === enrolledClassroom.code_id ||
+        s.classroom_id === enrolledClassroom.code ||
+        s.classroom_id === enrolledClassroom.code_value,
+    )
+    .map((s) => ({
+      username: s.username,
+      map_progress: s.map_progress || 1,
+    }))
+    .sort((a, b) =>
+      a.username.localeCompare(b.username, undefined, { sensitivity: 'base' }),
+    )
+
+  const selfEnrollment = mockStudentEnrollments.find(
+    (s) =>
+      (s.classroom_id === enrolledClassroom.id ||
+        s.classroom_id === enrolledClassroom.code) &&
+      s.username.toLowerCase() === player.username.toLowerCase(),
+  )
+
+  return [
+    200,
+    {
+      code_id: enrolledClassroom.code_id || enrolledClassroom.id,
+      name: enrolledClassroom.name,
+      educator_name: educatorName,
+      joined_at: selfEnrollment?.joined_at || '2026-08-21T09:15:00Z',
+      member_count: classMembers.length,
+      members: classMembers,
+    },
+  ]
+})
+
+mock.onDelete('/classroom/mine').reply(async (config) => {
+  if (mockControl.delayLeaveClassroomMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayLeaveClassroomMs))
+  }
+  if (mockControl.failLeaveClassroomCount > 0) {
+    mockControl.failLeaveClassroomCount--
+    return [500, { detail: 'Temporary error leaving classroom' }]
+  }
+
+  const { player, enrolledClassroom } = resolveMockPlayerFromConfig(config)
+  if (!enrolledClassroom) {
+    return [404, { detail: 'You are not in a classroom' }]
+  }
+
+  setMockPlayerEnrollment(player.user_id, null)
+  return [204]
+})
+
+mock.onPost('/classroom/join').reply((config) => {
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+  const rawCode = String(data.code_value || data.code || '')
+    .replace(/[\s-]+/g, '')
+    .toUpperCase()
+
+  if (!rawCode) {
+    return [422, { detail: [{ loc: ['body', 'code_value'], msg: 'Field required' }] }]
+  }
+
+  const { player, enrolledClassroom } = resolveMockPlayerFromConfig(config)
+
   const targetClassroom = mockClassrooms.find(
-    (c) => !c.deleted_at && (c.code.toUpperCase() === rawCode || c.id === rawCode),
+    (c) =>
+      !c.deleted_at &&
+      (c.code.toUpperCase() === rawCode ||
+        (c.code_value && c.code_value.toUpperCase() === rawCode) ||
+        c.id.toUpperCase() === rawCode),
   )
 
   if (!targetClassroom) {
-    return [404, { detail: 'Classroom code not found. Please verify the code with your educator.' }]
+    return [404, { detail: 'Classroom code not found' }]
+  }
+
+  if (enrolledClassroom) {
+    const isSameClass =
+      enrolledClassroom.id === targetClassroom.id ||
+      enrolledClassroom.code_id === targetClassroom.code_id
+    return [
+      409,
+      {
+        detail: {
+          field: 'code_value',
+          message: isSameClass
+            ? 'You have already joined this classroom'
+            : 'You are already in a classroom',
+        },
+      },
+    ]
   }
 
   if (!targetClassroom.is_active) {
-    return [409, { detail: 'This classroom is currently inactive and cannot accept new students.' }]
+    return [
+      409,
+      {
+        detail: {
+          field: 'code_value',
+          message: 'This classroom is not accepting new students',
+        },
+      },
+    ]
   }
 
-  const alreadyJoined = mockStudentEnrollments.some(
+  const joinedAt = new Date().toISOString()
+  setMockPlayerEnrollment(player.user_id, targetClassroom.id)
+  const createdRow = mockStudentEnrollments.find(
     (s) =>
-      (s.classroom_id === targetClassroom.id || s.classroom_id === targetClassroom.code) &&
-      s.username === 'AgentZero',
+      s.classroom_id === targetClassroom.id &&
+      s.username.toLowerCase() === player.username.toLowerCase(),
   )
-
-  if (alreadyJoined) {
-    return [409, { detail: 'You have already joined this classroom.' }]
+  if (createdRow) {
+    createdRow.joined_at = joinedAt
   }
-
-  const newEnrollment = {
-    classroom_id: targetClassroom.id,
-    profile_id: 'p' + (mockStudentEnrollments.length + 1),
-    username: 'AgentZero',
-    map_progress: 1,
-    last_synced_at: null,
-    joined_at: new Date().toISOString(),
-  }
-
-  mockStudentEnrollments.push(newEnrollment)
-  targetClassroom.student_count = (targetClassroom.student_count || 0) + 1
 
   return [
     201,
     {
-      profile_id: newEnrollment.profile_id,
-      code_id: targetClassroom.id,
+      profile_id: player.profile_id,
+      code_id: targetClassroom.code_id || targetClassroom.id,
       name: targetClassroom.name,
-      joined_at: newEnrollment.joined_at,
+      joined_at: joinedAt,
     },
   ]
 })
@@ -799,7 +1584,7 @@ mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply(async (config) => {
 })
 
 // PATCH /classroom/:code_id
-mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply(async (config) => {
+mock.onPatch(new RegExp('/classroom/(?!mine$)([^/]+)$')).reply(async (config) => {
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_PATCH__') || '0', 10) : 0
   if (mockControl.failClassroomPatchCount > 0 || sessionFail > 0) {
     if (mockControl.failClassroomPatchCount > 0) mockControl.failClassroomPatchCount--
@@ -848,7 +1633,7 @@ mock.onPatch(new RegExp('/classroom/([^/]+)$')).reply(async (config) => {
 })
 
 // DELETE /classroom/:code_id
-mock.onDelete(new RegExp('/classroom/([^/]+)$')).reply(async (config) => {
+mock.onDelete(new RegExp('/classroom/(?!mine$)([^/]+)$')).reply(async (config) => {
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_DELETE__') || '0', 10) : 0
   if (mockControl.failClassroomDeleteCount > 0 || sessionFail > 0) {
     if (mockControl.failClassroomDeleteCount > 0) mockControl.failClassroomDeleteCount--
@@ -1392,6 +2177,191 @@ mock.onPost(new RegExp('^/admin/approvals/[^/]+/reject$')).reply((config) => {
       created_at: approvalItem.created_at,
     },
   ]
+})
+
+const buildAdminClassroomRow = (classroom) => {
+  mockWebProfiles = loadPersistedMockWebProfiles()
+  const webProfiles = Object.values(mockWebProfiles)
+  const ownerProfile =
+    webProfiles.find((p) => p.web_profile_id === classroom.web_profile_id) ||
+    mockWebProfiles['u-001']
+  const studentCount = mockStudentEnrollments.filter(
+    (s) => s.classroom_id === classroom.id || s.classroom_id === classroom.code_id || s.classroom_id === classroom.code,
+  ).length
+  const trimmedDisplayName = stripDisplayNameWhitespace(ownerProfile?.display_name || '') || null
+
+  return {
+    code_id: classroom.code_id || classroom.id,
+    web_profile_id: ownerProfile?.web_profile_id || classroom.web_profile_id || 'wp-001',
+    code_value: classroom.code_value || classroom.code,
+    name: classroom.name,
+    description: classroom.description ?? null,
+    is_active: Boolean(classroom.is_active),
+    student_count: studentCount,
+    created_at: classroom.created_at,
+    owner_user_id: ownerProfile?.user_id || 'u-001',
+    owner_email: ownerProfile?.email || 'educator@cybermorph.local',
+    owner_display_name: trimmedDisplayName,
+  }
+}
+
+const verifyAdminMockAuth = (config) => {
+  const authHeader =
+    config?.headers?.Authorization ||
+    config?.headers?.authorization ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('cyber_token')
+      ? `Bearer ${localStorage.getItem('cyber_token')}`
+      : '')
+  if (!authHeader || authHeader === 'Bearer ') {
+    return [401, { detail: 'Could not validate credentials' }]
+  }
+  const role = typeof localStorage !== 'undefined' ? localStorage.getItem('cyber_role') : null
+  if (
+    (role && role !== 'admin') ||
+    authHeader.includes('player') ||
+    authHeader.includes('educator')
+  ) {
+    return [403, { detail: 'Admin access required' }]
+  }
+  return null
+}
+
+mock.onGet('/admin/classrooms').reply(async (config) => {
+  if (mockControl.delayAdminClassroomsMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayAdminClassroomsMs))
+  }
+  const authErr = verifyAdminMockAuth(config)
+  if (authErr) return authErr
+
+  if (mockControl.failAdminClassroomsCount > 0) {
+    mockControl.failAdminClassroomsCount--
+    return [500, { detail: 'Temporary admin classrooms failure' }]
+  }
+
+  const params = config.params || {}
+  const search = typeof params.search === 'string' ? params.search.trim().toLowerCase() : ''
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+  const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
+
+  let rows = mockClassrooms
+    .filter((c) => !c.deleted_at)
+    .map((c) => buildAdminClassroomRow(c))
+
+  if (search) {
+    rows = rows.filter(
+      (r) =>
+        r.name.toLowerCase().includes(search) ||
+        r.code_value.toLowerCase().includes(search) ||
+        r.owner_email.toLowerCase().includes(search),
+    )
+  }
+
+  rows.sort((a, b) => {
+    const timeDiff = new Date(b.created_at) - new Date(a.created_at)
+    if (timeDiff !== 0) return timeDiff
+    return String(b.code_id).localeCompare(String(a.code_id))
+  })
+
+  const totalCount = rows.length
+  const startIdx = (page - 1) * pageSize
+  const items = rows.slice(startIdx, startIdx + pageSize)
+
+  return [
+    200,
+    {
+      items,
+      total_count: totalCount,
+      page,
+      page_size: pageSize,
+    },
+  ]
+})
+
+mock.onPatch(new RegExp('^/admin/classrooms/([^/]+)$')).reply(async (config) => {
+  if (mockControl.delayAdminClassroomPatchMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayAdminClassroomPatchMs))
+  }
+  const authErr = verifyAdminMockAuth(config)
+  if (authErr) return authErr
+
+  if (mockControl.failAdminClassroomPatchCount > 0) {
+    mockControl.failAdminClassroomPatchCount--
+    return [500, { detail: 'Temporary admin classroom update failure' }]
+  }
+
+  const data = typeof config.data === 'string' ? JSON.parse(config.data) : config.data
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return [422, { detail: [{ loc: ['body'], msg: 'Input should be a valid dictionary', type: 'dict_type' }] }]
+  }
+
+  const keys = Object.keys(data)
+  const extraKeys = keys.filter((k) => k !== 'is_active')
+  if (extraKeys.length > 0) {
+    return [
+      422,
+      {
+        detail: extraKeys.map((k) => ({
+          loc: ['body', k],
+          msg: 'Extra inputs are not permitted',
+          type: 'extra_forbidden',
+        })),
+      },
+    ]
+  }
+
+  if (typeof data.is_active !== 'boolean') {
+    return [
+      422,
+      {
+        detail: [
+          {
+            loc: ['body', 'is_active'],
+            msg: 'Input should be a valid boolean',
+            type: 'bool_type',
+          },
+        ],
+      },
+    ]
+  }
+
+  const match = config.url.match(/^\/admin\/classrooms\/([^/]+)$/)
+  const codeId = match ? decodeURIComponent(match[1]) : null
+  const target = mockClassrooms.find(
+    (c) => !c.deleted_at && (c.code_id === codeId || c.id === codeId),
+  )
+
+  if (!target) {
+    return [404, { detail: 'Classroom not found' }]
+  }
+
+  target.is_active = data.is_active
+  return [200, buildAdminClassroomRow(target)]
+})
+
+mock.onDelete(new RegExp('^/admin/classrooms/([^/]+)$')).reply(async (config) => {
+  if (mockControl.delayAdminClassroomDeleteMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, mockControl.delayAdminClassroomDeleteMs))
+  }
+  const authErr = verifyAdminMockAuth(config)
+  if (authErr) return authErr
+
+  if (mockControl.failAdminClassroomDeleteCount > 0) {
+    mockControl.failAdminClassroomDeleteCount--
+    return [500, { detail: 'Temporary admin classroom delete failure' }]
+  }
+
+  const match = config.url.match(/^\/admin\/classrooms\/([^/]+)$/)
+  const codeId = match ? decodeURIComponent(match[1]) : null
+  const target = mockClassrooms.find(
+    (c) => !c.deleted_at && (c.code_id === codeId || c.id === codeId),
+  )
+
+  if (!target) {
+    return [404, { detail: 'Classroom not found' }]
+  }
+
+  target.deleted_at = new Date().toISOString()
+  return [204]
 })
 
 mock.onAny().reply(404, { detail: 'Endpoint not found in mock adapter' })

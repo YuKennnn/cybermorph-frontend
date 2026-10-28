@@ -26,7 +26,7 @@ export const registerPlayerAccount = async (playerData) => {
  * Register a new web user (educator portal account).
  * Note: Email must end in @dnsc.edu.ph.
  * Endpoint: POST /auth/register-web
- * @param {Object} webUserData - { email, password }
+ * @param {Object} webUserData - { email, password, display_name }
  * @returns {Promise<{ user_id: string, email: string, approval_status: string }>}
  */
 export const registerWebAccount = async (webUserData) => {
@@ -41,6 +41,17 @@ export const registerWebAccount = async (webUserData) => {
  */
 export const fetchWebUserProfile = async () => {
   const response = await apiClient.get('/web-users/me')
+  return response.data
+}
+
+/**
+ * Update authenticated web user profile (educator or admin).
+ * Endpoint: PATCH /web-users/me
+ * @param {Object} payload - { display_name }
+ * @returns {Promise<{ web_profile_id: string, user_id: string, email: string, role: string, display_name: string|null, portal_access: boolean, approval_status: string, last_login_at: string|null }>}
+ */
+export const updateWebUserProfile = async (payload) => {
+  const response = await apiClient.patch('/web-users/me', payload)
   return response.data
 }
 

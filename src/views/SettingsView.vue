@@ -3,6 +3,11 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import {
+  useClassroomStore,
+  isAllowedClassroomReturnRoute,
+} from '../stores/classroomStore'
+import { validateDisplayName } from '../utils/displayName'
+import {
   getStoredTheme,
   setStoredTheme,
   getStoredTextSize,
@@ -29,6 +34,127 @@ import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const classroomStore = useClassroomStore()
+
+// Educator Display Name State
+const savedDisplayName = computed(() => authStore.user?.display_name ?? '')
+const displayNameDraft = ref(savedDisplayName.value)
+const isDisplayNameDirty = ref(false)
+const isSavingDisplayName = ref(false)
+const displayNameError = ref('')
+const displayNameSuccess = ref('')
+
+// Sync draft from store ONLY when the user does not have an active unsaved edit
+watch(
+  savedDisplayName,
+  (newSaved) => {
+    if (!isDisplayNameDirty.value && !isSavingDisplayName.value) {
+      displayNameDraft.value = newSaved
+    }
+  },
+)
+
+const validatedReturnRoute = computed(() => {
+  const queryReturn =
+    typeof route.query.returnTo === 'string' ? route.query.returnTo : null
+  if (isAllowedClassroomReturnRoute(queryReturn)) {
+    return queryReturn
+  }
+  if (isAllowedClassroomReturnRoute(classroomStore.pendingCreateReturnRoute)) {
+    return classroomStore.pendingCreateReturnRoute
+  }
+  return null
+})
+
+const hasClassroomCreateRecovery = computed(() => {
+  return Boolean(
+    authStore.isEducator &&
+      validatedReturnRoute.value &&
+      (route.query.from === 'classroom-create' ||
+        classroomStore.createConflictNeedsDisplayName ||
+        classroomStore.createDraftName),
+  )
+})
+
+const handleDisplayNameInput = () => {
+  isDisplayNameDirty.value = true
+  if (displayNameError.value) {
+    displayNameError.value = ''
+  }
+  if (displayNameSuccess.value) {
+    displayNameSuccess.value = ''
+  }
+}
+
+const extractDisplayNameApiError = (err) => {
+  if (err?.isValidationError && err.message) {
+    return err.message
+  }
+  const status = err?.response?.status
+  const detail = err?.response?.data?.detail
+
+  if (status === 422 && Array.isArray(detail)) {
+    const firstMsg = detail.find((item) => typeof item?.msg === 'string')?.msg
+    if (firstMsg) {
+      return firstMsg.replace(/^Value error,\s*/i, '')
+    }
+    return 'Please enter a valid display name (1 to 100 characters, single line).'
+  }
+
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+
+  if (detail && typeof detail.message === 'string' && detail.message.trim()) {
+    return detail.message
+  }
+
+  return 'Unable to save display name. Please check your connection and try again.'
+}
+
+const handleSaveDisplayName = async () => {
+  if (isSavingDisplayName.value) return
+  displayNameError.value = ''
+  displayNameSuccess.value = ''
+
+  const validation = validateDisplayName(displayNameDraft.value)
+  if (!validation.valid) {
+    displayNameError.value = validation.error
+    return
+  }
+
+  isSavingDisplayName.value = true
+  try {
+    const updatedUser = await authStore.updateDisplayName(displayNameDraft.value)
+    if (!updatedUser) {
+      return
+    }
+    displayNameDraft.value = updatedUser.display_name ?? validation.trimmed
+    isDisplayNameDirty.value = false
+    displayNameSuccess.value = 'Display name saved.'
+  } catch (err) {
+    displayNameError.value = extractDisplayNameApiError(err)
+  } finally {
+    isSavingDisplayName.value = false
+  }
+}
+
+const handleCancelDisplayName = () => {
+  if (isSavingDisplayName.value) return
+  displayNameDraft.value = savedDisplayName.value
+  isDisplayNameDirty.value = false
+  displayNameError.value = ''
+  displayNameSuccess.value = ''
+}
+
+const handleReturnToClassroomCreate = () => {
+  const target = classroomStore.prepareReturnToCreateModal(
+    validatedReturnRoute.value,
+  )
+  if (target) {
+    router.push(target)
+  }
+}
 
 // Navigation Section State (account | accessibility)
 const SECTIONS = ['account', 'accessibility']
@@ -108,6 +234,11 @@ onMounted(() => {
   removeVoicesListener = addVoicesChangedListener((_, status) => {
     voiceEngineStatus.value = status
   })
+  if (authStore.isEducator || authStore.isAdmin) {
+    authStore.ensureWebProfileLoaded().catch(() => {
+      // Background refresh failure is non-blocking; existing state remains
+    })
+  }
 })
 
 const handleThemeChange = (theme) => {
@@ -277,9 +408,112 @@ const webUserEmail = computed(() => {
             <h2 id="account-details-heading" class="card-title">Account details</h2>
           </div>
 
+          <div
+            v-if="authStore.isEducatorMissingDisplayName"
+            class="missing-display-name-banner"
+            role="status"
+            aria-live="polite"
+          >
+            <div class="banner-body">
+              <strong>Set your display name</strong>
+              <p>
+                Add the display name players see as their teacher. You must set a display name before creating a classroom.
+              </p>
+              <p v-if="hasClassroomCreateRecovery && classroomStore.createDraftName" class="recovery-draft-note">
+                Your classroom draft <strong>"{{ classroomStore.createDraftName }}"</strong> is saved. Save your display name below, then return to create the classroom.
+              </p>
+            </div>
+          </div>
+
+          <!-- Educator Display Name Editor (Educator Only) -->
+          <form
+            v-if="authStore.isEducator"
+            class="display-name-form"
+            novalidate
+            @submit.prevent="handleSaveDisplayName"
+          >
+            <div class="display-name-field">
+              <label for="educator-display-name" class="display-name-label">
+                Display name
+              </label>
+              <p id="educator-display-name-hint" class="display-name-hint">
+                The name players see as their teacher.
+              </p>
+              <input
+                id="educator-display-name"
+                v-model="displayNameDraft"
+                type="text"
+                class="display-name-input"
+                :class="{ 'input-invalid': !!displayNameError }"
+                :disabled="isSavingDisplayName"
+                :aria-invalid="displayNameError ? 'true' : 'false'"
+                :aria-describedby="displayNameError ? 'educator-display-name-hint educator-display-name-error' : 'educator-display-name-hint'"
+                autocomplete="name"
+                placeholder="e.g., Prof. Ada Lovelace"
+                @input="handleDisplayNameInput"
+              />
+              <p
+                v-if="displayNameError"
+                id="educator-display-name-error"
+                class="display-name-error"
+                role="alert"
+              >
+                {{ displayNameError }}
+              </p>
+            </div>
+
+            <div class="display-name-actions">
+              <button
+                type="submit"
+                class="btn-save-display-name"
+                :disabled="isSavingDisplayName"
+              >
+                {{ isSavingDisplayName ? 'Saving...' : 'Save changes' }}
+              </button>
+              <button
+                type="button"
+                class="btn-cancel-display-name"
+                :disabled="isSavingDisplayName"
+                @click="handleCancelDisplayName"
+              >
+                Cancel
+              </button>
+              <button
+                v-if="hasClassroomCreateRecovery && authStore.hasEducatorDisplayName"
+                type="button"
+                class="btn-return-classroom"
+                @click="handleReturnToClassroomCreate"
+              >
+                Return to classroom creation
+              </button>
+            </div>
+
+            <div
+              v-if="displayNameSuccess"
+              class="display-name-success"
+              role="status"
+              aria-live="polite"
+            >
+              <span>{{ displayNameSuccess }}</span>
+              <button
+                v-if="hasClassroomCreateRecovery"
+                type="button"
+                class="btn-inline-return"
+                @click="handleReturnToClassroomCreate"
+              >
+                Return to classroom creation
+              </button>
+            </div>
+          </form>
+
           <div class="read-only-notice" role="note">
             <AppIcon name="copy" :size="16" class="notice-icon" />
-            <span>Account details are currently read-only. Profile editing is not currently supported.</span>
+            <span v-if="authStore.isEducator">
+              Account email, role, and approval status are read-only.
+            </span>
+            <span v-else>
+              Account details are currently read-only. Profile editing is not currently supported.
+            </span>
           </div>
 
           <!-- Player Role Details -->
@@ -794,6 +1028,210 @@ const webUserEmail = computed(() => {
   margin: 0;
   font-size: 0.9rem;
   color: var(--color-text-muted);
+}
+
+/* Educator Display Name Editor */
+.missing-display-name-banner {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.missing-display-name-banner strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.missing-display-name-banner p {
+  margin: 0;
+}
+
+.missing-display-name-banner .recovery-draft-note {
+  margin-top: 0.45rem;
+}
+
+:root[data-theme="dark"] .missing-display-name-banner {
+  background-color: #451a03;
+  border-color: #92400e;
+  color: #fde68a;
+}
+
+.display-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.display-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: 480px;
+}
+
+.display-name-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.display-name-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.display-name-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.55rem 0.8rem;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--color-text-main);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.display-name-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.display-name-input.input-invalid {
+  border-color: var(--color-danger, #dc2626);
+}
+
+.display-name-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.display-name-error {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-danger, #dc2626);
+}
+
+.display-name-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-save-display-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.15rem;
+  min-height: 42px;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-save-display-name:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.btn-save-display-name:focus-visible,
+.btn-cancel-display-name:focus-visible,
+.btn-return-classroom:focus-visible,
+.btn-inline-return:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-save-display-name:disabled,
+.btn-cancel-display-name:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cancel-display-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.1rem;
+  min-height: 42px;
+  background-color: var(--color-card);
+  color: var(--color-text-main);
+  border: 1.5px solid var(--color-border-control);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-cancel-display-name:hover:not(:disabled) {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-border-hover);
+}
+
+.btn-return-classroom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.1rem;
+  min-height: 42px;
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-violet-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.display-name-success {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.9rem;
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  max-width: 480px;
+}
+
+.btn-inline-return {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* Read-only Notice Banner */

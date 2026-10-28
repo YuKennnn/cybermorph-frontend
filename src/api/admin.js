@@ -60,3 +60,52 @@ export const rejectEducator = async (userId) => {
   const response = await apiClient.post(`/admin/approvals/${userId}/reject`)
   return response.data
 }
+
+/**
+ * Fetch paginated list of all live classrooms across educators.
+ * Endpoint: GET /admin/classrooms
+ * @param {Object} [params] - Query parameters
+ * @param {string} [params.search] - Search term across classroom name, join code, or owner email
+ * @param {number} [params.page=1] - 1-based page number
+ * @param {number} [params.page_size=20] - Number of items per page
+ * @returns {Promise<{ items: Array, total_count: number, page: number, page_size: number }>}
+ */
+export const fetchAdminClassrooms = async (params = {}) => {
+  const response = await apiClient.get('/admin/classrooms', { params })
+  return response.data
+}
+
+/**
+ * Switch a classroom's student enrollment status on or off as an administrator.
+ * Endpoint: PATCH /admin/classrooms/{codeId}
+ * Only `{ is_active }` is accepted by the backend (`StrictBool`, `extra="forbid"`).
+ * @param {string} codeId - UUID of the classroom (`code_id`)
+ * @param {boolean} isActive - Strict boolean enrollment state (`true` = open, `false` = closed)
+ * @returns {Promise<Object>} Updated `AdminClassroomResponse`
+ */
+export const updateAdminClassroomStatus = async (codeId, isActive) => {
+  if (typeof codeId !== 'string' || !codeId.trim()) {
+    throw new TypeError('Classroom codeId must be a non-empty string')
+  }
+  if (typeof isActive !== 'boolean') {
+    throw new TypeError('isActive must be a boolean')
+  }
+  const response = await apiClient.patch(
+    `/admin/classrooms/${encodeURIComponent(codeId)}`,
+    { is_active: isActive },
+  )
+  return response.data
+}
+
+/**
+ * Soft-delete any educator's classroom as an administrator.
+ * Endpoint: DELETE /admin/classrooms/{codeId}
+ * @param {string} codeId - UUID of the classroom (`code_id`)
+ * @returns {Promise<void>} Resolves on 204 No Content
+ */
+export const deleteAdminClassroom = async (codeId) => {
+  if (typeof codeId !== 'string' || !codeId.trim()) {
+    throw new TypeError('Classroom codeId must be a non-empty string')
+  }
+  await apiClient.delete(`/admin/classrooms/${encodeURIComponent(codeId)}`)
+}

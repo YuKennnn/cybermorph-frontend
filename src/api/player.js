@@ -1,4 +1,4 @@
-import apiClient from './client'
+import apiClient from './client.js'
 
 /**
  * Fetch authenticated player's profile and progress telemetry.

@@ -1,8 +1,13 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-import { extractErrorMessage } from '../api/client'
+import {
+  validateEmailField,
+  validateLoginPasswordField,
+  mapAuthApiError,
+  joinDescribedBy,
+} from '../utils/authValidation'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 
@@ -12,44 +17,119 @@ const authStore = useAuthStore()
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
-const errorMessage = ref('')
 const isLoading = ref(false)
-const isServerWakingUp = ref(false)
-let wakeUpTimer = null
+
+const emailError = ref('')
+const passwordError = ref('')
+const credentialsError = ref('')
+const formError = ref('')
+
+const emailInvalidated = ref(false)
+const passwordInvalidated = ref(false)
+
+const emailInputRef = ref(null)
+const passwordInputRef = ref(null)
+
+const isEmailInvalid = computed(
+  () => Boolean(emailError.value || credentialsError.value),
+)
+const isPasswordInvalid = computed(
+  () => Boolean(passwordError.value || credentialsError.value),
+)
+
+const emailDescribedBy = computed(() =>
+  joinDescribedBy(
+    emailError.value ? 'login-email-error' : null,
+    credentialsError.value ? 'login-credentials-error' : null,
+  ),
+)
+
+const passwordDescribedBy = computed(() =>
+  joinDescribedBy(
+    passwordError.value ? 'login-password-error' : null,
+    credentialsError.value ? 'login-credentials-error' : null,
+  ),
+)
+
+const handleEmailInput = () => {
+  if (credentialsError.value) {
+    credentialsError.value = ''
+  }
+  if (formError.value) {
+    formError.value = ''
+  }
+  if (emailInvalidated.value) {
+    const check = validateEmailField(email.value)
+    emailError.value = check.valid ? '' : check.error
+  }
+}
+
+const handlePasswordInput = () => {
+  if (credentialsError.value) {
+    credentialsError.value = ''
+  }
+  if (formError.value) {
+    formError.value = ''
+  }
+  if (passwordInvalidated.value) {
+    const check = validateLoginPasswordField(password.value)
+    passwordError.value = check.valid ? '' : check.error
+  }
+}
 
 const handleLogin = async () => {
-  errorMessage.value = ''
-  isLoading.value = true
-  isServerWakingUp.value = false
+  if (isLoading.value) return
 
-  // Inform user if request takes longer than 4s due to Render cold start
-  wakeUpTimer = setTimeout(() => {
-    if (isLoading.value) {
-      isServerWakingUp.value = true
+  formError.value = ''
+  credentialsError.value = ''
+
+  const emailCheck = validateEmailField(email.value)
+  const passwordCheck = validateLoginPasswordField(password.value)
+
+  emailError.value = emailCheck.valid ? '' : emailCheck.error
+  passwordError.value = passwordCheck.valid ? '' : passwordCheck.error
+
+  if (!emailCheck.valid) {
+    emailInvalidated.value = true
+  }
+  if (!passwordCheck.valid) {
+    passwordInvalidated.value = true
+  }
+
+  if (!emailCheck.valid || !passwordCheck.valid) {
+    await nextTick()
+    if (!emailCheck.valid) {
+      emailInputRef.value?.focus()
+    } else if (!passwordCheck.valid) {
+      passwordInputRef.value?.focus()
     }
-  }, 4000)
+    return
+  }
+
+  isLoading.value = true
 
   try {
     await authStore.login({
-      email: email.value.trim(),
+      email: emailCheck.trimmed,
       password: password.value,
     })
     router.push('/dashboard')
   } catch (error) {
-    errorMessage.value = extractErrorMessage(
-      error,
-      'Sign-in failed. Please verify your credentials or server connection.',
-    )
+    const mapped = mapAuthApiError(error, { mode: 'login' })
+    credentialsError.value = mapped.credentialsError
+    if (mapped.fieldErrors.email) {
+      emailError.value = mapped.fieldErrors.email
+      emailInvalidated.value = true
+    }
+    if (mapped.fieldErrors.password) {
+      passwordError.value = mapped.fieldErrors.password
+      passwordInvalidated.value = true
+    }
+    formError.value = mapped.formError
   } finally {
-    if (wakeUpTimer) clearTimeout(wakeUpTimer)
     isLoading.value = false
-    isServerWakingUp.value = false
   }
 }
-
-onUnmounted(() => {
-  if (wakeUpTimer) clearTimeout(wakeUpTimer)
-})
 </script>
 
 <template>
@@ -57,30 +137,38 @@ onUnmounted(() => {
     <PublicHeader />
     <div class="auth-container">
       <div class="auth-card">
-
-
         <h2 class="title">Sign In</h2>
         <p class="subtitle">Sign in to your CyberMorph account</p>
 
-        <div v-if="errorMessage" class="error-banner">
-          {{ errorMessage }}
-        </div>
-
-        <div v-if="isServerWakingUp" class="info-banner">
-          Connecting to backend server... This may take up to 45 seconds after idle.
-        </div>
-
-        <form @submit.prevent="handleLogin">
+        <form
+          novalidate
+          :aria-busy="isLoading ? 'true' : 'false'"
+          @submit.prevent="handleLogin"
+        >
           <div class="form-group">
             <label for="email">Email Address</label>
             <input
               id="email"
+              ref="emailInputRef"
               v-model="email"
               type="email"
+              :class="{ 'input-invalid': isEmailInvalid }"
+              :aria-invalid="isEmailInvalid ? 'true' : 'false'"
+              :aria-describedby="emailDescribedBy"
               placeholder="your-email@example.com"
               required
               autocomplete="email"
+              @input="handleEmailInput"
             />
+            <p
+              v-if="emailError"
+              id="login-email-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="14" class="field-error-icon" />
+              <span>{{ emailError }}</span>
+            </p>
           </div>
 
           <div class="form-group">
@@ -88,11 +176,16 @@ onUnmounted(() => {
             <div class="password-input-wrapper">
               <input
                 id="password"
+                ref="passwordInputRef"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
+                :class="{ 'input-invalid': isPasswordInvalid }"
+                :aria-invalid="isPasswordInvalid ? 'true' : 'false'"
+                :aria-describedby="passwordDescribedBy"
                 placeholder="Enter your password"
                 required
                 autocomplete="current-password"
+                @input="handlePasswordInput"
               />
               <button
                 type="button"
@@ -104,10 +197,44 @@ onUnmounted(() => {
                 <AppIcon :name="showPassword ? 'eye-off' : 'eye'" :size="18" />
               </button>
             </div>
+            <p
+              v-if="passwordError"
+              id="login-password-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="14" class="field-error-icon" />
+              <span>{{ passwordError }}</span>
+            </p>
+            <p
+              v-if="credentialsError"
+              id="login-credentials-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="14" class="field-error-icon" />
+              <span>{{ credentialsError }}</span>
+            </p>
           </div>
 
-          <button type="submit" class="btn-primary" :disabled="isLoading">
-            {{ isLoading ? 'Signing In...' : 'Sign In to Portal' }}
+          <div
+            v-if="formError"
+            id="login-form-error"
+            class="error-banner form-error-banner"
+            role="alert"
+          >
+            <AppIcon name="alert" :size="16" class="field-error-icon" />
+            <span>{{ formError }}</span>
+          </div>
+
+          <button
+            type="submit"
+            class="btn-primary"
+            :disabled="isLoading"
+            :aria-busy="isLoading ? 'true' : 'false'"
+          >
+            <AppIcon v-if="isLoading" name="loader" :size="16" class="btn-spinner" />
+            <span>{{ isLoading ? 'Signing in…' : 'Sign In to Portal' }}</span>
           </button>
         </form>
 
@@ -146,28 +273,6 @@ onUnmounted(() => {
   box-shadow: var(--shadow-purple-hover);
 }
 
-.card-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  background-color: var(--color-bg-muted);
-  padding: 0.25rem 0.65rem;
-  border-radius: 9999px;
-  margin-bottom: 1.25rem;
-  letter-spacing: 0.05em;
-}
-
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
-}
-
 .title {
   margin: 0 0 0.35rem 0;
   font-size: 1.65rem;
@@ -194,6 +299,7 @@ label {
 }
 
 input {
+  min-height: 44px;
   padding: 0.75rem 1rem;
   background-color: var(--color-bg);
   border: 1.5px solid var(--color-border-control);
@@ -202,12 +308,22 @@ input {
   font-family: var(--font-sans);
   font-size: 0.95rem;
   outline: none;
-  transition: all 0.2s ease;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 input:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
+}
+
+input.input-invalid {
+  border-color: var(--color-danger);
+}
+
+input.input-invalid:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-border);
 }
 
 .password-input-wrapper {
@@ -224,11 +340,13 @@ input:focus {
 
 .btn-toggle-password {
   position: absolute;
-  right: 0.75rem;
+  right: 0.5rem;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0.25rem;
   color: var(--color-text-dim);
   cursor: pointer;
@@ -248,9 +366,27 @@ input:focus {
   outline-offset: 2px;
 }
 
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0 0;
+  color: var(--color-danger);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.field-error-icon {
+  flex-shrink: 0;
+  margin-top: 0.12rem;
+}
+
 .btn-primary {
   width: 100%;
-  padding: 0.8rem;
+  min-height: 44px;
+  padding: 0.8rem 1rem;
   margin-top: 0.5rem;
   background: var(--btn-gradient);
   color: #ffffff;
@@ -261,6 +397,11 @@ input:focus {
   font-weight: 700;
   letter-spacing: 0.03em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
   transition: all 0.2s ease;
 }
@@ -272,28 +413,44 @@ input:focus {
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.65;
   cursor: not-allowed;
+  transform: none;
+}
+
+.btn-spinner {
+  animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner {
+    animation: none !important;
+  }
+}
+
+:global(:root[data-reduced-motion="true"]) .btn-spinner {
+  animation: none !important;
 }
 
 .error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   background-color: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   color: var(--color-danger);
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
-}
-
-.info-banner {
-  background-color: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning);
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-  font-size: 0.88rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .footer-text {

@@ -2,6 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { fetchMyClassrooms } from '../api/classroom.js'
 
+export const ALLOWED_CLASSROOM_RETURN_ROUTES = Object.freeze([
+  '/dashboard',
+  '/classroom/manage',
+])
+
+export const isAllowedClassroomReturnRoute = (routePath) =>
+  typeof routePath === 'string' && ALLOWED_CLASSROOM_RETURN_ROUTES.includes(routePath)
+
 export const useClassroomStore = defineStore('classroom', () => {
   // ==========================================
   // 1. STATE (In-Memory Only, Never Persisted)
@@ -11,6 +19,12 @@ export const useClassroomStore = defineStore('classroom', () => {
   const isLoading = ref(false)
   const error = ref('')
   const isFetched = ref(false)
+
+  // Classroom creation draft & missing display_name recovery state
+  const createDraftName = ref('')
+  const createConflictNeedsDisplayName = ref(false)
+  const pendingCreateReturnRoute = ref(null)
+  const shouldReopenCreateModal = ref(false)
 
   // Internal concurrency & promise deduplication guards
   let currentRequestId = 0
@@ -138,6 +152,59 @@ export const useClassroomStore = defineStore('classroom', () => {
   }
 
   /**
+   * Classroom creation draft & 409 display_name recovery helpers.
+   */
+  const setCreateDraftName = (name) => {
+    createDraftName.value = typeof name === 'string' ? name : ''
+  }
+
+  const markDisplayNameConflict = (returnRoute) => {
+    createConflictNeedsDisplayName.value = true
+    pendingCreateReturnRoute.value = isAllowedClassroomReturnRoute(returnRoute)
+      ? returnRoute
+      : null
+  }
+
+  const clearCreateConflict = () => {
+    createConflictNeedsDisplayName.value = false
+  }
+
+  const prepareReturnToCreateModal = (fallbackRoute = null) => {
+    const target = isAllowedClassroomReturnRoute(pendingCreateReturnRoute.value)
+      ? pendingCreateReturnRoute.value
+      : isAllowedClassroomReturnRoute(fallbackRoute)
+        ? fallbackRoute
+        : null
+    if (target) {
+      pendingCreateReturnRoute.value = target
+      shouldReopenCreateModal.value = true
+    }
+    createConflictNeedsDisplayName.value = false
+    return target
+  }
+
+  const consumeReopenCreateModal = (currentPath) => {
+    if (!shouldReopenCreateModal.value) return false
+    if (
+      pendingCreateReturnRoute.value &&
+      isAllowedClassroomReturnRoute(currentPath) &&
+      pendingCreateReturnRoute.value !== currentPath
+    ) {
+      return false
+    }
+    shouldReopenCreateModal.value = false
+    pendingCreateReturnRoute.value = null
+    return true
+  }
+
+  const clearCreateDraft = () => {
+    createDraftName.value = ''
+    createConflictNeedsDisplayName.value = false
+    pendingCreateReturnRoute.value = null
+    shouldReopenCreateModal.value = false
+  }
+
+  /**
    * Reset all state. Called on user logout or session switch to prevent data leakage.
    * Increments currentRequestId so pending in-flight requests cannot update state after reset.
    */
@@ -149,6 +216,7 @@ export const useClassroomStore = defineStore('classroom', () => {
     isLoading.value = false
     error.value = ''
     isFetched.value = false
+    clearCreateDraft()
   }
 
   return {
@@ -158,6 +226,10 @@ export const useClassroomStore = defineStore('classroom', () => {
     isLoading,
     error,
     isFetched,
+    createDraftName,
+    createConflictNeedsDisplayName,
+    pendingCreateReturnRoute,
+    shouldReopenCreateModal,
     // Getters
     currentClassroom,
     activeClassrooms,
@@ -167,6 +239,12 @@ export const useClassroomStore = defineStore('classroom', () => {
     setCurrentClassroomId,
     updateClassroomInState,
     removeClassroomFromState,
+    setCreateDraftName,
+    markDisplayNameConflict,
+    clearCreateConflict,
+    prepareReturnToCreateModal,
+    consumeReopenCreateModal,
+    clearCreateDraft,
     reset,
   }
 })

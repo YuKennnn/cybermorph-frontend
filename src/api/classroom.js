@@ -34,8 +34,39 @@ export const generateClassroomCode = async (data) => {
  * @returns {Promise<{ profile_id: string, code_id: string, name: string, joined_at: string }>}
  */
 export const joinClassroom = async (codeOrPayload) => {
-  const codeValue = typeof codeOrPayload === 'string' ? codeOrPayload : codeOrPayload?.code_value || codeOrPayload?.code
-  const response = await apiClient.post('/classroom/join', { code_value: codeValue })
+  const rawCode =
+    typeof codeOrPayload === 'string'
+      ? codeOrPayload
+      : codeOrPayload?.code_value || codeOrPayload?.code || ''
+  const normalizedCode = String(rawCode).replace(/[\s-]+/g, '').toUpperCase()
+  const response = await apiClient.post('/classroom/join', { code_value: normalizedCode })
+  return response.data
+}
+
+/**
+ * Fetch the authenticated player's current classroom membership.
+ * Endpoint: GET /classroom/mine
+ * @returns {Promise<{
+ *   code_id: string,
+ *   name: string,
+ *   educator_name: string | null,
+ *   joined_at: string,
+ *   member_count: number,
+ *   members: Array<{ username: string, map_progress: number }>
+ * }>}
+ */
+export const fetchMyClassroom = async () => {
+  const response = await apiClient.get('/classroom/mine')
+  return response.data
+}
+
+/**
+ * Leave the authenticated player's current classroom.
+ * Endpoint: DELETE /classroom/mine
+ * @returns {Promise<void>}
+ */
+export const leaveMyClassroom = async () => {
+  const response = await apiClient.delete('/classroom/mine')
   return response.data
 }
 
