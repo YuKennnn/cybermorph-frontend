@@ -4,6 +4,14 @@ import { useClassroomStore } from '../../stores/classroomStore.js'
 import AppIcon from '../common/AppIcon.vue'
 
 const props = defineProps({
+  pageTitle: {
+    type: String,
+    default: '',
+  },
+  pageDescription: {
+    type: String,
+    default: '',
+  },
   codeId: {
     type: String,
     required: true,
@@ -180,14 +188,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <header class="workspace-header" aria-label="Classroom workspace">
-    <!-- Breadcrumb -->
-    <div class="breadcrumb-bar">
-      <router-link to="/classroom/manage" class="back-link">
-        ◀ Return to all classrooms
-      </router-link>
+  <div class="workspace-page-heading">
+    <div v-if="pageTitle" class="workspace-heading-copy">
+      <h1>{{ pageTitle }}</h1>
+      <p v-if="pageDescription">{{ pageDescription }}</p>
     </div>
+    <!-- Breadcrumb -->
+    <router-link to="/classroom/manage" class="btn-primary return-button">
+      <AppIcon name="arrow-right" :size="18" class="return-icon" />
+      <span>Return to all classrooms</span>
+    </router-link>
+  </div>
 
+  <header class="workspace-header" aria-label="Classroom workspace">
     <!-- Metadata Error Banner & Retry -->
     <div v-if="metadataError" class="metadata-error-banner" role="alert">
       <AppIcon name="alert" :size="16" class="error-icon" />
@@ -206,9 +219,13 @@ onUnmounted(() => {
     <div class="identity-banner">
       <div class="identity-main">
         <div class="title-row">
-          <h1 class="classroom-title" :class="{ 'loading-text': isLoading }">
+          <component
+            :is="pageTitle ? 'h2' : 'h1'"
+            class="classroom-title"
+            :class="{ 'loading-text': isLoading }"
+          >
             {{ displayName }}
-          </h1>
+          </component>
 
           <!-- Confirmed Status Pill Only -->
           <span
@@ -321,6 +338,7 @@ onUnmounted(() => {
         <AppIcon name="settings" :size="16" />
         <span>Settings</span>
       </router-link>
+
     </nav>
   </header>
 </template>
@@ -337,23 +355,45 @@ onUnmounted(() => {
   max-width: 100%;
 }
 
-.breadcrumb-bar {
-  margin-bottom: 0.85rem;
-}
-
-.back-link {
-  display: inline-flex;
+.workspace-page-heading {
+  display: flex;
   align-items: center;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--color-primary, #7c3aed);
-  text-decoration: none;
-  transition: color 0.15s ease;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2rem;
 }
 
-.back-link:hover {
-  color: var(--color-primary-hover, #6d28d9);
-  text-decoration: underline;
+.workspace-heading-copy {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.workspace-heading-copy h1 {
+  margin-bottom: 0.35rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.workspace-heading-copy p {
+  margin: 0;
+  max-width: 65ch;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.return-button {
+  margin-left: auto;
+  min-height: 44px;
+  max-width: 100%;
+  text-align: left;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.return-icon {
+  flex-shrink: 0;
+  transform: rotate(180deg);
 }
 
 /* Metadata Error Banner */

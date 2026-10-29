@@ -7,7 +7,11 @@ import AppIcon from '../components/common/AppIcon.vue'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchPlayerAnalytics, fetchSessionAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
-import { CANONICAL_THREAT_CATEGORIES } from '../stores/threatIndexStore.js'
+import {
+  CANONICAL_THREAT_CATEGORIES,
+  validateThreatIndexResponse,
+} from '../stores/threatIndexStore.js'
+import { parseBackendUtcTimestamp, formatLastSyncedDate } from '../utils/datetime.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,10 +26,10 @@ const syncClassroomMetadata = (force = false) => {
 
 // Documented Simulation Maps & Canonical Threats
 const CANONICAL_MAPS = [
-  { name: 'Home' },
-  { name: 'Office' },
-  { name: 'Internet Cafe' },
-  { name: 'Public Park' },
+  { name: 'Home', stage: '01' },
+  { name: 'Office', stage: '02' },
+  { name: 'Internet Cafe', stage: '03' },
+  { name: 'Public Park', stage: '04' },
 ]
 
 const CANONICAL_THREATS = CANONICAL_THREAT_CATEGORIES
@@ -88,7 +92,7 @@ const returnDestination = computed(() => {
 const studentIdentity = ref({
   username: '',
   map_progress: null,
-  last_synced_at: null,
+  last_synced_at: undefined,
 })
 // 'loading' | 'found' | 'no_match' | 'limit_reached' | 'error'
 const identityStatus = ref('loading')
@@ -101,17 +105,15 @@ const formatMapProgress = (progress) => {
   return 'Unavailable'
 }
 
-const formatLastSynced = (isoString) => {
-  if (!isoString) return 'Not synced yet'
-  const date = new Date(isoString)
-  return isNaN(date.getTime())
-    ? 'Not synced yet'
-    : date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-}
+const formattedStudentSyncDate = computed(() => {
+  if (identityStatus.value === 'loading') {
+    return 'Loading...'
+  }
+  if (identityStatus.value !== 'found') {
+    return 'Sync date unavailable'
+  }
+  return formatLastSyncedDate(studentIdentity.value.last_synced_at)
+})
 
 const resolveStudentIdentity = async () => {
   const reqId = ++identityRequestId
@@ -134,7 +136,7 @@ const resolveStudentIdentity = async () => {
       studentIdentity.value = {
         username: foundOnStart.username || '',
         map_progress: foundOnStart.map_progress ?? null,
-        last_synced_at: foundOnStart.last_synced_at || null,
+        last_synced_at: foundOnStart.last_synced_at !== undefined ? foundOnStart.last_synced_at : undefined,
       }
       identityStatus.value = 'found'
       return
@@ -177,7 +179,7 @@ const resolveStudentIdentity = async () => {
       studentIdentity.value = {
         username: matchedStudent.username || '',
         map_progress: matchedStudent.map_progress ?? null,
-        last_synced_at: matchedStudent.last_synced_at || null,
+        last_synced_at: matchedStudent.last_synced_at !== undefined ? matchedStudent.last_synced_at : undefined,
       }
       identityStatus.value = 'found'
     } else if (totalPages > MAX_SEARCH_PAGES) {
@@ -216,6 +218,14 @@ const loadPlayerAnalytics = async () => {
     const data = await fetchPlayerAnalytics(profileId.value)
     if (reqId !== analyticsRequestId) return
     analyticsData.value = data
+    if (selectedSession.value?.session_id) {
+      const match = data.recent_sessions?.find(
+        (s) => String(s.session_id) === String(selectedSession.value.session_id),
+      )
+      if (match) {
+        selectedSession.value = match
+      }
+    }
   } catch (err) {
     if (reqId !== analyticsRequestId) return
     analyticsError.value =
@@ -255,8 +265,8 @@ const formatDuration = (seconds) => {
 
 const formatSessionDate = (isoString) => {
   if (!isoString) return '—'
-  const d = new Date(isoString)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString(undefined, {
+  const d = parseBackendUtcTimestamp(isoString)
+  return !d ? '—' : d.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -275,6 +285,48 @@ const formatErrorRate = (rate) => {
 }
 
 // ==========================================
+// Map Progression & Threat Index State
+// ==========================================
+const studentMapProgress = computed(() => {
+  const p = analyticsData.value?.map_progress ?? studentIdentity.value?.map_progress
+  if (typeof p === 'number' && Number.isInteger(p) && p >= 0 && p < CANONICAL_MAPS.length) {
+    return p
+  }
+  return null
+})
+
+const mapTiles = computed(() => {
+  const current = studentMapProgress.value
+  return CANONICAL_MAPS.map((m, idx) => ({
+    name: m.name,
+    stage: m.stage,
+    isUnlocked: current !== null && idx <= current,
+  }))
+})
+
+const validatedThreatIndex = computed(() => {
+  if (!analyticsData.value) {
+    return { status: 'loading', entries: [], error: '' }
+  }
+  return validateThreatIndexResponse(analyticsData.value.threat_index)
+})
+
+const isStudentNeverSynced = computed(() => {
+  return studentIdentity.value?.last_synced_at === null
+})
+
+const studentThreatUnlockedText = computed(() => {
+  if (isStudentNeverSynced.value) {
+    return 'Not synced yet'
+  }
+  if (validatedThreatIndex.value.status !== 'ready') {
+    return 'Unavailable'
+  }
+  const count = validatedThreatIndex.value.entries.filter((e) => e.is_unlocked).length
+  return `${count} of 8 unlocked`
+})
+
+// ==========================================
 // 3. Session Telemetry Modal State
 // ==========================================
 const isSessionModalOpen = ref(false)
@@ -286,7 +338,10 @@ const sessionErrorMessage = ref('')
 const openSession = async (sessionItem) => {
   if (!sessionItem?.session_id) return
   const reqId = ++sessionRequestId
-  selectedSession.value = sessionItem
+  const fullSession = analyticsData.value?.recent_sessions?.find(
+    (s) => String(s.session_id) === String(sessionItem.session_id),
+  )
+  selectedSession.value = fullSession || sessionItem
   isSessionModalOpen.value = true
   isSessionLoading.value = true
   sessionErrorMessage.value = ''
@@ -370,7 +425,7 @@ watch([codeId, profileId], ([newCode, newProfile], [oldCode]) => {
   studentIdentity.value = {
     username: '',
     map_progress: null,
-    last_synced_at: null,
+    last_synced_at: undefined,
   }
   identityStatus.value = 'loading'
   identityError.value = ''
@@ -447,7 +502,7 @@ onUnmounted(() => {
               <span class="meta-divider">•</span>
               <span class="meta-item">
                 <AppIcon name="clock" :size="14" class="meta-icon" />
-                Last synced: <strong>{{ formatLastSynced(studentIdentity.last_synced_at) }}</strong>
+                Last synced: <strong>{{ formattedStudentSyncDate }}</strong>
               </span>
             </div>
           </div>
@@ -541,7 +596,113 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 2. Types of Threats & Error Rates (Condition 1) -->
+        <!-- 2. Map Progression (4 Canonical Maps) -->
+        <section class="section-card" aria-label="Map progression">
+          <div class="section-header section-header-split">
+            <div>
+              <h3>Map progression</h3>
+              <span class="section-hint">Highest simulation environment unlocked through gameplay</span>
+            </div>
+            <div class="header-badge-wrap">
+              <span class="summary-count-badge">
+                {{ studentMapProgress !== null ? `${formatMapProgress(studentMapProgress)} unlocked` : 'Unavailable' }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="studentMapProgress === null" class="scoped-unavailable-banner" role="status">
+            <AppIcon name="alert" :size="16" class="banner-icon" />
+            <span>Map progression data is currently unavailable for this student.</span>
+          </div>
+
+          <div v-else class="map-grid">
+            <div
+              v-for="tile in mapTiles"
+              :key="tile.name"
+              :class="['map-card', tile.isUnlocked ? 'is-unlocked' : 'is-locked']"
+            >
+              <div class="map-card-top">
+                <span class="map-stage">Stage {{ tile.stage }}</span>
+                <span :class="['status-badge', tile.isUnlocked ? 'badge-unlocked' : 'badge-locked']">
+                  <AppIcon :name="tile.isUnlocked ? 'check' : 'lock'" :size="13" />
+                  <span>{{ tile.isUnlocked ? 'Unlocked' : 'Locked' }}</span>
+                </span>
+              </div>
+              <h4 class="map-name">{{ tile.name }}</h4>
+              <div class="map-card-footer">
+                <span class="map-state-text">
+                  {{ tile.isUnlocked ? 'Available for play' : 'Requires prior map completion' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Threat Index Unlocks (8 Canonical Categories) -->
+        <section class="section-card" aria-label="Threat index unlocks">
+          <div class="section-header section-header-split">
+            <div>
+              <h3>Threat index</h3>
+              <span class="section-hint">Types of threats unlocked through game discoveries</span>
+            </div>
+            <div class="header-badge-wrap">
+              <span class="summary-count-badge">
+                {{ studentThreatUnlockedText }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Never Synced Student Notice -->
+          <div v-if="isStudentNeverSynced" class="threat-sync-note" role="status">
+            <AppIcon name="info" :size="16" class="note-icon" />
+            <span>Student has not synced gameplay progress yet. Threat categories will show as unlocked once progress is uploaded from the game.</span>
+          </div>
+
+          <!-- Malformed / Incomplete / Unavailable Threat Index Banner -->
+          <div
+            v-else-if="validatedThreatIndex.status !== 'ready'"
+            class="scoped-unavailable-banner"
+            role="alert"
+          >
+            <AppIcon name="alert" :size="16" class="banner-icon" />
+            <span>{{ validatedThreatIndex.error || 'Threat index unlock progression is unavailable.' }}</span>
+          </div>
+
+          <!-- 8 Threat Cards Grid -->
+          <div v-if="validatedThreatIndex.status === 'ready'" class="threat-grid">
+            <div
+              v-for="entry in validatedThreatIndex.entries"
+              :key="entry.threat_name"
+              :class="['threat-card', entry.is_unlocked ? 'is-unlocked' : 'is-locked']"
+            >
+              <div class="threat-card-top">
+                <div class="threat-category-heading">
+                  <span class="threat-number">{{ entry.number }}</span>
+                  <h4 class="threat-name">{{ entry.threat_name }}</h4>
+                </div>
+                <span :class="['status-badge', entry.is_unlocked ? 'badge-unlocked' : 'badge-locked']">
+                  <AppIcon :name="entry.is_unlocked ? 'check' : 'lock'" :size="13" />
+                  <span>{{ entry.is_unlocked ? 'Unlocked' : 'Locked' }}</span>
+                </span>
+              </div>
+
+              <p v-if="entry.summary" class="threat-summary">
+                {{ entry.summary }}
+              </p>
+
+              <div class="threat-card-footer">
+                <span v-if="entry.is_unlocked" class="unlock-meta unlocked-meta">
+                  {{ entry.unlock_date_label }}
+                </span>
+                <span v-else class="unlock-meta locked-meta">
+                  {{ isStudentNeverSynced ? 'Not synced yet' : 'Not unlocked' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Types of Threats & Error Rates (Condition 1) -->
         <section class="section-card" aria-label="Types of threats">
           <div class="section-header">
             <h3>Types of threats</h3>
@@ -1059,5 +1220,246 @@ onUnmounted(() => {
 
 .btn-retry:hover {
   background-color: var(--color-danger-bg);
+}
+
+/* Header Badge & Split Layout */
+.section-header-split {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.summary-count-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* Map Progression Cards */
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .map-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.map-card {
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: border-color 0.15s ease;
+}
+
+.map-card.is-unlocked {
+  border-color: var(--color-secondary);
+}
+
+.map-card.is-locked {
+  background-color: var(--color-bg-subtle);
+  opacity: 0.85;
+}
+
+.map-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.map-stage {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.map-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.map-card-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* Threat Index Cards */
+.threat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .threat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.threat-card {
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-purple-sm);
+}
+
+.threat-card.is-unlocked {
+  border-color: var(--color-secondary);
+}
+
+.threat-card.is-locked {
+  background-color: var(--color-bg-subtle);
+}
+
+.threat-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.threat-category-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.threat-number {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.threat-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  line-height: 1.35;
+}
+
+.threat-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.threat-card-footer {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.unlock-meta {
+  font-weight: 600;
+}
+
+.unlocked-meta {
+  color: var(--color-text-main);
+}
+
+.locked-meta {
+  color: var(--color-text-muted);
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge-unlocked {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+}
+
+.badge-locked {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+/* Scoped Unavailable and Sync Banners */
+.scoped-unavailable-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.scoped-unavailable-banner .banner-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.threat-sync-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.threat-sync-note .note-icon {
+  color: var(--color-primary);
+  margin-top: 0.15rem;
+  flex-shrink: 0;
 }
 </style>

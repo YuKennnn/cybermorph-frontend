@@ -15,6 +15,28 @@ const isPlayerClassroomRoute = computed(
   () => route.path === '/classroom' || route.path === '/classroom/join',
 )
 
+const isEducatorClassroomRoute = computed(() => {
+  if (!authStore.isEducator) return false
+  const name = route.name
+  if (
+    name === 'classroom-manage' ||
+    name === 'classroom-students' ||
+    name === 'student-progress' ||
+    name === 'classroom-settings' ||
+    name === 'educator-analytics'
+  ) {
+    return true
+  }
+  const path = route.path
+  return (
+    path === '/classroom/manage' ||
+    path.startsWith('/classroom/manage/') ||
+    path.startsWith('/classroom/students') ||
+    path.startsWith('/classroom/settings') ||
+    path.startsWith('/analytics')
+  )
+})
+
 const ensurePlayerMembershipLoaded = () => {
   if (authStore.isPlayer && authStore.token) {
     playerClassroomStore.loadMembership().catch(() => {})
@@ -249,6 +271,16 @@ const formatRole = (role) => {
           <span class="nav-label">Overview</span>
         </router-link>
 
+        <router-link
+          v-if="authStore.isPlayer"
+          to="/session-history"
+          class="nav-item"
+          @click="closeMobileMenu"
+        >
+          <AppIcon name="clock" :size="18" class="nav-icon" />
+          <span class="nav-label">Session history</span>
+        </router-link>
+
         <router-link to="/leaderboard" class="nav-item" @click="closeMobileMenu">
           <AppIcon name="leaderboard" :size="18" class="nav-icon" />
           <span class="nav-label">Leaderboard</span>
@@ -296,21 +328,12 @@ const formatRole = (role) => {
         <router-link
           v-if="authStore.isEducator"
           to="/classroom/manage"
-          class="nav-item"
+          :class="['nav-item', { 'router-link-active': isEducatorClassroomRoute }]"
+          :aria-current="isEducatorClassroomRoute ? 'page' : undefined"
           @click="closeMobileMenu"
         >
           <AppIcon name="classrooms" :size="18" class="nav-icon" />
           <span class="nav-label">Classrooms</span>
-        </router-link>
-
-        <router-link
-          v-if="authStore.isEducator"
-          to="/analytics"
-          class="nav-item"
-          @click="closeMobileMenu"
-        >
-          <AppIcon name="analytics" :size="18" class="nav-icon" />
-          <span class="nav-label">Classroom analytics</span>
         </router-link>
 
         <!-- Admin Specific Links -->

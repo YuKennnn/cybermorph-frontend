@@ -232,6 +232,22 @@ const sizePixels = computed(() => {
     <template v-else-if="name === 'stop' || name === 'square'">
       <rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor" />
     </template>
+
+    <!-- Clock / History -->
+    <template v-else-if="name === 'clock' || name === 'history'">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </template>
+
+    <!-- Chevron Left -->
+    <template v-else-if="name === 'chevron-left'">
+      <polyline points="15 18 9 12 15 6" />
+    </template>
+
+    <!-- Chevron Right -->
+    <template v-else-if="name === 'chevron-right'">
+      <polyline points="9 18 15 12 9 6" />
+    </template>
   </svg>
 </template>
 

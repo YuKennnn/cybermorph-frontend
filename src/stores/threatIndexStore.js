@@ -2,6 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { fetchThreatIndex } from '../api/player.js'
 import { useAuthStore } from './authStore.js'
+import { parseBackendUtcTimestamp, formatThreatUnlockedCount } from '../utils/datetime.js'
+
+export { formatThreatUnlockedCount }
 
 /**
  * Eight canonical DICT threat categories in exact backend order (`API_GUIDE.md` §Players),
@@ -81,8 +84,8 @@ export const formatThreatUnlockDate = (unlockedAt) => {
   if (typeof unlockedAt !== 'string' || unlockedAt.trim() === '') {
     return 'Unlock date unavailable'
   }
-  const parsedMs = Date.parse(unlockedAt)
-  if (Number.isNaN(parsedMs)) {
+  const parsed = parseBackendUtcTimestamp(unlockedAt)
+  if (!parsed) {
     return 'Unlock date unavailable'
   }
   try {
@@ -91,7 +94,7 @@ export const formatThreatUnlockDate = (unlockedAt) => {
       month: 'short',
       day: 'numeric',
       timeZone: 'UTC',
-    }).format(new Date(parsedMs))
+    }).format(parsed)
     return `Unlocked ${formatted}`
   } catch {
     return 'Unlock date unavailable'
@@ -164,7 +167,7 @@ export const validateThreatIndexResponse = (rawData) => {
     }
 
     if (unlockedAt !== null && unlockedAt !== undefined) {
-      if (typeof unlockedAt !== 'string' || unlockedAt.trim() === '' || Number.isNaN(Date.parse(unlockedAt))) {
+      if (typeof unlockedAt !== 'string' || unlockedAt.trim() === '' || !parseBackendUtcTimestamp(unlockedAt)) {
         return {
           status: 'malformed',
           entries: [],

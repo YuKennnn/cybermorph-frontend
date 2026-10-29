@@ -5,6 +5,7 @@ import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchClassroomAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
 import { CANONICAL_THREAT_CATEGORIES } from '../stores/threatIndexStore.js'
+import { formatLastSyncedDate, formatThreatUnlockedCount } from '../utils/datetime.js'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 import ThreatPerformanceGauge from '../components/analytics/ThreatPerformanceGauge.vue'
 
@@ -281,17 +282,7 @@ const formatMapProgress = (progress) => {
   return 'Unavailable'
 }
 
-const formatLastSynced = (isoString) => {
-  if (!isoString) return 'Not synced yet'
-  const date = new Date(isoString)
-  return isNaN(date.getTime())
-    ? 'Not synced yet'
-    : date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-}
+const formatLastSynced = formatLastSyncedDate
 
 // ==========================================
 // Watchers
@@ -405,6 +396,8 @@ onUnmounted(() => {
     <!-- Header Section: Shared Classroom Workspace Header -->
     <ClassroomWorkspaceHeader
       v-if="effectiveCodeId"
+      page-title="Classroom analytics"
+      page-description="Review classroom performance, map scores, and student progress."
       :code-id="effectiveCodeId"
       active-tab="analytics"
       :student-count="hasConfirmedRoster && !rosterErrorMessage && !isStudentsLoading ? tableTotalCount : null"
@@ -607,6 +600,7 @@ onUnmounted(() => {
               <tr>
                 <th>Student name</th>
                 <th>Map progress</th>
+                <th>Threat index</th>
                 <th>Last synced</th>
                 <th class="text-right">Student progress</th>
               </tr>
@@ -622,6 +616,11 @@ onUnmounted(() => {
                 <td>
                   <span class="badge-progression">
                     {{ formatMapProgress(student.map_progress) }}
+                  </span>
+                </td>
+                <td>
+                  <span class="threat-count-badge">
+                    {{ formatThreatUnlockedCount(student.threat_unlocked_count, student.last_synced_at) }}
                   </span>
                 </td>
                 <td class="date-cell">
@@ -995,6 +994,17 @@ onUnmounted(() => {
   border-radius: 6px;
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.threat-count-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .date-cell {

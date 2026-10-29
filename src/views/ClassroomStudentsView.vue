@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom'
 import { useClassroomStore } from '../stores/classroomStore'
+import { formatLastSyncedDate, formatThreatUnlockedCount } from '../utils/datetime'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 
 const route = useRoute()
@@ -127,17 +128,7 @@ watch(
   },
 )
 
-const formatLastSynced = (isoString) => {
-  if (!isoString) return 'Not synced yet'
-  const date = new Date(isoString)
-  return isNaN(date.getTime())
-    ? 'Not synced yet'
-    : date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-}
+const formatLastSynced = formatLastSyncedDate
 
 onMounted(() => {
   syncClassroomMetadata()
@@ -152,6 +143,8 @@ onUnmounted(() => {
 <template>
   <div class="roster-page">
     <ClassroomWorkspaceHeader
+      page-title="Classroom students"
+      page-description="Review enrolled students, map progress, and their latest sync activity."
       :code-id="codeId"
       :student-count="hasConfirmedRoster ? totalCount : null"
       :is-count-loading="isRosterLoading"
@@ -186,6 +179,7 @@ onUnmounted(() => {
               <tr>
                 <th>Student name</th>
                 <th>Map progress</th>
+                <th>Threat index</th>
                 <th>Last synced</th>
                 <th class="text-right">Student progress</th>
               </tr>
@@ -197,6 +191,11 @@ onUnmounted(() => {
                 </td>
                 <td>
                   <span class="progress-badge">{{ formatMapProgress(student.map_progress) }}</span>
+                </td>
+                <td>
+                  <span class="threat-count-badge">
+                    {{ formatThreatUnlockedCount(student.threat_unlocked_count, student.last_synced_at) }}
+                  </span>
                 </td>
                 <td class="date-cell">{{ formatLastSynced(student.last_synced_at) }}</td>
                 <td class="text-right">
@@ -426,6 +425,18 @@ tr:hover {
   font-family: var(--font-sans);
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.threat-count-badge {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .date-cell {

@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { formatFinishingCredits } from '../../utils/playerSessions.js'
 
 const props = defineProps({
   isOpen: {
@@ -37,6 +38,10 @@ const emit = defineEmits(['close', 'backToStudent'])
 const modalRef = ref(null)
 const backBtnRef = ref(null)
 let previousActiveElement = null
+
+const formattedFinishingCredits = computed(() => {
+  return formatFinishingCredits(props.session?.credits_left)
+})
 
 const trapFocus = (event) => {
   if (event.key !== 'Tab' || !modalRef.value) return
@@ -160,36 +165,44 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <div v-if="isLoading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Loading session details...</p>
-      </div>
-
-      <div v-else-if="errorMessage" class="error-banner" role="alert">
-        {{ errorMessage }}
-      </div>
-
-      <div v-else-if="sessionTelemetry" class="modal-body">
-        <!-- Session Context Header -->
-        <div class="session-summary-box">
+      <div class="modal-body">
+        <!-- Session Context Header (Known from selected recent-session record) -->
+        <div v-if="session || sessionTelemetry" class="session-summary-box">
           <div class="summary-col">
             <span class="summary-label">Student</span>
-            <span class="summary-val">{{ sessionTelemetry.username || student?.username || 'Student' }}</span>
+            <span class="summary-val">{{ sessionTelemetry?.username || student?.username || 'Student' }}</span>
           </div>
           <div class="summary-col">
             <span class="summary-label">Map</span>
-            <span class="summary-val">{{ sessionTelemetry.map_name }}</span>
+            <span class="summary-val">{{ session?.map_name || sessionTelemetry?.map_name || '—' }}</span>
           </div>
           <div class="summary-col">
             <span class="summary-label">Outcome</span>
-            <span :class="['result-pill', sessionTelemetry.result]">
-              {{ sessionTelemetry.result?.toUpperCase() }}
+            <span
+              v-if="session?.result || sessionTelemetry?.result"
+              :class="['result-pill', session?.result || sessionTelemetry?.result]"
+            >
+              {{ (session?.result || sessionTelemetry?.result)?.toUpperCase() }}
             </span>
+            <span v-else class="summary-val">—</span>
+          </div>
+          <div class="summary-col">
+            <span class="summary-label">Finishing credits</span>
+            <span class="summary-val">{{ formattedFinishingCredits }}</span>
           </div>
         </div>
 
+        <div v-if="isLoading" class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading session details...</p>
+        </div>
+
+        <div v-else-if="errorMessage" class="error-banner" role="alert">
+          {{ errorMessage }}
+        </div>
+
         <!-- Threat Events Table or Graceful Empty State -->
-        <div class="subsection">
+        <div v-else-if="sessionTelemetry" class="subsection">
           <h5>Session events</h5>
 
           <div
@@ -359,6 +372,8 @@ onUnmounted(() => {
   padding: 1rem 1.25rem;
   display: flex;
   justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 1rem;
   text-align: center;
 }
 

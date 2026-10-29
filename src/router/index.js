@@ -107,6 +107,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['player'] },
   },
   {
+    path: '/session-history',
+    name: 'session-history',
+    component: () => import('../views/SessionHistoryView.vue'),
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
+  {
     path: '/analytics/:code_id?',
     name: 'educator-analytics',
     component: () => import('../views/EducatorAnalyticsView.vue'),

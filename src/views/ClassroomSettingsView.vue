@@ -427,6 +427,8 @@ onMounted(() => {
 <template>
   <div class="settings-workspace-page">
     <ClassroomWorkspaceHeader
+      page-title="Classroom settings"
+      page-description="Update classroom details and control enrollment availability."
       :code-id="codeId"
       :originating-roster-page="originatingRosterPage"
       active-tab="settings"

@@ -42,11 +42,19 @@ const generalError = ref('')
 
 const threatFailed = computed(() => threatIndexStore.isUnavailable)
 
+// Chart is restricted to the latest 10 sessions before applying the map filter
+const chartSourceSessions = computed(() => sessionItems.value.slice(0, 10))
+
 const filteredSessions = computed(() =>
-  filterSessionsByMap(sessionItems.value, selectedMapFilter.value),
+  filterSessionsByMap(chartSourceSessions.value, selectedMapFilter.value),
 )
 
 const chartData = computed(() => buildChartSeries(filteredSessions.value))
+
+const chartAriaLabel = computed(() => {
+  const count = chartData.value.points.length
+  return `Bar chart of ${count} recent session scores from oldest to newest within your latest 10 sessions. Plotted values are provided in the accessible data table.`
+})
 
 const getActiveAccountScope = () => {
   if (!authStore.token) return null
@@ -472,8 +480,13 @@ onUnmounted(() => {
         <div class="panel-header">
           <div class="panel-heading-group">
             <div class="panel-title-row">
-              <h3 id="recent-performance-heading" class="panel-title">Recent performance</h3>
-              <span class="scope-badge">Latest 20 sessions</span>
+              <div class="panel-title-left">
+                <h3 id="recent-performance-heading" class="panel-title">Recent performance</h3>
+                <span class="scope-badge">Latest 10 sessions</span>
+              </div>
+              <router-link to="/session-history" class="btn-history-link">
+                View session history
+              </router-link>
             </div>
             <p class="panel-subtitle">
               Session score is earned credits minus lost credits and false-positive penalties
@@ -489,13 +502,13 @@ onUnmounted(() => {
               class="map-select"
               aria-describedby="overview-map-filter-note"
             >
-              <option value="All">All maps (latest 20)</option>
+              <option value="All">All maps (latest 10)</option>
               <option v-for="mapName in CANONICAL_SESSION_MAPS" :key="mapName" :value="mapName">
                 {{ mapName }}
               </option>
             </select>
             <span id="overview-map-filter-note" class="map-filter-note">
-              Filters within your latest 20 sessions
+              Filters within your latest 10 sessions
             </span>
           </div>
         </div>
@@ -525,13 +538,13 @@ onUnmounted(() => {
           </p>
         </div>
 
-        <!-- Filtered Empty State (0 sessions for selected map in latest 20) -->
+        <!-- Filtered Empty State (0 sessions for selected map in latest 10) -->
         <div v-else-if="filteredSessions.length === 0" class="panel-empty-state">
           <p class="panel-state-title">
-            No {{ selectedMapFilter }} sessions in your latest 20 sessions
+            No {{ selectedMapFilter }} sessions in your latest 10 sessions
           </p>
           <p class="panel-state-desc">
-            Select “All maps (latest 20)” or another map to view your recent recorded sessions.
+            Select “All maps (latest 10)” or another map to view your recent recorded sessions.
           </p>
         </div>
 
@@ -550,23 +563,30 @@ onUnmounted(() => {
                 </span>
               </div>
 
-              <div class="score-bars" role="img" :aria-label="`Bar chart of ${chartData.points.length} recent session scores from oldest to newest. Detailed values are listed in the Recent sessions table below.`">
-                <div
-                  v-for="point in chartData.points"
-                  :key="point.session_id"
-                  class="score-bar-col"
-                >
-                  <span class="bar-score-label">{{ point.score_label }}</span>
-                  <div class="bar-track">
-                    <div
-                      class="bar-fill"
-                      :data-map="point.map_name"
-                      :style="{ height: `${point.height_percent}%` }"
-                    ></div>
+              <div
+                class="score-bars-wrapper"
+                tabindex="0"
+                role="region"
+                aria-label="Performance score chart"
+              >
+                <div class="score-bars" role="img" :aria-label="chartAriaLabel">
+                  <div
+                    v-for="point in chartData.points"
+                    :key="point.session_id"
+                    class="score-bar-col"
+                  >
+                    <span class="bar-score-label">{{ point.score_label }}</span>
+                    <div class="bar-track">
+                      <div
+                        class="bar-fill"
+                        :data-map="point.map_name"
+                        :style="{ height: `${point.height_percent}%` }"
+                      ></div>
+                    </div>
+                    <span class="bar-map-tag" :data-map="point.map_name">
+                      {{ point.short_map_tag }}
+                    </span>
                   </div>
-                  <span class="bar-map-tag" :data-map="point.map_name">
-                    {{ point.short_map_tag }}
-                  </span>
                 </div>
               </div>
             </template>
@@ -574,65 +594,29 @@ onUnmounted(() => {
             <div v-else-if="chartData.points.length === 1" class="chart-insufficient-notice">
               Only 1 scored session in this view ({{ chartData.points[0].map_name }}:
               <strong>{{ chartData.points[0].score_label }}</strong>). At least 2 scored sessions
-              are needed to plot a performance comparison; full details are listed below.
+              are needed to plot a performance comparison.
             </div>
 
             <div v-else class="chart-insufficient-notice">
-              Score values are unavailable for the sessions in this view. See the session list below
-              for available details.
-            </div>
-          </div>
-
-          <!-- Accessible Recent Sessions List / Table -->
-          <div class="sessions-list-section">
-            <div class="sessions-list-header">
-              <h4 id="recent-sessions-heading" class="sessions-list-title">Recent sessions</h4>
-              <span class="sessions-count-note">
-                Showing {{ filteredSessions.length }} of {{ sessionItems.length }} in latest 20
-              </span>
+              Score values are unavailable for the sessions in this view.
             </div>
 
-            <div class="sessions-table-wrapper">
-              <table class="sessions-table" aria-labelledby="recent-sessions-heading">
+            <!-- Screen-reader accessible equivalent for plotted sessions -->
+            <div class="sr-only">
+              <table>
+                <caption>Recent performance score history (latest 10 sessions, oldest to newest)</caption>
                 <thead>
                   <tr>
                     <th scope="col">Date</th>
                     <th scope="col">Map</th>
-                    <th scope="col">Result</th>
-                    <th scope="col" class="col-num">Score</th>
-                    <th scope="col">Credit breakdown</th>
+                    <th scope="col">Score</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="session in filteredSessions" :key="session.session_id">
-                    <td data-label="Date" class="cell-date">
-                      <span class="date-primary">{{ session.played_date_label }}</span>
-                      <span class="date-duration">Duration: {{ session.duration_label }}</span>
-                    </td>
-                    <td data-label="Map">
-                      <span class="map-badge" :data-map="session.map_name">
-                        {{ session.map_name }}
-                      </span>
-                    </td>
-                    <td data-label="Result">
-                      <span class="result-pill" :data-result="session.result">
-                        {{ session.result_label }}
-                      </span>
-                    </td>
-                    <td
-                      data-label="Score"
-                      class="col-num cell-score"
-                      :class="{ 'is-unavailable': session.score === null }"
-                    >
-                      {{ session.score_label }}
-                    </td>
-                    <td
-                      data-label="Credit breakdown"
-                      class="cell-breakdown"
-                      :class="{ 'is-unavailable': session.score === null }"
-                    >
-                      {{ session.credit_breakdown_label }}
-                    </td>
+                  <tr v-for="point in chartData.points" :key="point.session_id">
+                    <td>{{ point.played_date_label }}</td>
+                    <td>{{ point.map_name }}</td>
+                    <td>{{ point.score_label }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -962,13 +946,21 @@ onUnmounted(() => {
   color: var(--color-text-dim);
 }
 
+.score-bars-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .score-bars {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
-  gap: 0.4rem;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(38px, 1fr);
+  gap: 0.45rem;
   align-items: end;
   min-height: 156px;
   padding-top: 0.35rem;
+  padding-bottom: 0.25rem;
 }
 
 .score-bar-col {
@@ -1040,141 +1032,24 @@ onUnmounted(() => {
   padding: 0.35rem 0.25rem;
 }
 
-/* Accessible Recent Sessions Table */
-.sessions-list-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.sessions-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.sessions-list-title {
-  margin: 0;
-  font-size: 0.98rem;
-  color: var(--color-text-main);
-}
-
-.sessions-count-note {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-.sessions-table-wrapper {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.sessions-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.86rem;
-}
-
-.sessions-table th,
-.sessions-table td {
-  padding: 0.7rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
-}
-
-.sessions-table th {
-  font-size: 0.74rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-  background-color: var(--color-bg-subtle);
-}
-
-.sessions-table th.col-num,
-.sessions-table td.col-num {
-  text-align: right;
-}
-
-.cell-date {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.date-primary {
-  font-weight: 600;
-  color: var(--color-text-main);
-}
-
-.date-duration {
-  font-size: 0.75rem;
-  color: var(--color-text-dim);
-}
-
-.map-badge {
+.btn-history-link {
   display: inline-flex;
   align-items: center;
-  padding: 0.18rem 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
   border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  background-color: var(--color-purple-light);
-  color: var(--color-primary);
   border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  transition: all 0.15s ease;
 }
 
-.result-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.16rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid var(--color-border);
+.btn-history-link:hover {
   background-color: var(--color-bg-subtle);
-  color: var(--color-text-muted);
-}
-
-.result-pill[data-result='win'] {
-  background-color: var(--color-success-bg);
-  border-color: var(--color-success-border);
-  color: var(--color-success);
-}
-
-.result-pill[data-result='lose'] {
-  background-color: var(--color-danger-bg);
-  border-color: var(--color-danger-border);
-  color: var(--color-danger);
-}
-
-.result-pill[data-result='timeout'] {
-  background-color: var(--color-purple-light);
-  border-color: var(--color-border);
-  color: var(--color-primary);
-}
-
-.cell-score {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-
-.cell-breakdown {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.cell-score.is-unavailable,
-.cell-breakdown.is-unavailable {
-  color: var(--color-text-dim);
-  font-family: var(--font-sans);
-  font-weight: 600;
+  border-color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .loading-state {
@@ -1342,61 +1217,15 @@ onUnmounted(() => {
   }
 
   .score-bars {
-    grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
-    gap: 0.25rem;
+    gap: 0.35rem;
   }
 
   .bar-score-label {
-    font-size: 0.62rem;
+    font-size: 0.65rem;
   }
 
   .bar-map-tag {
-    font-size: 0.62rem;
-  }
-
-  .sessions-table thead {
-    display: none;
-  }
-
-  .sessions-table,
-  .sessions-table tbody,
-  .sessions-table tr,
-  .sessions-table td {
-    display: block;
-    width: 100%;
-  }
-
-  .sessions-table tr {
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 0.65rem 0.8rem;
-    margin-bottom: 0.65rem;
-    background-color: var(--color-bg-subtle);
-  }
-
-  .sessions-table td {
-    border-bottom: none;
-    padding: 0.28rem 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.75rem;
-    text-align: right;
-  }
-
-  .sessions-table td::before {
-    content: attr(data-label);
-    font-size: 0.74rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--color-text-muted);
-    text-align: left;
-    flex-shrink: 0;
-  }
-
-  .cell-date {
-    align-items: flex-end;
+    font-size: 0.65rem;
   }
 }
 

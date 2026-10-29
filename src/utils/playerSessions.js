@@ -1,3 +1,5 @@
+import { parseBackendUtcTimestamp } from './datetime.js'
+
 export const FALSE_POSITIVE_PENALTY = 25
 
 export const CANONICAL_SESSION_MAPS = Object.freeze([
@@ -75,6 +77,28 @@ export const isMapUnlocked = (mapNameOrIndex, mapProgress) => {
 }
 
 /**
+ * Formats a session's finishing credits (`credits_left`) for UI display.
+ *
+ * Rules:
+ * - Confirmed non-negative integer (e.g. 130, 0) displays as string ("130", "0").
+ * - `null` or missing (`undefined`) displays as "Not recorded".
+ * - Malformed values (negative, fractions, non-number types like strings, NaN, Infinity) display as "Unavailable".
+ * - Never coerces strings, never truncates fractions, never clamps negatives.
+ *
+ * @param {unknown} creditsLeft
+ * @returns {string}
+ */
+export const formatFinishingCredits = (creditsLeft) => {
+  if (creditsLeft === null || creditsLeft === undefined) {
+    return 'Not recorded'
+  }
+  if (typeof creditsLeft !== 'number' || !Number.isInteger(creditsLeft) || creditsLeft < 0) {
+    return 'Unavailable'
+  }
+  return String(creditsLeft)
+}
+
+/**
  * Computes the verified backend session score:
  *   max(0, credits_earned - credits_lost - 25 * false_positives)
  *
@@ -118,8 +142,8 @@ export const formatSessionDate = (isoString) => {
       valid: false,
     }
   }
-  const parsed = new Date(isoString)
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseBackendUtcTimestamp(isoString)
+  if (!parsed) {
     return {
       fullLabel: 'Date unavailable',
       shortLabel: '—',
@@ -225,6 +249,9 @@ export const normalizeSessionHistoryResponse = (rawResponse, expectedProfileId =
       valid: false,
       error: 'Invalid session history response.',
       items: [],
+      totalCount: null,
+      page: 1,
+      pageSize: 20,
       gamesPlayed: null,
       bestScore: null,
       bestScoreUnavailable: true,
@@ -252,6 +279,9 @@ export const normalizeSessionHistoryResponse = (rawResponse, expectedProfileId =
           valid: false,
           error: 'Session history response does not match the active player profile.',
           items: [],
+          totalCount: null,
+          page: 1,
+          pageSize: 20,
           gamesPlayed: null,
           bestScore: null,
           bestScoreUnavailable: true,
@@ -265,6 +295,11 @@ export const normalizeSessionHistoryResponse = (rawResponse, expectedProfileId =
 
   const totalCountValid = isValidNonNegativeNumber(rawResponse.total_count)
   const rawTotalCount = totalCountValid ? Math.trunc(rawResponse.total_count) : null
+  const pageValid = isValidNonNegativeNumber(rawResponse.page) && rawResponse.page >= 1
+  const rawPage = pageValid ? Math.trunc(rawResponse.page) : 1
+  const pageSizeValid = isValidNonNegativeNumber(rawResponse.page_size) && rawResponse.page_size >= 1
+  const rawPageSize = pageSizeValid ? Math.trunc(rawResponse.page_size) : 20
+
   // Total count cannot be smaller than the number of returned session rows
   const gamesPlayed =
     rawTotalCount !== null && rawTotalCount >= items.length ? rawTotalCount : null
@@ -274,6 +309,9 @@ export const normalizeSessionHistoryResponse = (rawResponse, expectedProfileId =
       valid: true,
       error: '',
       items: [],
+      totalCount: rawTotalCount,
+      page: rawPage,
+      pageSize: rawPageSize,
       gamesPlayed,
       bestScore: null,
       bestScoreUnavailable: false,
@@ -289,6 +327,9 @@ export const normalizeSessionHistoryResponse = (rawResponse, expectedProfileId =
     valid: true,
     error: '',
     items,
+    totalCount: rawTotalCount,
+    page: rawPage,
+    pageSize: rawPageSize,
     gamesPlayed,
     bestScore,
     bestScoreUnavailable,
@@ -333,8 +374,9 @@ export const buildChartSeries = (filteredItems) => {
   const maxScore = Math.max(100, ...chronological.map((item) => item.score))
 
   const points = chronological.map((item, idx) => {
-    const rawPct = maxScore > 0 ? Math.round((item.score / maxScore) * 100) : 0
-    const heightPercent = item.score === 0 ? 4 : Math.max(8, Math.min(100, rawPct))
+    const rawPct = maxScore > 0 ? (item.score / maxScore) * 100 : 0
+    // Preserve genuine zero scores with zero-height fills; remove artificial minimum bar heights
+    const heightPercent = item.score <= 0 ? 0 : Math.min(100, Math.round(rawPct))
     return {
       ...item,
       order_index: idx + 1,
