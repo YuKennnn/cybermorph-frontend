@@ -58,7 +58,7 @@ export const updateWebUserProfile = async (payload) => {
 /**
  * Fetch authenticated player's profile and progress telemetry.
  * Endpoint: GET /players/me
- * @returns {Promise<{ profile_id: string, user_id: string, username: string, map_progress: string|number }>}
+ * @returns {Promise<{ profile_id: string, user_id: string, username: string, map_progress: number }>}
  */
 export const fetchPlayerProfile = async () => {
   const response = await apiClient.get('/players/me')

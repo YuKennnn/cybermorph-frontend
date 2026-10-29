@@ -296,6 +296,18 @@ onMounted(() => {
   }
 }
 
+@media (min-width: 1600px) {
+  .classroom-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .classroom-grid > * {
+    max-width: 420px;
+    width: 100%;
+  }
+}
+
 .empty-state {
   text-align: center;
   padding: 3.5rem 1.5rem;

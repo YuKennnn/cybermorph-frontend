@@ -470,4 +470,18 @@ input.input-invalid:focus {
 .link-primary:hover {
   text-decoration: underline;
 }
+
+@media (min-width: 1600px) {
+  .auth-container {
+    align-items: flex-start;
+    padding-top: clamp(2.5rem, 8vh, 5rem);
+    padding-bottom: 2.5rem;
+  }
+
+  .auth-card {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 2.5rem;
+  }
+}
 </style>

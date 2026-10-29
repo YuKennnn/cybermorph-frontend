@@ -305,6 +305,20 @@ onMounted(() => {
   }
 }
 
+@media (min-width: 1600px) {
+  .join-page {
+    align-items: flex-start;
+    padding-top: clamp(2.5rem, 8vh, 5rem);
+    padding-bottom: 2.5rem;
+  }
+
+  .join-card {
+    max-width: 500px;
+    margin: 0 auto;
+    padding: 2.5rem;
+  }
+}
+
 .card-header {
   margin-bottom: 1.5rem;
 }

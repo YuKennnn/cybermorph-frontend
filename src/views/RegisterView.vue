@@ -765,4 +765,26 @@ input.input-invalid:focus {
     max-width: 100%;
   }
 }
+
+@media (min-width: 1600px) {
+  .auth-container {
+    align-items: flex-start;
+    padding-top: clamp(2.5rem, 8vh, 5rem);
+    padding-bottom: 2.5rem;
+  }
+
+  .auth-card {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 2.25rem 2.5rem;
+  }
+
+  .title,
+  .auth-form,
+  .role-selector-wrap,
+  .error-banner,
+  .success-banner {
+    max-width: 360px;
+  }
+}
 </style>

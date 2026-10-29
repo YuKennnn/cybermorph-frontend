@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchClassroomAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
+import { CANONICAL_THREAT_CATEGORIES } from '../stores/threatIndexStore.js'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 import ThreatPerformanceGauge from '../components/analytics/ThreatPerformanceGauge.vue'
 
@@ -11,17 +12,8 @@ const route = useRoute()
 const router = useRouter()
 const classroomStore = useClassroomStore()
 
-// Canonical DICT Threat Categories
-const CANONICAL_THREATS = [
-  { name: 'Phishing' },
-  { name: 'Smishing' },
-  { name: 'Vishing' },
-  { name: 'Social Engineering' },
-  { name: 'Credential Theft / Weak Password Attack' },
-  { name: 'Public Wi-Fi Attack' },
-  { name: 'Malware Infection' },
-  { name: 'Ransomware' },
-]
+// Reused Canonical DICT Threat Categories
+const CANONICAL_THREATS = CANONICAL_THREAT_CATEGORIES
 
 // Canonical Simulation Maps
 const CANONICAL_MAPS = [
@@ -283,13 +275,10 @@ const goToTablePage = (targetPage) => {
 
 // Formatters
 const formatMapProgress = (progress) => {
-  if (typeof progress === 'number' && progress >= 1 && progress <= CANONICAL_MAPS.length) {
-    return CANONICAL_MAPS[progress - 1].name
+  if (typeof progress === 'number' && Number.isInteger(progress) && progress >= 0 && progress < CANONICAL_MAPS.length) {
+    return CANONICAL_MAPS[progress].name
   }
-  if (typeof progress === 'string' && progress.trim()) {
-    return progress
-  }
-  return 'Not started'
+  return 'Unavailable'
 }
 
 const formatLastSynced = (isoString) => {
@@ -531,7 +520,7 @@ onUnmounted(() => {
                 <span class="kpi-value">
                   {{
                     classroomAnalytics?.avg_map_progress !== undefined && classroomAnalytics?.avg_map_progress !== null
-                      ? `Level ${classroomAnalytics.avg_map_progress.toFixed(1)}`
+                      ? `${Number(classroomAnalytics.avg_map_progress).toFixed(1)}`
                       : '—'
                   }}
                 </span>

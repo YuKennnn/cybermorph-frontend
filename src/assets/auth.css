@@ -115,6 +115,71 @@
   box-shadow: 0 0 0 3.5px rgba(124, 58, 237, 0.15);
 }
 
+/* Browser Autofill Support across Light, Dark, and System Themes
+   Uses inset box-shadow with var(--color-bg) to match normal inputs exactly across all states
+   without long-transition delays or duplicate overrides. */
+.auth-page-wrapper input:-webkit-autofill,
+.auth-page-wrapper input:-webkit-autofill:hover,
+.auth-page-wrapper input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-text-main) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text-main) !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3.5px rgba(124, 58, 237, 0.15) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3.5px rgba(124, 58, 237, 0.15) !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input.input-invalid:-webkit-autofill,
+.auth-page-wrapper input.input-invalid:-webkit-autofill:hover,
+.auth-page-wrapper input.input-invalid:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-text-main) !important;
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input.input-invalid:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text-main) !important;
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3px var(--color-danger-border) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3px var(--color-danger-border) !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input:autofill,
+.auth-page-wrapper input:autofill:hover,
+.auth-page-wrapper input:autofill:active {
+  box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input:autofill:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3.5px rgba(124, 58, 237, 0.15) !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input.input-invalid:autofill,
+.auth-page-wrapper input.input-invalid:autofill:hover,
+.auth-page-wrapper input.input-invalid:autofill:active {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset !important;
+  caret-color: var(--color-text-main);
+}
+
+.auth-page-wrapper input.input-invalid:autofill:focus {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 1000px var(--color-bg) inset, 0 0 0 3px var(--color-danger-border) !important;
+  caret-color: var(--color-text-main);
+}
+
 .auth-page-wrapper .password-input-wrapper {
   position: relative;
   display: flex;
@@ -279,5 +344,21 @@
   .auth-page-wrapper .auth-card {
     padding: 1.25rem 1.15rem;
     border-radius: 10px;
+  }
+}
+
+/* Large Desktop Viewport Adjustments (>= 1600px) */
+@media (min-width: 1600px) {
+  .auth-page-wrapper .auth-container {
+    align-items: flex-start;
+    padding-top: clamp(2.5rem, 8vh, 5rem);
+    padding-bottom: 2.5rem;
+    min-height: calc(100vh - var(--public-header-height, 65px));
+    box-sizing: border-box;
+  }
+
+  .auth-page-wrapper .auth-card {
+    margin: 0 auto;
+    padding: 2.25rem 2.5rem;
   }
 }

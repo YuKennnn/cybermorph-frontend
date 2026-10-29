@@ -263,6 +263,18 @@ onUnmounted(() => {
   gap: 1.25rem;
 }
 
+@media (min-width: 1600px) {
+  .nav-container {
+    max-width: 1320px;
+  }
+}
+
+@media (min-width: 2000px) {
+  .nav-container {
+    max-width: 1440px;
+  }
+}
+
 @media (max-width: 640px) {
   .nav-container {
     padding: 0.75rem 1rem;

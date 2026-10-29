@@ -336,6 +336,18 @@ const learningTopics = [
   }
 }
 
+@media (min-width: 1600px) {
+  .page-container {
+    max-width: 1320px;
+  }
+}
+
+@media (min-width: 2000px) {
+  .page-container {
+    max-width: 1440px;
+  }
+}
+
 .gameplay-hero {
   padding: 4rem 0 3rem;
   background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);

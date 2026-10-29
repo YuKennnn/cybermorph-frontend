@@ -66,7 +66,7 @@ const getRiskLabel = (rate) => {
 
 <style scoped>
 .threat-card {
-  background-color: #ffffff;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 1.15rem;

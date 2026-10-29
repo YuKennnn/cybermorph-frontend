@@ -28,18 +28,50 @@ export const isValidNonNegativeNumber = (value) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
 
 /**
- * Resolves a player's current map name from documented 1-based `map_progress`.
+ * Resolves a player's highest unlocked map name from documented 0-based `map_progress` (0–3):
+ * 0 = Home; 1 = Office; 2 = Internet Cafe; 3 = Public Park.
  * Returns null if `map_progress` is missing or invalid (never defaults to 'Home').
+ * Strictly requires an integer; does not truncate fractions or clamp out-of-range values.
+ *
+ * @param {unknown} mapProgress
+ * @returns {string | null}
  */
-export const resolveCurrentMapName = (mapProgress) => {
-  if (typeof mapProgress !== 'number' || !Number.isFinite(mapProgress)) {
+export const resolveHighestUnlockedMapName = (mapProgress) => {
+  if (typeof mapProgress !== 'number' || !Number.isInteger(mapProgress)) {
     return null
   }
-  const intProgress = Math.trunc(mapProgress)
-  if (intProgress < 1 || intProgress > CANONICAL_SESSION_MAPS.length) {
+  if (mapProgress < 0 || mapProgress >= CANONICAL_SESSION_MAPS.length) {
     return null
   }
-  return CANONICAL_SESSION_MAPS[intProgress - 1]
+  return CANONICAL_SESSION_MAPS[mapProgress]
+}
+
+/**
+ * Backward-compatible alias for resolveHighestUnlockedMapName.
+ */
+export const resolveCurrentMapName = resolveHighestUnlockedMapName
+
+/**
+ * Checks whether a map is unlocked according to the player's `map_progress` (0–3).
+ * Maps with index <= map_progress are unlocked.
+ * Returns false if mapProgress is missing or invalid.
+ *
+ * @param {string | number} mapNameOrIndex
+ * @param {unknown} mapProgress
+ * @returns {boolean}
+ */
+export const isMapUnlocked = (mapNameOrIndex, mapProgress) => {
+  if (typeof mapProgress !== 'number' || !Number.isInteger(mapProgress) || mapProgress < 0 || mapProgress > 3) {
+    return false
+  }
+  const index =
+    typeof mapNameOrIndex === 'number'
+      ? mapNameOrIndex
+      : CANONICAL_SESSION_MAPS.indexOf(mapNameOrIndex)
+  if (index < 0 || index >= CANONICAL_SESSION_MAPS.length) {
+    return false
+  }
+  return index <= mapProgress
 }
 
 /**

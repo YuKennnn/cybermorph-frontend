@@ -11,48 +11,56 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
   Object.freeze({
     number: '01',
     threat_name: 'Phishing',
+    name: 'Phishing',
     summary:
       'Deceptive email messages and fraudulent login pages designed to trick people into surrendering usernames and passwords.',
   }),
   Object.freeze({
     number: '02',
     threat_name: 'Smishing',
+    name: 'Smishing',
     summary:
       'SMS-based text message scams using fake package delivery notices or urgent account suspensions to induce clicks.',
   }),
   Object.freeze({
     number: '03',
     threat_name: 'Vishing',
+    name: 'Vishing',
     summary:
       'Voice calls where attackers impersonate bank agents, technical support personnel, or government agencies.',
   }),
   Object.freeze({
     number: '04',
     threat_name: 'Social Engineering',
+    name: 'Social Engineering',
     summary:
       'Psychological manipulation techniques that exploit urgency, trust, or authority to bypass security procedures.',
   }),
   Object.freeze({
     number: '05',
-    threat_name: 'Credential Theft / Weak Password Attack',
+    threat_name: 'Credential Theft',
+    name: 'Credential Theft',
     summary:
       'Attacks targeting login credentials, including password reuse, keylogging, and weak password choices.',
   }),
   Object.freeze({
     number: '06',
     threat_name: 'Public Wi-Fi Attack',
+    name: 'Public Wi-Fi Attack',
     summary:
       'Rogue access points, "evil twin" networks, and packet interception on unencrypted public Wi-Fi connections.',
   }),
   Object.freeze({
     number: '07',
     threat_name: 'Malware Infection',
+    name: 'Malware Infection',
     summary:
       'Dangerous email attachments, malicious installers, and compromised download links that deploy harmful software.',
   }),
   Object.freeze({
     number: '08',
     threat_name: 'Ransomware',
+    name: 'Ransomware',
     summary:
       'Malicious programs that lock or encrypt files, along with essential backup strategies and defensive habits.',
   }),

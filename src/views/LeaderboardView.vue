@@ -312,7 +312,7 @@ onUnmounted(() => {
 
 .btn-outline {
   padding: 0.55rem 1.15rem;
-  background-color: #ffffff;
+  background-color: var(--color-card);
   color: var(--color-primary);
   border: 1.5px solid var(--color-border);
   border-radius: 8px;
@@ -434,7 +434,7 @@ tr:hover {
 }
 
 .top-entry {
-  background-color: #faf8ff;
+  background-color: var(--color-violet-subtle);
 }
 
 .rank-col {

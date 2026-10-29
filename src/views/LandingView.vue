@@ -377,6 +377,20 @@ const mapPreviews = [
   }
 }
 
+@media (min-width: 1600px) {
+  .hero-inner {
+    max-width: 1320px;
+    gap: 3.5rem;
+  }
+}
+
+@media (min-width: 2000px) {
+  .hero-inner {
+    max-width: 1440px;
+    gap: 4rem;
+  }
+}
+
 .hero-text-column {
   display: flex;
   flex-direction: column;
@@ -539,6 +553,22 @@ const mapPreviews = [
 @media (max-width: 640px) {
   .section-container {
     padding: 0 1rem;
+  }
+}
+
+@media (min-width: 1600px) {
+  .section-container {
+    max-width: 1320px;
+  }
+
+  .section-header {
+    max-width: 840px;
+  }
+}
+
+@media (min-width: 2000px) {
+  .section-container {
+    max-width: 1440px;
   }
 }
 

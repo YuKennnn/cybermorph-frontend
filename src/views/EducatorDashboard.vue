@@ -470,6 +470,26 @@ onMounted(() => {
   }
 }
 
+@media (min-width: 1600px) {
+  .stats-grid {
+    gap: 1.5rem;
+  }
+
+  .stat-card {
+    padding: 1.5rem;
+  }
+
+  .classrooms-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .classrooms-grid > * {
+    max-width: 420px;
+    width: 100%;
+  }
+}
+
 .empty-state {
   background-color: var(--color-card);
   border: 1px dashed var(--color-border);

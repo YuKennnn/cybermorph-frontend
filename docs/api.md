@@ -177,7 +177,7 @@ Canonical threat order:
 2. Smishing
 3. Vishing
 4. Social Engineering
-5. Credential Theft / Weak Password Attack
+5. Credential Theft
 6. Public Wi-Fi Attack
 7. Malware Infection
 8. Ransomware
@@ -215,6 +215,7 @@ Response:
 Backend behavior & requirements:
 - `session_id` must be a client-generated UUID. Resubmitting an identical UUID is a quiet, idempotent no-op (safe for offline retry).
 - `map_name` must be one of `"Home"`, `"Office"`, `"Internet Cafe"`, `"Public Park"`. If the submitted map is not unlocked yet for the player, the session is stored but does not increment `map_progress` or the leaderboard.
+- `map_progress` is an integer from `0` to `3` (`0 = Home`, `1 = Office`, `2 = Internet Cafe`, `3 = Public Park`) representing the highest unlocked map. Maps with an index <= `map_progress` are unlocked.
 - `result` must be `"win"`, `"lose"`, or `"timeout"`.
 - `played_at` must include a timezone offset or `'Z'` suffix (naive datetimes return 422).
 
@@ -368,7 +369,7 @@ Returned student information includes:
 
 - profile_id
 - username
-- map_progress
+- map_progress (integer 0–3: 0 = Home, 1 = Office, 2 = Internet Cafe, 3 = Public Park)
 - last_synced_at
 
 ### PATCH /classroom/{code_id}
@@ -621,8 +622,8 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 ## 14. Data Invariants
 
 - **User Roles**: `player`, `educator`, `admin`
-- **Canonical Threats**: Phishing, Smishing, Vishing, Social Engineering, Credential Theft / Weak Password Attack, Public Wi-Fi Attack, Malware Infection, Ransomware
-- **Canonical Maps**: Home, Office, Internet Cafe, Public Park
+- **Canonical Threats**: Phishing, Smishing, Vishing, Social Engineering, Credential Theft, Public Wi-Fi Attack, Malware Infection, Ransomware
+- **Canonical Maps**: Home, Office, Internet Cafe, Public Park (progression integers 0–3, where 0 = Home, 1 = Office, 2 = Internet Cafe, 3 = Public Park)
 - **Session Results**: `win`, `lose`, `timeout`
 
 ## 15. Documented Contract vs. Unbuilt Endpoints

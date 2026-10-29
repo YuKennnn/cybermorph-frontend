@@ -7,6 +7,7 @@ import AppIcon from '../components/common/AppIcon.vue'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchPlayerAnalytics, fetchSessionAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
+import { CANONICAL_THREAT_CATEGORIES } from '../stores/threatIndexStore.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,16 +28,7 @@ const CANONICAL_MAPS = [
   { name: 'Public Park' },
 ]
 
-const CANONICAL_THREATS = [
-  { name: 'Phishing' },
-  { name: 'Smishing' },
-  { name: 'Vishing' },
-  { name: 'Social Engineering' },
-  { name: 'Credential Theft / Weak Password Attack' },
-  { name: 'Public Wi-Fi Attack' },
-  { name: 'Malware Infection' },
-  { name: 'Ransomware' },
-]
+const CANONICAL_THREATS = CANONICAL_THREAT_CATEGORIES
 
 // Request ID Generation Guards (Condition 5: prevent stale updates)
 let identityRequestId = 0
@@ -103,13 +95,10 @@ const identityStatus = ref('loading')
 const identityError = ref('')
 
 const formatMapProgress = (progress) => {
-  if (typeof progress === 'number' && progress >= 1 && progress <= CANONICAL_MAPS.length) {
-    return CANONICAL_MAPS[progress - 1].name
+  if (typeof progress === 'number' && Number.isInteger(progress) && progress >= 0 && progress < CANONICAL_MAPS.length) {
+    return CANONICAL_MAPS[progress].name
   }
-  if (typeof progress === 'string' && progress.trim()) {
-    return progress
-  }
-  return 'Not started'
+  return 'Unavailable'
 }
 
 const formatLastSynced = (isoString) => {
@@ -689,8 +678,8 @@ onUnmounted(() => {
 
 /* Identity Card */
 .identity-card {
-  background-color: var(--color-surface, #ffffff);
-  border: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
   display: flex;
@@ -708,14 +697,14 @@ onUnmounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background-color: var(--color-primary-bg, #f5f3ff);
-  color: var(--color-primary, #7c3aed);
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
   font-weight: 700;
   font-size: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-border, #e2e8f0);
+  border: 1px solid var(--color-border);
 }
 
 .identity-text {
@@ -728,7 +717,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 700;
-  color: var(--color-text-main, #0f172a);
+  color: var(--color-text-main);
 }
 
 .identity-meta-row {
@@ -736,7 +725,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.6rem;
   font-size: 0.85rem;
-  color: var(--color-text-muted, #475569);
+  color: var(--color-text-muted);
   flex-wrap: wrap;
 }
 
@@ -747,7 +736,7 @@ onUnmounted(() => {
 }
 
 .meta-divider {
-  color: var(--color-border, #cbd5e1);
+  color: var(--color-border);
 }
 
 .identity-note {
@@ -760,21 +749,21 @@ onUnmounted(() => {
 }
 
 .note-info {
-  background-color: var(--color-bg-subtle, #f1f5f9);
-  color: var(--color-text-muted, #475569);
-  border: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .note-warning {
-  background-color: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .note-error {
-  background-color: var(--color-danger-bg, #fef2f2);
-  color: var(--color-danger, #dc2626);
-  border: 1px solid var(--color-danger-border, #fecaca);
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
 }
 
 .btn-retry-sm {
@@ -797,8 +786,8 @@ onUnmounted(() => {
 }
 
 .section-card {
-  background-color: var(--color-surface, #ffffff);
-  border: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
   display: flex;
@@ -979,24 +968,27 @@ onUnmounted(() => {
 }
 
 .result-pill.win {
-  background-color: #dcfce7;
-  color: #15803d;
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
 }
 
 .result-pill.lose {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
 }
 
 .result-pill.timeout {
-  background-color: #fef3c7;
-  color: #b45309;
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
 }
 
 .btn-inspect {
   background-color: transparent;
-  color: var(--color-primary, #7c3aed);
-  border: 1px solid var(--color-primary, #7c3aed);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
   padding: 0.35rem 0.75rem;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -1006,14 +998,14 @@ onUnmounted(() => {
 }
 
 .btn-inspect:hover {
-  background-color: var(--color-primary, #7c3aed);
+  background-color: var(--color-primary);
   color: #ffffff;
 }
 
 .empty-sessions {
   padding: 1.5rem;
   text-align: center;
-  color: var(--color-text-muted, #475569);
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
@@ -1025,14 +1017,14 @@ onUnmounted(() => {
   justify-content: center;
   padding: 3rem 1rem;
   gap: 1rem;
-  color: var(--color-text-muted, #475569);
+  color: var(--color-text-muted);
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border, #e2e8f0);
-  border-top-color: var(--color-primary, #7c3aed);
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1044,9 +1036,9 @@ onUnmounted(() => {
 }
 
 .error-banner {
-  background-color: var(--color-danger-bg, #fef2f2);
-  border: 1px solid var(--color-danger-border, #fecaca);
-  color: var(--color-danger, #dc2626);
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
   padding: 0.85rem 1rem;
   border-radius: 6px;
   display: flex;
@@ -1056,9 +1048,9 @@ onUnmounted(() => {
 }
 
 .btn-retry {
-  background-color: #ffffff;
-  color: var(--color-danger, #dc2626);
-  border: 1px solid var(--color-danger-border, #fecaca);
+  background-color: var(--color-card);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
   padding: 0.35rem 0.75rem;
   border-radius: 4px;
   font-weight: 600;
@@ -1066,6 +1058,6 @@ onUnmounted(() => {
 }
 
 .btn-retry:hover {
-  background-color: #fee2e2;
+  background-color: var(--color-danger-bg);
 }
 </style>

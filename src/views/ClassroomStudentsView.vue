@@ -30,13 +30,10 @@ const totalPages = computed(() => {
 })
 
 const formatMapProgress = (progress) => {
-  if (typeof progress === 'number' && progress >= 1 && progress <= mapNames.length) {
-    return mapNames[progress - 1]
+  if (typeof progress === 'number' && Number.isInteger(progress) && progress >= 0 && progress < mapNames.length) {
+    return mapNames[progress]
   }
-  if (typeof progress === 'string' && progress.trim()) {
-    return progress
-  }
-  return 'Not started'
+  return 'Unavailable'
 }
 
 const syncClassroomMetadata = (force = false) => {

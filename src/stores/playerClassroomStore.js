@@ -11,21 +11,25 @@ export const PLAYER_MAP_NAMES = Object.freeze([
 ])
 
 /**
- * Formats a player's numeric `map_progress` (1–4) using the documented map names.
- * @param {number | null | undefined} mapProgress
+ * Formats a player's numeric `map_progress` (0–3) using the documented map names.
+ * Maps with index <= map_progress are unlocked:
+ * 0 = Home; 1 = Office; 2 = Internet Cafe; 3 = Public Park.
+ * Missing or invalid values return 'Map progress unavailable'.
+ *
+ * @param {unknown} mapProgress
  * @returns {string}
  */
 export const formatMemberMapProgress = (mapProgress) => {
-  const numeric = Number(mapProgress)
-  if (!Number.isFinite(numeric) || numeric < 1) {
-    return 'Map 1 of 4 · Home'
+  if (
+    typeof mapProgress !== 'number' ||
+    !Number.isInteger(mapProgress) ||
+    mapProgress < 0 ||
+    mapProgress >= PLAYER_MAP_NAMES.length
+  ) {
+    return 'Map progress unavailable'
   }
-  const clampedIndex = Math.min(
-    Math.max(0, Math.trunc(numeric) - 1),
-    PLAYER_MAP_NAMES.length - 1,
-  )
-  const mapNumber = clampedIndex + 1
-  return `Map ${mapNumber} of ${PLAYER_MAP_NAMES.length} · ${PLAYER_MAP_NAMES[clampedIndex]}`
+  const mapNumber = mapProgress + 1
+  return `Map ${mapNumber} of ${PLAYER_MAP_NAMES.length} · ${PLAYER_MAP_NAMES[mapProgress]}`
 }
 
 /**
@@ -102,8 +106,12 @@ export const validateMyClassroomPayload = (raw) => {
       }
     }
     const username = typeof item.username === 'string' ? item.username.trim() : ''
-    const mapProgress = Number(item.map_progress)
-    if (!username || !Number.isFinite(mapProgress) || mapProgress < 1) {
+    const isProgressValid =
+      typeof item.map_progress === 'number' &&
+      Number.isInteger(item.map_progress) &&
+      item.map_progress >= 0 &&
+      item.map_progress <= 3
+    if (!username || !isProgressValid) {
       return {
         valid: false,
         data: null,
@@ -112,8 +120,8 @@ export const validateMyClassroomPayload = (raw) => {
     }
     normalizedMembers.push({
       username,
-      map_progress: Math.trunc(mapProgress),
-      map_label: formatMemberMapProgress(mapProgress),
+      map_progress: item.map_progress,
+      map_label: formatMemberMapProgress(item.map_progress),
     })
   }
 

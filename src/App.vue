@@ -78,6 +78,20 @@ const showSidebar = computed(() => {
   padding: 0;
 }
 
+@media (min-width: 1600px) {
+  .content-wrapper {
+    max-width: 1360px;
+    padding: 2.5rem 2rem;
+  }
+}
+
+@media (min-width: 2000px) {
+  .content-wrapper {
+    max-width: 1480px;
+    padding: 3rem 2.5rem;
+  }
+}
+
 @media (max-width: 768px) {
   .main-content.with-sidebar {
     padding-left: 0;

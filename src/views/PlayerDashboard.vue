@@ -299,7 +299,7 @@ onUnmounted(() => {
         <h2 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}</h2>
         <p class="subtitle">Your gameplay progress and threat training status</p>
         <div class="current-map-detail">
-          <span class="map-detail-label">Current map:</span>
+          <span class="map-detail-label">Highest unlocked map:</span>
           <template v-if="profileFailed">
             <span class="map-detail-unavailable">{{
               isRetryingProfile ? 'Retrying...' : 'Unavailable'
@@ -1397,6 +1397,17 @@ onUnmounted(() => {
 
   .cell-date {
     align-items: flex-end;
+  }
+}
+
+@media (min-width: 1600px) {
+  .score-bars {
+    min-height: 190px;
+    gap: 0.6rem;
+  }
+
+  .chart-container {
+    padding: 1.35rem 1.5rem;
   }
 }
 </style>

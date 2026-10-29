@@ -91,6 +91,18 @@ const handleFooterClick = () => {
   margin: 0 auto;
 }
 
+@media (min-width: 1600px) {
+  .footer-container {
+    max-width: 1272px;
+  }
+}
+
+@media (min-width: 2000px) {
+  .footer-container {
+    max-width: 1392px;
+  }
+}
+
 .footer-main {
   display: grid;
   grid-template-columns: 1fr;

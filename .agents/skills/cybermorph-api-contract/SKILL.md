@@ -62,9 +62,10 @@ Show friendly user-facing messages; never render raw backend error payloads.
 
 ### Cross-repository invariants (shared with Godot + FastAPI — never drift)
 - Threat taxonomy, canonical order: Phishing, Smishing, Vishing, Social
-  Engineering, Credential Theft / Weak Password Attack, Public Wi-Fi Attack,
+  Engineering, Credential Theft, Public Wi-Fi Attack,
   Malware Infection, Ransomware.
-- Map ordering: Home, Office, Internet Cafe, Public Park.
+- Map ordering and 0-based progression: Home (0), Office (1), Internet Cafe (2), Public Park (3).
+  `map_progress` is integer 0–3 representing the highest unlocked map (maps with index <= `map_progress` are unlocked; Home is index 0).
 - Session outcomes: `win`, `lose`, `timeout`.
 - Soft deletion uses `deleted_at` / `deleted_by`.
 

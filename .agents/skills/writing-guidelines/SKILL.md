@@ -42,17 +42,18 @@ When writing documentation, telemetry displays, or analytics summaries, threat c
 2. `Smishing`
 3. `Vishing`
 4. `Social Engineering`
-5. `Credential Theft / Weak Password Attack`
+5. `Credential Theft`
 6. `Public Wi-Fi Attack`
 7. `Malware Infection`
 8. `Ransomware`
 
 ### Canonical Simulation Maps
-Maps must be referenced by their exact names and canonical unlock progression:
-1. `Home`
-2. `Office`
-3. `Internet Cafe`
-4. `Public Park`
+Maps must be referenced by their exact names and 0-based progression indices (`map_progress` 0–3):
+0. `Home` (always unlocked on start)
+1. `Office`
+2. `Internet Cafe`
+3. `Public Park`
+A map is unlocked when its index <= `map_progress`.
 
 ### Session Outcomes
 Game session results are restricted to:
