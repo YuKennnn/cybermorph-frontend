@@ -52,6 +52,28 @@
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
 
+  /* Leaderboard Medal Tokens */
+  --color-medal-gold-bg: #fff3cd;
+  --color-medal-gold-trophy: #fbbf24;
+  --color-medal-gold-border: #d97706;
+  --color-medal-gold-badge-bg: #fef3c7;
+  --color-medal-gold-text: #78350f;
+  --color-medal-gold-score: #b45309;
+
+  --color-medal-silver-bg: #e9eef5;
+  --color-medal-silver-trophy: #cbd5e1;
+  --color-medal-silver-border: #94a3b8;
+  --color-medal-silver-badge-bg: #e2e8f0;
+  --color-medal-silver-text: #1e293b;
+  --color-medal-silver-score: #334155;
+
+  --color-medal-bronze-bg: #fbe7d8;
+  --color-medal-bronze-trophy: #e5a16b;
+  --color-medal-bronze-border: #c2410c;
+  --color-medal-bronze-badge-bg: #ffedd5;
+  --color-medal-bronze-text: #7c2d12;
+  --color-medal-bronze-score: #9a3412;
+
   /* Elevation & Diffuse Shadows */
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.06);
@@ -124,6 +146,25 @@
   --color-warning-bg: #451a03;
   --color-warning-border: #92400e;
 
+  /* Leaderboard Medal Tokens */
+  --color-medal-gold-bg: #302615;
+  --color-medal-gold-border: #b45309;
+  --color-medal-gold-badge-bg: #2d2410;
+  --color-medal-gold-text: #fef08a;
+  --color-medal-gold-score: #fcd34d;
+
+  --color-medal-silver-bg: #202c3c;
+  --color-medal-silver-border: #64748b;
+  --color-medal-silver-badge-bg: #1e293b;
+  --color-medal-silver-text: #f1f5f9;
+  --color-medal-silver-score: #e2e8f0;
+
+  --color-medal-bronze-bg: #35241b;
+  --color-medal-bronze-border: #9a3412;
+  --color-medal-bronze-badge-bg: #2d1c12;
+  --color-medal-bronze-text: #fed7aa;
+  --color-medal-bronze-score: #fdba74;
+
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
   --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
@@ -175,6 +216,25 @@
     --color-warning: #fcd34d;
     --color-warning-bg: #451a03;
     --color-warning-border: #92400e;
+
+    /* Leaderboard Medal Tokens */
+    --color-medal-gold-bg: #302615;
+    --color-medal-gold-border: #b45309;
+    --color-medal-gold-badge-bg: #2d2410;
+    --color-medal-gold-text: #fef08a;
+    --color-medal-gold-score: #fcd34d;
+
+    --color-medal-silver-bg: #202c3c;
+    --color-medal-silver-border: #64748b;
+    --color-medal-silver-badge-bg: #1e293b;
+    --color-medal-silver-text: #f1f5f9;
+    --color-medal-silver-score: #e2e8f0;
+
+    --color-medal-bronze-bg: #35241b;
+    --color-medal-bronze-border: #9a3412;
+    --color-medal-bronze-badge-bg: #2d1c12;
+    --color-medal-bronze-text: #fed7aa;
+    --color-medal-bronze-score: #fdba74;
 
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
     --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);

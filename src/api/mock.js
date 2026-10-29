@@ -172,6 +172,33 @@ export const mockControl = {
     mockControl.delayPlayerProfileMs = 0
     mockControl.playerProfileOverride = undefined
   },
+  failAdminStatsCount: 0,
+  adminStatsOverride: undefined,
+  failAdminApprovalsCount: 0,
+  adminApprovalsOverride: undefined,
+  failAdminLogsCount: 0,
+  adminLogsOverride: undefined,
+  setAdminStatsOverride(payload) {
+    mockControl.adminStatsOverride = payload
+  },
+  resetAdminStats() {
+    mockControl.failAdminStatsCount = 0
+    mockControl.adminStatsOverride = undefined
+  },
+  setAdminApprovalsOverride(payload) {
+    mockControl.adminApprovalsOverride = payload
+  },
+  resetAdminApprovals() {
+    mockControl.failAdminApprovalsCount = 0
+    mockControl.adminApprovalsOverride = undefined
+  },
+  setAdminLogsOverride(payload) {
+    mockControl.adminLogsOverride = payload
+  },
+  resetAdminLogs() {
+    mockControl.failAdminLogsCount = 0
+    mockControl.adminLogsOverride = undefined
+  },
   resetAdminClassrooms() {
     mockControl.failAdminClassroomsCount = 0
     mockControl.delayAdminClassroomsMs = 0
@@ -1432,21 +1459,6 @@ mock.onPatch('/web-users/me').reply(async (config) => {
   return [200, { ...updated }]
 })
 
-// ==========================================
-// Admin Dashboard Data Endpoint
-// ==========================================
-mock.onGet('/admin/stats').reply(200, {
-  total_users: 156,
-  active_sessions: 23,
-  pending_approvals: 4,
-  threats_detected: 412,
-  server_uptime: '99.9%',
-  recent_logs: [
-    { id: 1, action: 'User Registration', user: 'educator_smith@school.edu', status: 'Pending' },
-    { id: 2, action: 'Threat Simulation Sync', user: 'AgentZero', status: 'Success' },
-    { id: 3, action: 'Classroom Code Generated', user: 'prof_jones@univ.edu', status: 'Success' },
-  ],
-})
 
 // ==========================================
 // Classroom Endpoints (Stateful)
@@ -2243,6 +2255,23 @@ mock.onGet('/admin/stats').reply((config) => {
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
 
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_STATS__') || '0', 10) : 0
+  if (mockControl.failAdminStatsCount > 0 || sessionFail > 0) {
+    if (mockControl.failAdminStatsCount > 0) mockControl.failAdminStatsCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_STATS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'System metrics unavailable' }]
+  }
+
+  const sessionOverride = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_ADMIN_STATS__') : null
+  if (sessionOverride) {
+    return [200, JSON.parse(sessionOverride)]
+  }
+  if (mockControl.adminStatsOverride !== undefined) {
+    return [200, mockControl.adminStatsOverride]
+  }
+
   return [
     200,
     {
@@ -2299,6 +2328,23 @@ mock.onGet('/admin/approvals').reply((config) => {
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_APPROVALS__') || '0', 10) : 0
+  if (mockControl.failAdminApprovalsCount > 0 || sessionFail > 0) {
+    if (mockControl.failAdminApprovalsCount > 0) mockControl.failAdminApprovalsCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_APPROVALS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Pending approvals queue unavailable' }]
+  }
+
+  const sessionOverride = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_ADMIN_APPROVALS__') : null
+  if (sessionOverride) {
+    return [200, JSON.parse(sessionOverride)]
+  }
+  if (mockControl.adminApprovalsOverride !== undefined) {
+    return [200, mockControl.adminApprovalsOverride]
+  }
 
   const params = config.params || {}
   const statusFilter = (params.status || 'pending').toLowerCase()
@@ -2586,6 +2632,390 @@ mock.onDelete(new RegExp('^/admin/classrooms/([^/]+)$')).reply(async (config) =>
 
   target.deleted_at = new Date().toISOString()
   return [204]
+})
+
+const VALID_ACTION_TYPES = new Set([
+  'register_player',
+  'register_web_user',
+  'login',
+  'create_classroom',
+  'join_classroom',
+  'leave_classroom',
+  'update_classroom',
+  'delete_classroom',
+  'approve_educator',
+  'reject_educator',
+  'reassign_classroom',
+])
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export const mockLogs = [
+  {
+    log_id: '10000000-0000-0000-0000-000000000025',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'approve_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e1000000-0000-0000-0000-000000000001',
+    description: 'Approved educator account for prof.santos@dnsc.edu.ph after institutional domain confirmation.',
+    logged_at: '2026-10-29T09:45:00', // Timezone-free
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000024',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c1000000-0000-0000-0000-000000000001',
+    description: 'Updated class \'Network Defense 101\' (is_active: false) by an admin. Closed enrollment ahead of semester examination period.',
+    logged_at: '2026-10-29T08:30:00+08:00', // Explicit timezone
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000023',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    user_email: 'educator@cybermorph.local',
+    action_type: 'create_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c2000000-0000-0000-0000-000000000002',
+    description: 'Generated classroom code \'CYBER8\' for Security Lab 2.',
+    logged_at: '2026-10-28T16:15:00', // Timezone-free
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000022',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'reject_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e2000000-0000-0000-0000-000000000002',
+    description: 'Rejected unverified educator registration application.',
+    logged_at: '2026-10-28T14:10:00Z', // Explicit UTC Z
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000021',
+    user_id: '00000000-0000-0000-0000-000000000003',
+    user_email: 'player@cybermorph.local',
+    action_type: 'join_classroom',
+    target_table: 'classroom_students',
+    target_id: 'c1000000-0000-0000-0000-000000000001',
+    description: 'Joined classroom \'Network Defense 101\' via join code.',
+    logged_at: '2026-10-28T11:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000020',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'delete_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c3000000-0000-0000-0000-000000000003',
+    description: 'Deleted obsolete test classroom \'Sample Sandbox\' by an admin.',
+    logged_at: '2026-10-27T17:40:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000019',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'reassign_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c4000000-0000-0000-0000-000000000004',
+    description: 'Historical reassignment of classroom code before feature deprecation.',
+    logged_at: '2026-10-24T12:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000018',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'login',
+    target_table: null,
+    target_id: null,
+    description: null,
+    logged_at: '2026-10-27T08:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000026',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: null,
+    description: 'Updated classroom global settings with no individual target code ID specified.',
+    logged_at: '2026-10-26T18:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000027',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'login',
+    target_table: null,
+    target_id: null,
+    description: null,
+    logged_at: '2026-10-27T99:00:00', // Malformed hour bounds (sorts on page 1)
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000017',
+    user_id: '00000000-0000-0000-0000-000000000003',
+    user_email: 'player@cybermorph.local',
+    action_type: 'leave_classroom',
+    target_table: 'classroom_students',
+    target_id: 'c5000000-0000-0000-0000-000000000005',
+    description: 'Player voluntarily unenrolled from previous semester section.',
+    logged_at: '2026-10-26T15:20:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000016',
+    user_id: '00000000-0000-0000-0000-000000000004',
+    user_email: 'cadet1@cybermorph.local',
+    action_type: 'register_player',
+    target_table: 'users',
+    target_id: '00000000-0000-0000-0000-000000000004',
+    description: 'Registered player account with username \'CyberCadet\'.',
+    logged_at: '2026-10-26T10:05:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000015',
+    user_id: '00000000-0000-0000-0000-000000000005',
+    user_email: 'prof.delacruz@dnsc.edu.ph',
+    action_type: 'register_web_user',
+    target_table: 'users',
+    target_id: '00000000-0000-0000-0000-000000000005',
+    description: 'Submitted educator application under institutional domain.',
+    logged_at: '2026-10-25T14:50:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000014',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'approve_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e3000000-0000-0000-0000-000000000003',
+    description: 'Approved educator registration for prof.reyes@dnsc.edu.ph.',
+    logged_at: '2026-10-25T09:12:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000013',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    user_email: 'educator@cybermorph.local',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c2000000-0000-0000-0000-000000000002',
+    description: 'Renamed classroom code to \'Intro to Security Concepts\'.',
+    logged_at: '2026-10-24T18:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000012',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c6000000-0000-0000-0000-000000000006',
+    description: 'Re-activated classroom \'Summer Intensive Bootcamp\' following educator request.',
+    logged_at: '2026-10-24T11:30:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000011',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    user_email: 'educator@cybermorph.local',
+    action_type: 'login',
+    target_table: null,
+    target_id: null,
+    description: 'Educator authenticated to web management portal from campus network subnet.',
+    logged_at: '2026-10-24T08:15:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000010',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'approve_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e4000000-0000-0000-0000-000000000004',
+    description: 'Approved instructor credentials after verification with academic affairs.',
+    logged_at: '2026-10-23T14:40:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000009',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'delete_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c7000000-0000-0000-0000-000000000007',
+    description: 'Deleted abandoned draft classroom code \'TEST99\'.',
+    logged_at: '2026-10-23T10:15:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000008',
+    user_id: '00000000-0000-0000-0000-000000000003',
+    user_email: 'player@cybermorph.local',
+    action_type: 'login',
+    target_table: null,
+    target_id: null,
+    description: null,
+    logged_at: '2026-10-22T19:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000007',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    user_email: 'educator@cybermorph.local',
+    action_type: 'create_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c8000000-0000-0000-0000-000000000008',
+    description: 'Generated classroom code \'ROOKIE\' for freshmen orientation section.',
+    logged_at: '2026-10-22T09:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000006',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'reject_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e5000000-0000-0000-0000-000000000005',
+    description: 'Rejected application with incomplete institutional affiliation.',
+    logged_at: '2026-10-21T16:30:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000005',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c9000000-0000-0000-0000-000000000009',
+    description: 'Administrative status toggle: closed enrollment.',
+    logged_at: '2026-10-21T11:00:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000004',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'approve_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e6000000-0000-0000-0000-000000000006',
+    description: 'Approved instructor account.',
+    logged_at: '2026-10-20T14:15:00',
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000003',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'login',
+    target_table: null,
+    target_id: null,
+    description: 'Administrator initial system bootstrap login.',
+    logged_at: '2026-10-15T08:00:00',
+  },
+  // Null timestamp entries: backend database allows NULL logged_at, sorted last
+  {
+    log_id: '10000000-0000-0000-0000-000000000002',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'approve_educator',
+    target_table: 'web_user_profiles',
+    target_id: 'e7000000-0000-0000-0000-000000000007',
+    description: 'Legacy migration audit record with unrecorded timestamp.',
+    logged_at: null,
+  },
+  {
+    log_id: '10000000-0000-0000-0000-000000000001',
+    user_id: '00000000-0000-0000-0000-000000000001',
+    user_email: 'admin@cybermorph.local',
+    action_type: 'create_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c0000000-0000-0000-0000-000000000000',
+    description: 'Historical genesis classroom entry without timestamp.',
+    logged_at: null,
+  },
+]
+
+mock.onGet('/admin/logs').reply((config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = localStorage.getItem('cyber_role')
+  if (role && role !== 'admin') return [403, { detail: 'Admin access required' }]
+
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_LOGS__') || '0', 10) : 0
+  if (mockControl.failAdminLogsCount > 0 || sessionFail > 0) {
+    if (mockControl.failAdminLogsCount > 0) mockControl.failAdminLogsCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_LOGS__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Audit activity logs unavailable' }]
+  }
+
+  const sessionOverride = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_ADMIN_LOGS__') : null
+  if (sessionOverride) {
+    return [200, JSON.parse(sessionOverride)]
+  }
+  if (mockControl.adminLogsOverride !== undefined) {
+    return [200, mockControl.adminLogsOverride]
+  }
+
+  const params = config.params || {}
+  const actionType = params.action_type ? String(params.action_type).trim() : null
+  const userId = params.user_id ? String(params.user_id).trim() : null
+
+  // Validate action_type if provided
+  if (actionType && !VALID_ACTION_TYPES.has(actionType)) {
+    return [
+      422,
+      {
+        detail: [
+          {
+            loc: ['query', 'action_type'],
+            msg: `Input should be a valid action_type enum value`,
+            type: 'enum',
+          },
+        ],
+      },
+    ]
+  }
+
+  // Validate user_id if provided
+  if (userId && !UUID_REGEX.test(userId)) {
+    return [
+      422,
+      {
+        detail: [
+          {
+            loc: ['query', 'user_id'],
+            msg: 'Input should be a valid UUID, invalid character or length',
+            type: 'uuid_parsing',
+          },
+        ],
+      },
+    ]
+  }
+
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+  const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
+
+  let filtered = mockLogs.filter((log) => {
+    if (actionType && log.action_type !== actionType) return false
+    if (userId && log.user_id.toLowerCase() !== userId.toLowerCase()) return false
+    return true
+  })
+
+  // Order by logged_at DESC NULLS LAST, log_id DESC
+  filtered.sort((a, b) => {
+    if (a.logged_at && !b.logged_at) return -1
+    if (!a.logged_at && b.logged_at) return 1
+    if (a.logged_at && b.logged_at) {
+      const cmp = b.logged_at.localeCompare(a.logged_at)
+      if (cmp !== 0) return cmp
+    }
+    return b.log_id.localeCompare(a.log_id)
+  })
+
+  const totalCount = filtered.length
+  const startIndex = (page - 1) * pageSize
+  const items = filtered.slice(startIndex, startIndex + pageSize)
+
+  return [
+    200,
+    {
+      items,
+      total_count: totalCount,
+      page,
+      page_size: pageSize,
+    },
+  ]
 })
 
 mock.onAny().reply(404, { detail: 'Endpoint not found in mock adapter' })

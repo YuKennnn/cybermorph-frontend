@@ -109,3 +109,24 @@ export const deleteAdminClassroom = async (codeId) => {
   }
   await apiClient.delete(`/admin/classrooms/${encodeURIComponent(codeId)}`)
 }
+
+/**
+ * Fetch paginated audit log of administrative, account, and classroom activities.
+ * Endpoint: GET /admin/logs
+ * @param {Object} [params] - Query parameters
+ * @param {string} [params.action_type] - Filter by ActionType
+ * @param {string} [params.user_id] - Filter by actor UUID
+ * @param {number} [params.page=1] - 1-based page number
+ * @param {number} [params.page_size=20] - Number of items per page
+ * @returns {Promise<{ items: Array, total_count: number, page: number, page_size: number }>}
+ */
+export const fetchAdminLogs = async (params = {}) => {
+  const query = {}
+  if (params.action_type) query.action_type = params.action_type
+  if (params.user_id) query.user_id = params.user_id
+  if (params.page !== undefined) query.page = params.page
+  if (params.page_size !== undefined) query.page_size = params.page_size
+
+  const response = await apiClient.get('/admin/logs', { params: query })
+  return response.data
+}

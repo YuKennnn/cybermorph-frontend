@@ -136,6 +136,12 @@ const routes = [
     component: () => import('../views/AdminClassroomsView.vue'),
     meta: { requiresAuth: true, roles: ['admin'] },
   },
+  {
+    path: '/admin/logs',
+    name: 'admin-logs',
+    component: () => import('../views/AdminLogsView.vue'),
+    meta: { requiresAuth: true, roles: ['admin'] },
+  },
   // Catch-all route for unrecognized paths
   {
     path: '/:pathMatch(.*)*',
