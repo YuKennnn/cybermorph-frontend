@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useClassroomStore } from '../stores/classroomStore'
 import { fetchMyClassrooms } from '../api/classroom'
+import { fetchClassroomAnalytics } from '../api/analytics'
 import { extractErrorMessage } from '../api/client'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
 import ClassroomCreateModal from '../components/classroom/ClassroomCreateModal.vue'
@@ -13,6 +14,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const classroomStore = useClassroomStore()
 
+const CANONICAL_MAPS = ['Home', 'Office', 'Internet Cafe', 'Public Park']
+
 const classrooms = ref([])
 const totalStudents = ref(0)
 const isLoading = ref(true)
@@ -20,9 +23,110 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const isCreateModalOpen = ref(false)
 
+// Classroom Snapshot state
+const selectedSnapshotCodeId = ref('')
+const snapshotAnalytics = ref(null)
+const isSnapshotLoading = ref(false)
+const snapshotError = ref('')
+let snapshotRequestId = 0
+
 const activeClassroomCount = computed(() => {
   return classrooms.value.filter((c) => c.is_active === true).length
 })
+
+const previewClassrooms = computed(() => {
+  return classrooms.value.slice(0, 4)
+})
+
+const resolveSnapshotSelection = (list) => {
+  if (!Array.isArray(list) || list.length === 0) return ''
+  // 1. Preserve currently selected classroom if it still exists in the refreshed list
+  if (selectedSnapshotCodeId.value) {
+    const existing = list.find((c) => (c.code_id || c.id) === selectedSnapshotCodeId.value)
+    if (existing) return existing.code_id || existing.id
+  }
+  // 2. Initially select first active classroom in returned order
+  const firstActive = list.find((c) => c.is_active === true)
+  if (firstActive) return firstActive.code_id || firstActive.id
+  // 3. Otherwise select first available classroom
+  return list[0].code_id || list[0].id
+}
+
+const loadSnapshotData = async (codeId) => {
+  if (!codeId) {
+    snapshotAnalytics.value = null
+    isSnapshotLoading.value = false
+    snapshotError.value = ''
+    return
+  }
+
+  const reqId = ++snapshotRequestId
+  isSnapshotLoading.value = true
+  snapshotError.value = ''
+  snapshotAnalytics.value = null // Prevent older classroom data from displaying while loading
+
+  try {
+    const data = await fetchClassroomAnalytics(codeId)
+    if (reqId !== snapshotRequestId) return
+    snapshotAnalytics.value = data
+  } catch (err) {
+    if (reqId !== snapshotRequestId) return
+    snapshotError.value = extractErrorMessage(
+      err,
+      'Failed to load classroom performance snapshot. Please try again.',
+    )
+  } finally {
+    if (reqId === snapshotRequestId) {
+      isSnapshotLoading.value = false
+    }
+  }
+}
+
+const handleSnapshotClassroomChange = () => {
+  if (selectedSnapshotCodeId.value) {
+    loadSnapshotData(selectedSnapshotCodeId.value)
+  }
+}
+
+const hasAnyScores = computed(() => {
+  const mapScores = snapshotAnalytics.value?.avg_best_score_by_map
+  if (!mapScores || typeof mapScores !== 'object') return false
+  return CANONICAL_MAPS.some((mapName) => {
+    const val = mapScores[mapName]
+    return typeof val === 'number' && !isNaN(val) && val >= 0
+  })
+})
+
+const maxSnapshotScore = computed(() => {
+  if (!hasAnyScores.value) return 0
+  const mapScores = snapshotAnalytics.value?.avg_best_score_by_map || {}
+  const scores = CANONICAL_MAPS.map((m) => mapScores[m]).filter(
+    (v) => typeof v === 'number' && !isNaN(v) && v >= 0,
+  )
+  return Math.max(...scores, 0)
+})
+
+const getBarWidthPercentage = (mapName) => {
+  const mapScores = snapshotAnalytics.value?.avg_best_score_by_map
+  if (!mapScores || !(mapName in mapScores)) return 0
+  const val = mapScores[mapName]
+  if (typeof val !== 'number' || isNaN(val) || val <= 0 || maxSnapshotScore.value <= 0) {
+    return 0
+  }
+  return Math.min(100, Math.round((val / maxSnapshotScore.value) * 100))
+}
+
+const formatScoreLabel = (mapName) => {
+  const mapScores = snapshotAnalytics.value?.avg_best_score_by_map
+  if (!mapScores || !(mapName in mapScores)) {
+    return 'No scores yet'
+  }
+  const val = mapScores[mapName]
+  if (typeof val !== 'number' || isNaN(val) || val < 0) {
+    return 'No scores yet'
+  }
+  return `${Math.round(val)} pts`
+}
 
 const loadDashboardData = async () => {
   isLoading.value = true
@@ -33,6 +137,20 @@ const loadDashboardData = async () => {
     const list = Array.isArray(data) ? data : []
     classrooms.value = list
     totalStudents.value = list.reduce((sum, c) => sum + (c.student_count || 0), 0)
+
+    if (list.length > 0) {
+      const nextCodeId = resolveSnapshotSelection(list)
+      const isSwitching = nextCodeId !== selectedSnapshotCodeId.value
+      selectedSnapshotCodeId.value = nextCodeId
+      if (isSwitching || !snapshotAnalytics.value) {
+        loadSnapshotData(nextCodeId)
+      }
+    } else {
+      selectedSnapshotCodeId.value = ''
+      snapshotAnalytics.value = null
+      snapshotError.value = ''
+      isSnapshotLoading.value = false
+    }
   } catch (error) {
     errorMessage.value = extractErrorMessage(
       error,
@@ -196,6 +314,112 @@ onMounted(() => {
         </div>
       </section>
 
+      <!-- Classroom Snapshot Card -->
+      <section
+        v-if="classrooms.length > 0"
+        class="snapshot-card"
+        aria-label="Classroom snapshot"
+      >
+        <div class="snapshot-card-header">
+          <div class="snapshot-title-group">
+            <h3 class="snapshot-card-title">Classroom snapshot</h3>
+            <span class="snapshot-subtitle">Average best score by map</span>
+          </div>
+
+          <div class="snapshot-header-actions">
+            <div class="snapshot-selector-wrapper">
+              <label for="snapshot-classroom-select" class="snapshot-selector-label">Classroom</label>
+              <select
+                id="snapshot-classroom-select"
+                v-model="selectedSnapshotCodeId"
+                class="snapshot-select"
+                :disabled="isSnapshotLoading"
+                @change="handleSnapshotClassroomChange"
+              >
+                <option
+                  v-for="c in classrooms"
+                  :key="c.code_id || c.id"
+                  :value="c.code_id || c.id"
+                >
+                  {{ c.name }} ({{ c.code_value || c.code }})
+                </option>
+              </select>
+            </div>
+
+            <router-link
+              v-if="selectedSnapshotCodeId"
+              :to="`/analytics/${selectedSnapshotCodeId}`"
+              class="snapshot-analytics-btn"
+            >
+              <span>View analytics</span>
+              <AppIcon name="arrow-right" :size="14" />
+            </router-link>
+          </div>
+        </div>
+
+        <div class="snapshot-card-body">
+          <!-- Loading State -->
+          <div v-if="isSnapshotLoading" class="snapshot-loading" role="status">
+            <div class="spinner"></div>
+            <p>Loading classroom performance snapshot...</p>
+          </div>
+
+          <!-- Error State with Retry Action -->
+          <div v-else-if="snapshotError" class="snapshot-error-banner" role="alert">
+            <div class="snapshot-error-content">
+              <AppIcon name="alert" :size="16" class="error-icon" />
+              <span>{{ snapshotError }}</span>
+            </div>
+            <button
+              type="button"
+              class="btn-retry"
+              :disabled="isSnapshotLoading"
+              @click="loadSnapshotData(selectedSnapshotCodeId)"
+            >
+              <AppIcon name="refresh" :size="14" />
+              <span>Try again</span>
+            </button>
+          </div>
+
+          <!-- Empty Scores State -->
+          <div v-else-if="!hasAnyScores" class="snapshot-empty-scores" role="status">
+            <p>No scores recorded yet for this classroom.</p>
+          </div>
+
+          <!-- Canonical Map Score Bars -->
+          <div v-else class="snapshot-bars-container">
+            <div class="snapshot-bars-list" role="list" aria-label="Average best score by map">
+              <div
+                v-for="mapName in CANONICAL_MAPS"
+                :key="mapName"
+                class="snapshot-bar-row"
+                role="listitem"
+              >
+                <div class="bar-header">
+                  <span class="bar-map-name">{{ mapName }}</span>
+                  <span
+                    class="bar-score-value"
+                    :class="{ 'is-empty': formatScoreLabel(mapName) === 'No scores yet' }"
+                  >
+                    {{ formatScoreLabel(mapName) }}
+                  </span>
+                </div>
+                <div class="bar-track" aria-hidden="true">
+                  <div
+                    class="bar-fill"
+                    :style="{ width: `${getBarWidthPercentage(mapName)}%` }"
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <p class="snapshot-footnote">
+              Scores reflect different map scenarios and are not a direct measure of comparative skill.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- Classroom Deployments Section -->
       <section class="classrooms-section">
         <div class="section-header">
@@ -205,12 +429,20 @@ onMounted(() => {
               Distribute access codes to students to connect their devices to your roster.
             </p>
           </div>
+          <router-link
+            v-if="classrooms.length > 4"
+            to="/classroom/manage"
+            class="view-all-classrooms-link"
+          >
+            <span>View all classrooms</span>
+            <AppIcon name="arrow-right" :size="14" />
+          </router-link>
         </div>
 
         <!-- Classrooms Grid (Reusing ClassroomCard with utility actions hidden) -->
-        <div v-if="classrooms.length > 0" class="classrooms-grid">
+        <div v-if="previewClassrooms.length > 0" class="classrooms-grid">
           <ClassroomCard
-            v-for="classroom in classrooms"
+            v-for="classroom in previewClassrooms"
             :key="classroom.code_id || classroom.id"
             :classroom="classroom"
             :show-utility-actions="false"
@@ -459,14 +691,55 @@ onMounted(() => {
 
 .classrooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.25rem;
 }
 
+.view-all-classrooms-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  min-height: 36px;
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.view-all-classrooms-link:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.view-all-classrooms-link:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+
+@media (max-width: 768px) {
+  .classrooms-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
-  .classrooms-grid,
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .view-all-classrooms-link {
+    width: 100%;
   }
 }
 
@@ -480,12 +753,12 @@ onMounted(() => {
   }
 
   .classrooms-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
   }
 
   .classrooms-grid > * {
-    max-width: 420px;
+    max-width: none;
     width: 100%;
   }
 }
@@ -597,6 +870,275 @@ onMounted(() => {
   .header-actions .btn-outline {
     flex: 1;
     min-width: 140px;
+  }
+}
+
+/* Classroom Snapshot Card */
+.snapshot-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 2rem;
+}
+
+.snapshot-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.snapshot-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.snapshot-card-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  letter-spacing: -0.01em;
+}
+
+.snapshot-subtitle {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.snapshot-header-actions {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.snapshot-selector-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 200px;
+}
+
+.snapshot-selector-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.snapshot-select {
+  height: 38px;
+  padding: 0 0.85rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  color: var(--color-text-main);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.snapshot-select:focus,
+.snapshot-select:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+
+.snapshot-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.snapshot-analytics-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  height: 38px;
+  padding: 0 1rem;
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.snapshot-analytics-btn:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.snapshot-analytics-btn:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+
+.snapshot-card-body {
+  min-height: 120px;
+}
+
+.snapshot-loading {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.snapshot-loading .spinner {
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 0.75rem auto;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.snapshot-error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.snapshot-error-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.snapshot-empty-scores {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.snapshot-empty-scores p {
+  margin: 0;
+}
+
+.snapshot-bars-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.snapshot-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.snapshot-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+}
+
+.bar-map-name {
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.bar-score-value {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--color-primary);
+  font-feature-settings: 'tnum';
+}
+
+.bar-score-value.is-empty {
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--color-text-dim);
+}
+
+.bar-track {
+  width: 100%;
+  height: 10px;
+  background-color: var(--color-bg-muted);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--btn-gradient);
+  border-radius: 9999px;
+  transition: width 0.35s ease;
+}
+
+.snapshot-footnote {
+  margin: 1.5rem 0 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .snapshot-card {
+    padding: 1.25rem 1rem;
+  }
+
+  .snapshot-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .snapshot-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.85rem;
+  }
+
+  .snapshot-selector-wrapper {
+    width: 100%;
+  }
+
+  .snapshot-select {
+    width: 100%;
+  }
+
+  .snapshot-analytics-btn {
+    width: 100%;
   }
 }
 </style>

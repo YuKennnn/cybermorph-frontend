@@ -1,8 +1,8 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchAdminLogs } from '../api/admin'
-import { formatAuditLogTimestamp, getLocalTimeZoneName } from '../utils/datetime'
+import { fetchAdminLogs, fetchAdminUsers } from '../api/admin'
+import { formatAuditLogTimestamp } from '../utils/datetime'
 import { ACTION_OPTIONS, getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
 import AppIcon from '../components/common/AppIcon.vue'
 
@@ -17,15 +17,98 @@ const page = ref(1)
 const pageSize = ref(20)
 const selectedAction = ref('')
 const selectedUserId = ref('')
-const actorInput = ref('')
-const actorInputError = ref('')
+const appliedAccount = ref(null)
+const pendingAccount = ref(null)
+
+const lookupQuery = ref('')
+const suggestions = ref([])
+const isDropdownOpen = ref(false)
+const lookupLoading = ref(false)
+const lookupLoadingMore = ref(false)
+const lookupError = ref('')
+const lookupPage = ref(1)
+const lookupTotalCount = ref(0)
+const highlightedIndex = ref(-1)
+
+const searchWrapperRef = ref(null)
+const searchInputRef = ref(null)
+
 const isLoading = ref(true)
 const errorMessage = ref('')
 const expandedDescriptions = ref(new Set())
 
-const localTimeZoneLabel = computed(() => getLocalTimeZoneName())
+const appliedAccountDisplay = computed(() => {
+  if (!selectedUserId.value) return ''
+  return (
+    appliedAccount.value?.email ||
+    appliedAccount.value?.user_id ||
+    selectedUserId.value
+  )
+})
 
-let latestRequestId = 0
+const isPickerDifferingFromApplied = computed(() => {
+  if (!selectedUserId.value) return false
+  if (
+    pendingAccount.value &&
+    pendingAccount.value.user_id !== selectedUserId.value
+  ) {
+    return true
+  }
+  const trimmed = lookupQuery.value.trim()
+  const activeEmail = appliedAccount.value?.email || ''
+  const activeId = selectedUserId.value
+  if (trimmed && (trimmed === activeEmail || trimmed === activeId)) {
+    return false
+  }
+  if (
+    appliedAccount.value &&
+    trimmed === formatUserOptionLabel(appliedAccount.value)
+  ) {
+    return false
+  }
+  return true
+})
+
+let latestLogsRequestId = 0
+let latestLookupRequestId = 0
+let searchDebounceTimer = null
+
+const isApplyEnabled = computed(() => {
+  return Boolean(
+    pendingAccount.value?.user_id &&
+      pendingAccount.value.user_id !== selectedUserId.value,
+  )
+})
+
+const formatUserDisplayName = (user) => {
+  if (!user) return ''
+  return user.display_name || user.username || ''
+}
+
+const formatUserOptionLabel = (user) => {
+  if (!user) return ''
+  const name = formatUserDisplayName(user)
+  return name ? `${user.email} (${name})` : user.email
+}
+
+// Background lookup for existing user_id from URL without blocking log retrieval
+const lookupAccountById = async (userId) => {
+  try {
+    const res = await fetchAdminUsers({ search: userId, page: 1, page_size: 5 })
+    const match = res?.items?.find(
+      (u) => String(u.user_id).toLowerCase() === String(userId).toLowerCase(),
+    )
+    if (match && selectedUserId.value === userId) {
+      appliedAccount.value = { ...match }
+      if (!pendingAccount.value || pendingAccount.value.user_id === userId) {
+        pendingAccount.value = { ...match }
+        lookupQuery.value = match.email
+      }
+    }
+  } catch {
+    // Gracefully ignore directory lookup failures for initial URL state
+  }
+}
 
 // Parse initial query params from route URL
 const initFromQueryParams = () => {
@@ -46,10 +129,15 @@ const initFromQueryParams = () => {
   const queryUserId = String(route.query.user_id || '').trim()
   if (queryUserId && UUID_REGEX.test(queryUserId)) {
     selectedUserId.value = queryUserId
-    actorInput.value = queryUserId
+    appliedAccount.value = { user_id: queryUserId, email: null, display_name: null }
+    pendingAccount.value = { user_id: queryUserId, email: null, display_name: null }
+    lookupQuery.value = queryUserId
+    lookupAccountById(queryUserId)
   } else {
     selectedUserId.value = ''
-    actorInput.value = ''
+    appliedAccount.value = null
+    pendingAccount.value = null
+    lookupQuery.value = ''
   }
 }
 
@@ -106,7 +194,7 @@ const isDescriptionExpanded = (logId) => {
 }
 
 const loadLogs = async () => {
-  const reqId = ++latestRequestId
+  const reqId = ++latestLogsRequestId
   isLoading.value = true
   errorMessage.value = ''
 
@@ -125,7 +213,7 @@ const loadLogs = async () => {
     const data = await fetchAdminLogs(params)
 
     // Discard stale responses if a newer request was dispatched
-    if (reqId !== latestRequestId) return
+    if (reqId !== latestLogsRequestId) return
 
     logs.value = Array.isArray(data?.items) ? data.items : []
     totalCount.value = typeof data?.total_count === 'number' ? data.total_count : 0
@@ -133,11 +221,11 @@ const loadLogs = async () => {
     if (typeof data?.page_size === 'number') pageSize.value = data.page_size
     syncUrlQuery()
   } catch {
-    if (reqId !== latestRequestId) return
+    if (reqId !== latestLogsRequestId) return
     errorMessage.value =
       'Unable to load audit logs. Please verify your connection or try again.'
   } finally {
-    if (reqId === latestRequestId) {
+    if (reqId === latestLogsRequestId) {
       isLoading.value = false
     }
   }
@@ -148,63 +236,199 @@ const handleActionChange = () => {
   loadLogs()
 }
 
-const handleActorInputChange = () => {
-  if (actorInputError.value) {
-    const trimmed = actorInput.value.trim()
-    if (!trimmed || UUID_REGEX.test(trimmed)) {
-      actorInputError.value = ''
+// Account Directory Lookup
+const executeSearch = async (query, pageToLoad = 1, append = false) => {
+  const reqId = ++latestLookupRequestId
+  if (append) {
+    lookupLoadingMore.value = true
+  } else {
+    lookupLoading.value = true
+  }
+  lookupError.value = ''
+
+  try {
+    const data = await fetchAdminUsers({
+      search: query,
+      page: pageToLoad,
+      page_size: 5,
+    })
+
+    if (reqId !== latestLookupRequestId) return
+
+    const items = Array.isArray(data?.items) ? data.items : []
+    if (append) {
+      suggestions.value = [...suggestions.value, ...items]
+    } else {
+      suggestions.value = items
+    }
+    lookupTotalCount.value = typeof data?.total_count === 'number' ? data.total_count : 0
+    lookupPage.value = typeof data?.page === 'number' ? data.page : pageToLoad
+    isDropdownOpen.value = true
+    highlightedIndex.value = -1
+  } catch {
+    if (reqId !== latestLookupRequestId) return
+    lookupError.value = 'Account directory lookup unavailable. Please try again.'
+    if (!append) {
+      suggestions.value = []
+    }
+    isDropdownOpen.value = true
+  } finally {
+    if (reqId === latestLookupRequestId) {
+      lookupLoading.value = false
+      lookupLoadingMore.value = false
     }
   }
 }
 
-const applyActorFilter = () => {
-  const trimmed = actorInput.value.trim()
-  if (!trimmed) {
-    actorInputError.value = ''
-    if (selectedUserId.value) {
-      selectedUserId.value = ''
-      page.value = 1
-      loadLogs()
-    }
+const handleSearchInput = (event) => {
+  if (event?.target && typeof event.target.value === 'string') {
+    lookupQuery.value = event.target.value
+  }
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+
+  // Explicit selection required: free typing clears unapplied pending selection
+  if (
+    pendingAccount.value &&
+    lookupQuery.value !== formatUserOptionLabel(pendingAccount.value) &&
+    lookupQuery.value !== pendingAccount.value.email
+  ) {
+    pendingAccount.value = null
+  }
+
+  const trimmed = lookupQuery.value.trim()
+  if (trimmed.length < 2) {
+    suggestions.value = []
+    lookupTotalCount.value = 0
+    lookupPage.value = 1
+    isDropdownOpen.value = false
+    lookupLoading.value = false
+    lookupError.value = ''
+    highlightedIndex.value = -1
     return
   }
 
-  if (!UUID_REGEX.test(trimmed)) {
-    actorInputError.value = 'Actor filter requires a valid 36-character user UUID.'
-    // Invalid input must not send a request
+  searchDebounceTimer = setTimeout(() => {
+    executeSearch(trimmed, 1, false)
+  }, 300)
+}
+
+const handleSearchFocus = () => {
+  const trimmed = lookupQuery.value.trim()
+  if (trimmed.length >= 2 && (suggestions.value.length > 0 || lookupError.value)) {
+    isDropdownOpen.value = true
+  }
+}
+
+const loadMoreAccounts = () => {
+  const trimmed = lookupQuery.value.trim()
+  if (
+    trimmed.length >= 2 &&
+    suggestions.value.length < lookupTotalCount.value &&
+    !lookupLoadingMore.value
+  ) {
+    executeSearch(trimmed, lookupPage.value + 1, true)
+  }
+}
+
+const retrySearch = () => {
+  const trimmed = lookupQuery.value.trim()
+  if (trimmed.length >= 2) {
+    executeSearch(trimmed, lookupPage.value, false)
+  }
+}
+
+const selectAccount = (user) => {
+  if (!user?.user_id) return
+  pendingAccount.value = {
+    user_id: user.user_id,
+    email: user.email,
+    display_name: user.display_name,
+    username: user.username,
+    role: user.role,
+  }
+  lookupQuery.value = user.email || formatUserOptionLabel(user)
+  isDropdownOpen.value = false
+  highlightedIndex.value = -1
+  lookupError.value = ''
+}
+
+const navigateSuggestions = (delta) => {
+  if (!isDropdownOpen.value || suggestions.value.length === 0) return
+  const max = suggestions.value.length - 1
+  let next = highlightedIndex.value + delta
+  if (next < 0) next = max
+  if (next > max) next = 0
+  highlightedIndex.value = next
+}
+
+const handleSearchEnter = () => {
+  if (
+    isDropdownOpen.value &&
+    highlightedIndex.value >= 0 &&
+    highlightedIndex.value < suggestions.value.length
+  ) {
+    selectAccount(suggestions.value[highlightedIndex.value])
     return
   }
+  if (isApplyEnabled.value) {
+    applyAccountFilter()
+  }
+}
 
-  actorInputError.value = ''
-  selectedUserId.value = trimmed
+const closeDropdown = () => {
+  isDropdownOpen.value = false
+  highlightedIndex.value = -1
+}
+
+const clearLookupInput = () => {
+  lookupQuery.value = ''
+  pendingAccount.value = null
+  suggestions.value = []
+  isDropdownOpen.value = false
+  lookupError.value = ''
+  highlightedIndex.value = -1
+}
+
+const applyAccountFilter = () => {
+  if (!pendingAccount.value?.user_id) return
+  selectedUserId.value = pendingAccount.value.user_id
+  appliedAccount.value = { ...pendingAccount.value }
   page.value = 1
   loadLogs()
 }
 
-const quickFilterByActor = (userId) => {
+// Row-level filter for historical/active actors
+const quickFilterByActor = (userId, userEmail) => {
   if (!userId || !UUID_REGEX.test(userId)) return
-  actorInput.value = userId
-  actorInputError.value = ''
   selectedUserId.value = userId
+  appliedAccount.value = {
+    user_id: userId,
+    email: userEmail || null,
+    display_name: null,
+    username: null,
+  }
+  pendingAccount.value = { ...appliedAccount.value }
+  lookupQuery.value = userEmail || userId
+  isDropdownOpen.value = false
   page.value = 1
   loadLogs()
 }
 
 const clearActorFilter = () => {
   selectedUserId.value = ''
-  actorInput.value = ''
-  actorInputError.value = ''
+  appliedAccount.value = null
+  pendingAccount.value = null
+  lookupQuery.value = ''
+  suggestions.value = []
+  isDropdownOpen.value = false
+  lookupError.value = ''
   page.value = 1
   loadLogs()
 }
 
 const clearFilters = () => {
   selectedAction.value = ''
-  selectedUserId.value = ''
-  actorInput.value = ''
-  actorInputError.value = ''
-  page.value = 1
-  loadLogs()
+  clearActorFilter()
 }
 
 const goToPage = (newPage) => {
@@ -213,9 +437,21 @@ const goToPage = (newPage) => {
   loadLogs()
 }
 
+const handleClickOutside = (event) => {
+  if (searchWrapperRef.value && !searchWrapperRef.value.contains(event.target)) {
+    closeDropdown()
+  }
+}
+
 onMounted(() => {
   initFromQueryParams()
   loadLogs()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  document.removeEventListener('click', handleClickOutside)
 })
 
 watch(
@@ -237,7 +473,16 @@ watch(
     }
     if (selectedUserId.value !== queryUserId) {
       selectedUserId.value = queryUserId
-      actorInput.value = queryUserId
+      if (queryUserId) {
+        appliedAccount.value = { user_id: queryUserId, email: null, display_name: null }
+        pendingAccount.value = { user_id: queryUserId, email: null, display_name: null }
+        lookupQuery.value = queryUserId
+        lookupAccountById(queryUserId)
+      } else {
+        appliedAccount.value = null
+        pendingAccount.value = null
+        lookupQuery.value = ''
+      }
       hasChange = true
     }
 
@@ -250,11 +495,12 @@ watch(
 
 <template>
   <div class="audit-logs-view">
+    <!-- Page Header -->
     <header class="page-header">
       <div class="header-titles">
         <h2 class="title">Audit logs</h2>
         <p class="subtitle">
-          Trace recorded administrative actions, registrations, and classroom events
+          Trace recorded administrative actions, educator registrations, and classroom management events.
         </p>
       </div>
 
@@ -272,9 +518,11 @@ watch(
       </div>
     </header>
 
+    <!-- Main Content -->
     <main class="page-body">
-      <!-- Filter Bar -->
+      <!-- Filters Card -->
       <section class="filter-card" aria-label="Audit log filters">
+        <!-- Control Row: labels on top, inputs on bottom with identical baseline -->
         <div class="filters-controls-row">
           <!-- Action Type Filter -->
           <div class="filter-field action-field">
@@ -296,31 +544,134 @@ watch(
             </select>
           </div>
 
-          <!-- Actor User UUID Filter -->
+          <!-- Performed by (Account Lookup) Filter -->
           <div class="filter-field actor-field">
-            <label for="actor-filter" class="filter-label">
-              <span>Actor user ID</span>
-              <span class="label-subtext">(UUID only)</span>
+            <label for="performed-by-filter" class="filter-label">
+              <span>Performed by</span>
             </label>
             <div class="input-with-action">
-              <input
-                id="actor-filter"
-                v-model="actorInput"
-                type="text"
-                class="filter-input"
-                placeholder="e.g. 00000000-0000-0000-0000-000000000000"
-                :class="{ 'has-error': Boolean(actorInputError) }"
-                :aria-invalid="Boolean(actorInputError)"
-                :aria-describedby="actorInputError ? 'actor-filter-error' : 'actor-filter-hint'"
-                :disabled="isLoading"
-                @input="handleActorInputChange"
-                @keydown.enter.prevent="applyActorFilter"
-              />
+              <div ref="searchWrapperRef" class="search-input-wrapper">
+                <input
+                  id="performed-by-filter"
+                  ref="searchInputRef"
+                  v-model="lookupQuery"
+                  type="text"
+                  role="combobox"
+                  :aria-expanded="isDropdownOpen"
+                  aria-autocomplete="list"
+                  aria-controls="performed-by-suggestions"
+                  :aria-activedescendant="highlightedIndex >= 0 ? `suggestion-opt-${highlightedIndex}` : undefined"
+                  class="filter-input search-input"
+                  placeholder="Search email or name"
+                  :aria-describedby="isPickerDifferingFromApplied ? 'actor-filter-applied' : undefined"
+                  :disabled="isLoading"
+                  autocomplete="off"
+                  @input="handleSearchInput"
+                  @focus="handleSearchFocus"
+                  @keydown.down.prevent="navigateSuggestions(1)"
+                  @keydown.up.prevent="navigateSuggestions(-1)"
+                  @keydown.enter.prevent="handleSearchEnter"
+                  @keydown.esc.prevent="closeDropdown"
+                />
+                <button
+                  v-if="lookupQuery"
+                  type="button"
+                  class="btn-clear-input"
+                  aria-label="Clear search input"
+                  @click="clearLookupInput"
+                >
+                  <AppIcon name="x" :size="13" />
+                </button>
+
+                <!-- Suggestions Dropdown (floating overlay) -->
+                <div
+                  v-if="isDropdownOpen"
+                  id="performed-by-suggestions"
+                  class="suggestions-dropdown"
+                  role="listbox"
+                  tabindex="-1"
+                >
+                  <!-- Loading -->
+                  <div v-if="lookupLoading" class="suggestion-status">
+                    <span class="mini-spinner" aria-hidden="true"></span>
+                    <span>Searching accounts…</span>
+                  </div>
+
+                  <!-- Error -->
+                  <div
+                    v-else-if="lookupError"
+                    class="suggestion-status suggestion-error"
+                    role="alert"
+                  >
+                    <span>{{ lookupError }}</span>
+                    <button type="button" class="btn-retry-lookup" @click="retrySearch">
+                      Retry
+                    </button>
+                  </div>
+
+                  <!-- Empty -->
+                  <div v-else-if="suggestions.length === 0" class="suggestion-status">
+                    <span>No accounts found matching "{{ lookupQuery.trim() }}"</span>
+                  </div>
+
+                  <!-- Suggestions List -->
+                  <template v-else>
+                    <div
+                      v-for="(user, idx) in suggestions"
+                      :id="`suggestion-opt-${idx}`"
+                      :key="user.user_id"
+                      role="option"
+                      :aria-selected="highlightedIndex === idx || pendingAccount?.user_id === user.user_id"
+                      class="suggestion-item"
+                      :class="{
+                        'is-highlighted': highlightedIndex === idx,
+                        'is-selected': pendingAccount?.user_id === user.user_id,
+                      }"
+                      @click="selectAccount(user)"
+                      @mouseenter="highlightedIndex = idx"
+                    >
+                      <div class="user-primary-row">
+                        <span class="user-email">{{ user.email }}</span>
+                        <span
+                          v-if="user.role"
+                          class="user-role-badge"
+                          :class="`role-${user.role}`"
+                        >
+                          {{ user.role }}
+                        </span>
+                      </div>
+                      <div v-if="user.display_name || user.username" class="user-secondary-row">
+                        <span class="user-name">
+                          {{ user.display_name || user.username }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Load More Option -->
+                    <div
+                      v-if="suggestions.length < lookupTotalCount"
+                      class="dropdown-footer"
+                    >
+                      <button
+                        type="button"
+                        class="btn-load-more"
+                        :disabled="lookupLoadingMore"
+                        @click.stop="loadMoreAccounts"
+                      >
+                        <span v-if="lookupLoadingMore" class="mini-spinner" aria-hidden="true"></span>
+                        <span>Load more accounts ({{ suggestions.length }} of {{ lookupTotalCount }})</span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Apply Button (Violet Primary Theme) -->
               <button
                 type="button"
                 class="btn-apply-actor"
-                :disabled="isLoading"
-                @click="applyActorFilter"
+                :disabled="isLoading || !isApplyEnabled"
+                @click="applyAccountFilter"
               >
                 Apply
               </button>
@@ -342,48 +693,13 @@ watch(
           </div>
         </div>
 
-        <!-- Feedback & Helper Text Row (Kept separate from control alignment) -->
-        <div class="filters-feedback-row">
-          <div
-            v-if="actorInputError"
-            id="actor-filter-error"
-            class="field-error-text"
-            role="alert"
-          >
-            {{ actorInputError }}
+        <!-- Feedback Row: compact applied filter indicator shown only when picker differs from active filter -->
+        <div v-if="isPickerDifferingFromApplied" class="filters-feedback-row">
+          <div id="actor-filter-applied" class="applied-filter-indicator">
+            Applied: <strong>{{ appliedAccountDisplay }}</strong>
           </div>
-          <div
-            v-else
-            id="actor-filter-hint"
-            class="field-hint-text"
-          >
-            Filter recorded actions by actor user UUID (not by username or email).
-          </div>
-        </div>
-
-        <!-- Active Filter Pill -->
-        <div v-if="selectedUserId" class="active-filter-indicator">
-          <span class="indicator-text">
-            Filtering by actor UUID: <code>{{ selectedUserId }}</code>
-          </span>
-          <button
-            type="button"
-            class="btn-remove-pill"
-            aria-label="Remove actor UUID filter"
-            @click="clearActorFilter"
-          >
-            <AppIcon name="x" :size="12" />
-          </button>
         </div>
       </section>
-
-      <!-- Timezone Notice Above Table -->
-      <div class="table-timezone-notice" role="note">
-        <AppIcon name="info" :size="16" class="notice-icon" />
-        <span class="notice-text">
-          Timestamps with recorded offsets are shown in your local time ({{ localTimeZoneLabel }}). Timestamps recorded without offsets have an unspecified timezone and are displayed exactly as logged.
-        </span>
-      </div>
 
       <!-- Error State -->
       <div v-if="errorMessage" class="error-banner" role="alert">
@@ -411,7 +727,7 @@ watch(
             <thead>
               <tr>
                 <th scope="col" class="th-time">Timestamp</th>
-                <th scope="col" class="th-actor">Actor</th>
+                <th scope="col" class="th-actor">Performed by</th>
                 <th scope="col" class="th-action">Action</th>
                 <th scope="col" class="th-target">Affected resource</th>
                 <th scope="col" class="th-desc">Description</th>
@@ -447,7 +763,7 @@ watch(
                   </div>
                 </td>
 
-                <!-- Actor Email -->
+                <!-- Performed by (Actor Email & Row Filter) -->
                 <td class="td-actor">
                   <div class="actor-container">
                     <span class="actor-email" :title="log.user_email">
@@ -457,11 +773,11 @@ watch(
                       v-if="log.user_id"
                       type="button"
                       class="btn-actor-filter"
-                      :title="`Filter by actor UUID: ${log.user_id}`"
-                      :aria-label="`Filter by actor ${log.user_email || log.user_id}`"
-                      @click="quickFilterByActor(log.user_id)"
+                      :title="`Show this user’s activity (${log.user_email || log.user_id})`"
+                      :aria-label="`Show this user’s activity: ${log.user_email || log.user_id}`"
+                      @click="quickFilterByActor(log.user_id, log.user_email)"
                     >
-                      Filter
+                      Show this user’s activity
                     </button>
                   </div>
                 </td>
@@ -487,12 +803,12 @@ watch(
                       </code>
                     </template>
                     <!-- Case 2: Only target table present -->
-                    <template v-else-if="log.target_table && !log.target_id">
+                    <template v-else-if="log.target_table">
                       <span class="target-table">{{ log.target_table }}</span>
                       <span class="resource-partial text-dim">(No ID recorded)</span>
                     </template>
                     <!-- Case 3: Only target ID present -->
-                    <template v-else-if="!log.target_table && log.target_id">
+                    <template v-else-if="log.target_id">
                       <span class="resource-partial text-dim">(No table recorded)</span>
                       <code class="target-id" :title="log.target_id">
                         {{ formatTargetId(log.target_id) }}
@@ -700,6 +1016,7 @@ watch(
 .actor-field {
   flex: 1 1 340px;
   min-width: 260px;
+  position: relative;
 }
 
 .filter-label {
@@ -714,15 +1031,9 @@ watch(
   letter-spacing: 0.03em;
 }
 
-.label-subtext {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-text-dim);
-  text-transform: none;
-}
-
 .filter-select {
   height: 42px;
+  width: 100%;
   padding: 0 0.85rem;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
@@ -749,6 +1060,13 @@ watch(
   min-width: 0;
 }
 
+.search-input-wrapper {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
 .filter-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -766,36 +1084,209 @@ watch(
   box-sizing: border-box;
 }
 
+.search-input {
+  padding-right: 2.2rem;
+}
+
 .filter-input:focus-visible {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
 }
 
-.filter-input.has-error {
-  border-color: var(--color-danger);
-  background-color: #fef2f2;
+.btn-clear-input {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  padding: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 
-.btn-apply-actor {
-  height: 42px;
-  padding: 0 1rem;
-  background-color: var(--color-bg-subtle);
+.btn-clear-input:hover {
+  color: var(--color-text-main);
+}
+
+/* Suggestions Dropdown (floating overlay) */
+.suggestions-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0.35rem 0;
+}
+
+.suggestion-item {
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.is-highlighted {
+  background-color: var(--color-bg-subtle);
+}
+
+.suggestion-item.is-selected {
+  background-color: var(--color-violet-subtle);
+}
+
+.user-primary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.user-email {
+  font-weight: 600;
+  font-size: 0.86rem;
   color: var(--color-text-main);
+  overflow-wrap: break-word;
+}
+
+.user-role-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.user-secondary-row {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.dropdown-footer {
+  padding: 0.35rem 0.5rem 0.15rem 0.5rem;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.btn-load-more {
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.btn-load-more:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background-color: var(--color-card);
+}
+
+.mini-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+.suggestion-status {
+  padding: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.suggestion-error {
+  color: var(--color-danger);
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.btn-retry-lookup {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Violet Primary Theme for Apply Button */
+.btn-apply-actor {
+  height: 42px;
+  min-height: 42px;
+  padding: 0 1.25rem;
+  background: var(--btn-gradient);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
   font-family: var(--font-sans);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.25);
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-apply-actor:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background-color: var(--color-card);
+  background: var(--btn-gradient-hover);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-apply-actor:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-apply-actor:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .filter-actions {
@@ -828,82 +1319,19 @@ watch(
   background-color: var(--color-danger-bg);
 }
 
-/* Feedback Row: strictly below controls to never shift control vertical alignment */
+/* Feedback Row: compact applied filter indicator shown only when picker differs from active filter */
 .filters-feedback-row {
   margin-top: 0.5rem;
-  min-height: 1.25rem;
 }
 
-.field-error-text {
+.applied-filter-indicator {
   font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-danger);
-}
-
-.field-hint-text {
-  font-size: 0.78rem;
   color: var(--color-text-dim);
 }
 
-.active-filter-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.65rem;
-  padding: 0.35rem 0.65rem;
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.active-filter-indicator code {
-  font-family: var(--font-mono);
-  color: var(--color-primary);
+.applied-filter-indicator strong {
+  color: var(--color-text-main);
   font-weight: 600;
-  overflow-wrap: anywhere;
-  word-break: break-all;
-}
-
-.btn-remove-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 0.1rem;
-}
-
-.btn-remove-pill:hover {
-  color: var(--color-danger);
-}
-
-/* Timezone Explanation Notice above Table */
-.table-timezone-notice {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.65rem 1rem;
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  margin-bottom: 1.25rem;
-}
-
-.notice-icon {
-  color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-.notice-text {
-  font-size: 0.84rem;
-  color: var(--color-text-muted);
-  line-height: 1.45;
 }
 
 /* Table Card */
@@ -961,7 +1389,7 @@ td {
 
 .th-actor {
   width: 270px;
-  min-width: 240px;
+  min-width: 220px;
 }
 
 .th-action {
@@ -996,9 +1424,9 @@ td {
 
 .actor-container {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
+  gap: 0.35rem;
 }
 
 .actor-email {
@@ -1007,11 +1435,10 @@ td {
   overflow-wrap: break-word;
   word-break: normal;
   line-height: 1.4;
-  flex: 1 1 auto;
 }
 
 .btn-actor-filter {
-  padding: 0.15rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   font-size: 0.72rem;
   font-weight: 600;
   background-color: var(--color-bg-subtle);
@@ -1020,8 +1447,7 @@ td {
   color: var(--color-primary);
   cursor: pointer;
   transition: all 0.15s ease;
-  flex-shrink: 0;
-  margin-top: 0.1rem;
+  white-space: nowrap;
 }
 
 .btn-actor-filter:hover {

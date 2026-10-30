@@ -2149,61 +2149,89 @@ mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
 // ==========================================
 let mockAdminUsers = [
   {
-    user_id: 'u-admin-01',
+    user_id: '00000000-0000-0000-0000-000000000001',
     email: 'admin@cybermorph.local',
     role: 'admin',
     username: null,
-    display_name: null,
+    display_name: 'Administrator',
     is_active: true,
     created_at: '2026-08-01T08:00:00Z',
   },
   {
-    user_id: 'u-educator-01',
-    email: 'educator@dnsc.edu.ph',
+    user_id: '00000000-0000-0000-0000-000000000002',
+    email: 'educator@cybermorph.local',
     role: 'educator',
     username: null,
-    display_name: null,
+    display_name: 'Prof. Santos',
     is_active: true,
     created_at: '2026-08-05T09:30:00Z',
   },
   {
-    user_id: 'u-educator-pending-01',
+    user_id: '00000000-0000-0000-0000-000000000003',
+    email: 'player@cybermorph.local',
+    role: 'player',
+    username: 'CyberPlayer',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-07T10:00:00Z',
+  },
+  {
+    user_id: '00000000-0000-0000-0000-000000000004',
+    email: 'cadet1@cybermorph.local',
+    role: 'player',
+    username: 'CadetOne',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-08T11:00:00Z',
+  },
+  {
+    user_id: '00000000-0000-0000-0000-000000000005',
+    email: 'prof.delacruz@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: 'Prof. Dela Cruz',
+    is_active: true,
+    created_at: '2026-08-09T12:00:00Z',
+  },
+  // Duplicate names to test distinguishing by email
+  {
+    user_id: '00000000-0000-0000-0000-000000000006',
+    email: 'alex.santos@dnsc.edu.ph',
+    role: 'educator',
+    username: null,
+    display_name: 'Alex Santos',
+    is_active: true,
+    created_at: '2026-08-10T14:00:00Z',
+  },
+  {
+    user_id: '00000000-0000-0000-0000-000000000007',
+    email: 'alex.player@example.com',
+    role: 'player',
+    username: 'Alex Santos',
+    display_name: null,
+    is_active: true,
+    created_at: '2026-08-11T15:00:00Z',
+  },
+  {
+    user_id: '00000000-0000-0000-0000-000000000008',
     email: 'prof_smith@dnsc.edu.ph',
     role: 'educator',
     username: null,
-    display_name: null,
+    display_name: 'Prof. Smith',
     is_active: false,
     created_at: '2026-09-10T14:15:00Z',
   },
   {
-    user_id: 'u-educator-pending-02',
+    user_id: '00000000-0000-0000-0000-000000000009',
     email: 'instructor_lee@dnsc.edu.ph',
     role: 'educator',
     username: null,
-    display_name: null,
+    display_name: 'Instructor Lee',
     is_active: false,
     created_at: '2026-09-15T11:20:00Z',
   },
   {
-    user_id: 'u-educator-rejected-01',
-    email: 'rejected_candidate@dnsc.edu.ph',
-    role: 'educator',
-    username: null,
-    display_name: null,
-    is_active: false,
-    created_at: '2026-09-02T10:00:00Z',
-  },
-  {
-    user_id: 'u-player-01',
-    email: 'player_alex@example.com',
-    role: 'player',
-    username: 'AgentAlex',
-    display_name: null,
-    is_active: true,
-    created_at: '2026-08-10T16:45:00Z',
-  },
-  {
-    user_id: 'u-player-02',
+    user_id: '00000000-0000-0000-0000-000000000010',
     email: 'player_sam@example.com',
     role: 'player',
     username: 'SamSec',
@@ -2212,7 +2240,7 @@ let mockAdminUsers = [
     created_at: '2026-08-12T13:10:00Z',
   },
   {
-    user_id: 'u-player-03',
+    user_id: '00000000-0000-0000-0000-000000000011',
     email: 'player_casey@example.com',
     role: 'player',
     username: 'CaseyByte',
@@ -2288,6 +2316,12 @@ mock.onGet('/admin/users').reply((config) => {
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_USERS__') || '0', 10) : 0
+  if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_USERS__', String(sessionFail - 1))
+    return [500, { detail: 'Account directory lookup unavailable' }]
+  }
 
   const params = config.params || {}
   const roleFilter = params.role ? String(params.role).toLowerCase() : null
@@ -2651,6 +2685,16 @@ const VALID_ACTION_TYPES = new Set([
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export const mockLogs = [
+  {
+    log_id: '10000000-0000-0000-0000-000000000030',
+    user_id: '00000000-0000-0000-0000-000000000099',
+    user_email: 'historical.instructor@dnsc.edu.ph',
+    action_type: 'update_classroom',
+    target_table: 'classroom_codes',
+    target_id: 'c9000000-0000-0000-0000-000000000099',
+    description: 'Historical instructor action before account removal from directory.',
+    logged_at: '2026-10-29T09:50:00Z',
+  },
   {
     log_id: '10000000-0000-0000-0000-000000000025',
     user_id: '00000000-0000-0000-0000-000000000001',

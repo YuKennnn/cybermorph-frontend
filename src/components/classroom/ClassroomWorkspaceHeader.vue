@@ -37,6 +37,14 @@ const props = defineProps({
     type: Number,
     default: 1,
   },
+  returnTo: {
+    type: [String, Object],
+    default: '/classroom/manage',
+  },
+  returnLabel: {
+    type: String,
+    default: 'Return to all classrooms',
+  },
 })
 
 const emit = defineEmits(['retry-metadata'])
@@ -193,10 +201,10 @@ onUnmounted(() => {
       <h1>{{ pageTitle }}</h1>
       <p v-if="pageDescription">{{ pageDescription }}</p>
     </div>
-    <!-- Breadcrumb -->
-    <router-link to="/classroom/manage" class="btn-primary return-button">
+    <!-- Breadcrumb / Return Action -->
+    <router-link :to="returnTo" class="btn-primary return-button">
       <AppIcon name="arrow-right" :size="18" class="return-icon" />
-      <span>Return to all classrooms</span>
+      <span>{{ returnLabel }}</span>
     </router-link>
   </div>
 

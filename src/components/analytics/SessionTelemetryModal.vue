@@ -36,12 +36,17 @@ const props = defineProps({
 const emit = defineEmits(['close', 'backToStudent'])
 
 const modalRef = ref(null)
-const backBtnRef = ref(null)
+const closeBtnRef = ref(null)
 let previousActiveElement = null
 
 const formattedFinishingCredits = computed(() => {
   return formatFinishingCredits(props.session?.credits_left)
 })
+
+const handleClose = () => {
+  emit('close')
+  emit('backToStudent')
+}
 
 const trapFocus = (event) => {
   if (event.key !== 'Tab' || !modalRef.value) return
@@ -70,7 +75,7 @@ const trapFocus = (event) => {
 const handleKeyDown = (event) => {
   if (!props.isOpen) return
   if (event.key === 'Escape') {
-    emit('backToStudent')
+    handleClose()
     return
   }
   trapFocus(event)
@@ -83,8 +88,8 @@ watch(
       previousActiveElement = document.activeElement
       document.body.style.overflow = 'hidden'
       nextTick(() => {
-        if (backBtnRef.value) {
-          backBtnRef.value.focus()
+        if (closeBtnRef.value) {
+          closeBtnRef.value.focus()
         } else {
           const firstFocusable = modalRef.value?.querySelector(
             'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -139,35 +144,27 @@ onUnmounted(() => {
     role="dialog"
     aria-modal="true"
     aria-label="Session details"
-    @click.self="emit('backToStudent')"
+    @click.self="handleClose"
   >
     <div class="modal-dialog modal-md">
       <div class="modal-header">
-        <div class="header-left-actions">
-          <button
-            ref="backBtnRef"
-            type="button"
-            class="btn-back-link"
-            @click="emit('backToStudent')"
-          >
-            ◀ Back to student
-          </button>
-          <div class="modal-title-box">
-            <h4>Session details</h4>
-          </div>
+        <div class="modal-title-box">
+          <h4>Session details</h4>
         </div>
         <button
+          ref="closeBtnRef"
+          type="button"
           class="modal-close-btn"
           aria-label="Close session details modal"
-          @click="emit('backToStudent')"
+          @click="handleClose"
         >
-          ✕
+          Close
         </button>
       </div>
 
       <div class="modal-body">
         <!-- Session Context Header (Known from selected recent-session record) -->
-        <div v-if="session || sessionTelemetry" class="session-summary-box">
+        <div v-if="!errorMessage && (session || sessionTelemetry)" class="session-summary-box">
           <div class="summary-col">
             <span class="summary-label">Student</span>
             <span class="summary-val">{{ sessionTelemetry?.username || student?.username || 'Student' }}</span>
@@ -268,29 +265,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.header-left-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.btn-back-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0.35rem 0.5rem;
-  border-radius: 6px;
-  transition: all 0.15s ease;
-}
-
-.btn-back-link:hover {
-  background-color: var(--color-bg-subtle);
-  text-decoration: underline;
-}
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -325,18 +299,20 @@ onUnmounted(() => {
 }
 
 .modal-header {
-  padding: 1.25rem 1.5rem;
+  padding: 1.15rem 1.5rem;
   border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
   background-color: var(--color-bg-subtle);
+  gap: 1rem;
 }
 
 .modal-title-box h4 {
-  margin: 0 0 0.15rem 0;
+  margin: 0;
   color: var(--color-primary);
   font-size: 1.25rem;
+  font-weight: 700;
 }
 
 .modal-profile-id {
@@ -346,15 +322,38 @@ onUnmounted(() => {
 }
 
 .modal-close-btn {
-  background: none;
-  border: none;
-  font-size: 1.25rem;
-  color: var(--color-text-dim);
+  padding: 0.5rem 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  line-height: 1.3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.25);
+  transition: all 0.15s ease-in-out;
 }
 
 .modal-close-btn:hover {
-  color: var(--color-danger);
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+  transform: translateY(-1px);
+}
+
+.modal-close-btn:active {
+  transform: scale(0.98);
+}
+
+.modal-close-btn:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
 }
 
 .modal-body {

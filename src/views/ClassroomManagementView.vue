@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchMyClassrooms } from '../api/classroom'
 import { useAuthStore } from '../stores/authStore'
@@ -17,6 +17,41 @@ const classrooms = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+
+// Search and filter state
+const searchQuery = ref('')
+const selectedStatus = ref('all') // 'all' | 'active' | 'inactive'
+
+const isFilterActive = computed(() => {
+  return searchQuery.value.trim().length > 0 || selectedStatus.value !== 'all'
+})
+
+const clearFilters = () => {
+  searchQuery.value = ''
+  selectedStatus.value = 'all'
+}
+
+const filteredClassrooms = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  const status = selectedStatus.value
+
+  return classrooms.value.filter((c) => {
+    // Status filter
+    if (status === 'active' && c.is_active !== true) return false
+    if (status === 'inactive' && c.is_active !== false) return false
+
+    // Name or code search
+    if (query) {
+      const name = String(c.name || '').toLowerCase()
+      const code = String(c.code_value || c.code || '').toLowerCase()
+      if (!name.includes(query) && !code.includes(query)) {
+        return false
+      }
+    }
+
+    return true
+  })
+})
 
 // Modal state
 const isCreateModalOpen = ref(false)
@@ -145,14 +180,58 @@ onMounted(() => {
         </button>
       </div>
 
+      <!-- Classroom Toolbar -->
+      <section
+        v-if="!isLoading && !errorMessage && (classrooms.length > 0 || isFilterActive)"
+        class="classroom-toolbar"
+        aria-label="Classroom filters"
+      >
+        <div class="toolbar-controls">
+          <div class="toolbar-field search-field">
+            <label for="classroom-search" class="toolbar-label">Search classrooms</label>
+            <input
+              id="classroom-search"
+              v-model="searchQuery"
+              type="search"
+              class="toolbar-input"
+              placeholder="Search by name or access code..."
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="toolbar-field status-field">
+            <label for="classroom-status" class="toolbar-label">Status</label>
+            <select
+              id="classroom-status"
+              v-model="selectedStatus"
+              class="toolbar-select"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div v-if="isFilterActive" class="toolbar-actions">
+            <button
+              type="button"
+              class="btn-clear-filters"
+              @click="clearFilters"
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
+      </section>
+
       <div v-if="isLoading" class="loading-state">
         <div class="spinner"></div>
         <p>Fetching classroom roster...</p>
       </div>
 
-      <div v-else-if="classrooms.length > 0" class="classroom-grid">
+      <div v-else-if="filteredClassrooms.length > 0" class="classroom-grid">
         <ClassroomCard
-          v-for="c in classrooms"
+          v-for="c in filteredClassrooms"
           :key="c.code_id || c.id"
           :classroom="c"
           @view-students="handleViewStudents"
@@ -162,8 +241,14 @@ onMounted(() => {
         />
       </div>
 
+      <div v-else-if="classrooms.length > 0 && isFilterActive" class="empty-state" role="status">
+        <h4>No matching classrooms</h4>
+        <p>No classrooms match your search criteria or status filter.</p>
+        <button type="button" class="btn-outline" @click="clearFilters">Clear filters</button>
+      </div>
+
       <div v-else-if="!errorMessage" class="empty-state">
-        <h4>No classrooms found</h4>
+        <h4>No classrooms yet</h4>
         <p>Create a classroom and generate a 6-character access code for your students.</p>
         <button class="btn-primary" @click="isCreateModalOpen = true">+ Create classroom</button>
       </div>
@@ -380,5 +465,127 @@ onMounted(() => {
 .btn-notice-action:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Classroom Toolbar */
+.classroom-toolbar {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.toolbar-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.toolbar-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.search-field {
+  flex: 1 1 260px;
+  min-width: 200px;
+}
+
+.status-field {
+  flex: 0 0 170px;
+  min-width: 140px;
+}
+
+.toolbar-label {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.toolbar-input,
+.toolbar-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.55rem 0.85rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  color: var(--color-text-main);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.toolbar-input:focus,
+.toolbar-select:focus,
+.toolbar-input:focus-visible,
+.toolbar-select:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: flex-end;
+  min-height: 40px;
+}
+
+.btn-clear-filters {
+  min-height: 40px;
+  padding: 0.55rem 1rem;
+  background-color: var(--color-card);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-clear-filters:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+  background-color: var(--color-danger-bg);
+}
+
+.btn-clear-filters:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+}
+
+@media (max-width: 640px) {
+  .toolbar-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.85rem;
+  }
+
+  .search-field,
+  .status-field {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .btn-clear-filters {
+    width: 100%;
+  }
 }
 </style>

@@ -43,46 +43,20 @@ let sessionRequestId = 0
 const codeId = computed(() => String(route.params.code_id || ''))
 const profileId = computed(() => String(route.params.profile_id || ''))
 
-// Origin & Return Destination (Condition 4: explicit origin priority + legacy preservation)
-const origin = computed(() => {
-  if (route.query.origin === 'students') return 'students'
-  if (route.query.origin === 'analytics') return 'analytics'
-
-  // Legacy links fallback:
-  // "A legacy link carrying roster_page must retain its Students return destination even when table_page is also present."
-  if (route.query.roster_page) return 'students'
-  if (route.query.table_page) return 'analytics'
-
-  return 'students'
-})
-
+// Roster Return Destination & Pagination
 const originatingRosterPage = computed(() => {
-  const p = parseInt(route.query.roster_page, 10)
+  const p = parseInt(route.query.roster_page || route.query.page, 10)
   return !isNaN(p) && p > 0 ? p : 1
 })
 
-const originatingTablePage = computed(() => {
-  const p = parseInt(route.query.table_page, 10)
-  return !isNaN(p) && p > 0 ? p : 1
-})
-
-const returnDestination = computed(() => {
-  if (origin.value === 'analytics') {
-    const query = { table_page: originatingTablePage.value }
-    if (route.query.roster_page) {
-      query.roster_page = originatingRosterPage.value
-    }
-    return {
-      path: `/analytics/${codeId.value}`,
-      query,
-      label: '◀ Return to analytics',
-    }
+const rosterReturnRoute = computed(() => {
+  const query = {}
+  if (originatingRosterPage.value > 1) {
+    query.page = originatingRosterPage.value
   }
-
   return {
     path: `/classroom/students/${codeId.value}`,
-    query: originatingRosterPage.value > 1 ? { page: originatingRosterPage.value } : {},
-    label: '◀ Return to classroom roster',
+    query,
   }
 })
 
@@ -361,6 +335,7 @@ const openSession = async (sessionItem) => {
     if (!data?.profile_id || String(data.profile_id) !== profileId.value) {
       sessionErrorMessage.value = 'Session details do not belong to this student.'
       sessionTelemetry.value = null
+      selectedSession.value = null
       return
     }
 
@@ -473,19 +448,16 @@ onUnmounted(() => {
 <template>
   <div class="student-progress-view">
     <ClassroomWorkspaceHeader
+      page-title="Student progress"
+      page-description="Review this student’s map progression, threat unlocks, and recent sessions."
       :code-id="codeId"
       active-tab="students"
+      :return-to="rosterReturnRoute"
+      return-label="Return to classroom roster"
       :originating-roster-page="originatingRosterPage"
     />
 
     <main class="page-body">
-      <!-- Return Navigation Link -->
-      <div class="breadcrumb-container">
-        <router-link :to="returnDestination" class="return-nav-link back-link">
-          {{ returnDestination.label }}
-        </router-link>
-      </div>
-
       <!-- Identity Context Header -->
       <section class="identity-card" aria-label="Student overview">
         <div class="identity-header">
@@ -817,24 +789,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-}
-
-.breadcrumb-container {
-  display: flex;
-  align-items: center;
-}
-
-.back-link {
-  color: var(--color-primary, #7c3aed);
-  text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 600;
-  transition: opacity 0.2s ease;
-}
-
-.back-link:hover {
-  text-decoration: underline;
-  opacity: 0.85;
 }
 
 /* Identity Card */

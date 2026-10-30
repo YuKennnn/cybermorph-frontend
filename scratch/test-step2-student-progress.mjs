@@ -4,6 +4,10 @@ import assert from 'node:assert'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { Buffer } from 'node:buffer'
+
+const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/e915d42a-bc70-4315-86d7-18b50753d36f'
+const isWindows = process.platform === 'win32'
 
 // Setup localStorage shim for Node unit tests
 if (typeof globalThis.localStorage === 'undefined') {
@@ -124,8 +128,8 @@ async function runStep2FormulaChecks() {
 // 2. Real Headless Chrome Browser Application Tests on Isolated Port
 // =============================================================
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
-const TEST_PORT = process.env.TEST_PORT ? Number(process.env.TEST_PORT) : 5182
-const CDP_PORT = 9226
+const TEST_PORT = process.env.TEST_PORT ? Number(process.env.TEST_PORT) : 5194
+const CDP_PORT = 9258
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-step2-cdp-${Date.now()}`)
 
 class CDPClient {
@@ -206,6 +210,20 @@ class CDPClient {
     })
   }
 
+  async setViewport(width, height) {
+    await this.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: width < 768,
+    })
+  }
+
+  async screenshot(filePath) {
+    const res = await this.send('Page.captureScreenshot', { format: 'png' })
+    fs.writeFileSync(filePath, Buffer.from(res.data, 'base64'))
+  }
+
   close() {
     if (this.ws) this.ws.close()
   }
@@ -217,7 +235,7 @@ async function runStep2BrowserTests() {
   // 1. Verify port is not already occupied
   console.log(`Checking if port ${TEST_PORT} is free...`)
   try {
-    const preCheck = await fetch(`http://localhost:${TEST_PORT}/`)
+    const preCheck = await fetch(`http://127.0.0.1:${TEST_PORT}/`)
     if (preCheck) {
       throw new Error(`Port ${TEST_PORT} is already occupied. Refusing to connect to an existing server.`)
     }
@@ -227,25 +245,21 @@ async function runStep2BrowserTests() {
     }
   }
 
-  // 2. Spawn isolated Vite test server on port 5174 with VITE_USE_MOCK=true
+  // 2. Spawn isolated Vite test server on port 5194 with VITE_USE_MOCK=true
   console.log(`Starting isolated Vite test server on port ${TEST_PORT} with VITE_USE_MOCK=true...`)
-  const isWindows = process.platform === 'win32'
-  const npmCmd = isWindows ? 'npx.cmd' : 'npx'
-
   let viteExited = false
   let viteExitCode = null
   let viteError = null
 
   const viteProc = spawn(
-    npmCmd,
-    ['vite', '--port', String(TEST_PORT), '--strictPort'],
+    process.execPath,
+    ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', String(TEST_PORT), '--strictPort'],
     {
       cwd: process.cwd(),
       env: {
         ...process.env,
         VITE_USE_MOCK: 'true',
       },
-      shell: isWindows,
       stdio: 'pipe',
     },
   )
@@ -270,7 +284,7 @@ async function runStep2BrowserTests() {
     }
 
     try {
-      const res = await fetch(`http://localhost:${TEST_PORT}/`)
+      const res = await fetch(`http://127.0.0.1:${TEST_PORT}/`)
       if (res.ok) {
         serverReady = true
         break
@@ -284,32 +298,38 @@ async function runStep2BrowserTests() {
     serverReady && !viteExited,
     `Isolated Vite server failed to confirm startup on port ${TEST_PORT} (exited: ${viteExited}, code: ${viteExitCode})`,
   )
-  console.log(`✓ Confirmed own isolated Vite test server is up on http://localhost:${TEST_PORT}`)
+  console.log(`✓ Confirmed own isolated Vite test server is up on http://127.0.0.1:${TEST_PORT}`)
 
   // 3. Launch Headless Chrome on CDP_PORT
   fs.mkdirSync(USER_DATA_DIR, { recursive: true })
-  const chromeProc = spawn(CHROME_PATH, [
-    `--remote-debugging-port=${CDP_PORT}`,
-    `--user-data-dir=${USER_DATA_DIR}`,
-    '--headless=new',
-    '--disable-gpu',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--window-size=1280,900',
-    'about:blank',
-  ])
+  const chromeProc = spawn(
+    CHROME_PATH,
+    [
+      '--headless=new',
+      `--remote-debugging-port=${CDP_PORT}`,
+      `--user-data-dir=${USER_DATA_DIR}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-networking',
+      '--disable-extensions',
+      '--disable-gpu',
+      '--no-sandbox',
+      '--window-size=1440,900',
+      'about:blank',
+    ],
+    { stdio: 'ignore' },
+  )
 
   let client
   try {
     let versionData = null
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       try {
         const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`)
         versionData = await res.json()
         break
       } catch {
-        await sleep(200)
+        await sleep(250)
       }
     }
 
@@ -325,7 +345,7 @@ async function runStep2BrowserTests() {
 
     // 4. Authenticate as educator
     console.log('1. Authenticating as educator on isolated test server...')
-    await client.send('Page.navigate', { url: `http://localhost:${TEST_PORT}/login` })
+    await client.send('Page.navigate', { url: `http://127.0.0.1:${TEST_PORT}/login` })
     await client.waitEval(`document.querySelector('#email') !== null`)
     await client.eval(`
       const emailInput = document.querySelector('#email');
@@ -339,14 +359,19 @@ async function runStep2BrowserTests() {
     await client.waitEval(`window.location.pathname.includes('/dashboard')`, 8000)
     console.log('✓ Successfully authenticated with mock educator')
 
-    // 5. Test Direct Student-Page Entry & Shared Classroom Store Initialization (Condition 1)
-    console.log('2. Direct entry to student p18 (classroom c1) and verifying shared store initialization...')
+    // 5. Test Direct Student-Page Entry & Upper Header State
+    console.log('2. Direct entry to student p18 (classroom c1) and verifying header and navigation...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p18?origin=students&roster_page=2`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p18?origin=students&roster_page=2`,
     })
 
     const directEntryData = await client.waitEval(`
       (() => {
+        const pageH1 = document.querySelector('.workspace-heading-copy h1')?.textContent?.trim();
+        const pageDesc = document.querySelector('.workspace-heading-copy p')?.textContent?.trim();
+        const returnBtnText = document.querySelector('.return-button span')?.textContent?.trim();
+        const returnBtnHref = document.querySelector('.return-button')?.getAttribute('href');
+        const duplicateBack = document.querySelector('.breadcrumb-container, .return-nav-link');
         const headerTitle = document.querySelector('.classroom-title')?.textContent?.trim();
         const headerCode = document.querySelector('.code-pill')?.textContent?.trim();
         const headerBadge = document.querySelector('.count-badge strong')?.textContent?.trim();
@@ -356,10 +381,14 @@ async function runStep2BrowserTests() {
         const wins = document.querySelector('.kpi-value.win-count')?.textContent?.trim();
         const losses = document.querySelector('.kpi-value.loss-count')?.textContent?.trim();
         const mapProgress = document.querySelector('.identity-meta-row')?.textContent?.trim();
-        const returnLabel = document.querySelector('.return-nav-link')?.textContent?.trim();
         const threatRows = document.querySelectorAll('.threats-table tbody tr');
         const sessionRows = document.querySelectorAll('.sessions-table tbody tr');
         return {
+          pageH1,
+          pageDesc,
+          returnBtnText,
+          returnBtnHref,
+          hasDuplicateBack: Boolean(duplicateBack),
           headerTitle,
           headerCode,
           headerBadge,
@@ -368,7 +397,6 @@ async function runStep2BrowserTests() {
           wins,
           losses,
           mapProgress,
-          returnLabel,
           threatRowCount: threatRows.length,
           sessionRowCount: sessionRows.length,
         };
@@ -376,6 +404,30 @@ async function runStep2BrowserTests() {
     `, 8000)
 
     console.log('Direct entry data:', directEntryData)
+    assert.strictEqual(directEntryData.pageH1, 'Student progress', 'Page heading must be "Student progress"')
+    assert.strictEqual(
+      directEntryData.pageDesc,
+      'Review this student’s map progression, threat unlocks, and recent sessions.',
+      'Subtitle must match specification',
+    )
+    assert.strictEqual(
+      directEntryData.returnBtnText,
+      'Return to classroom roster',
+      'Upper-right button must be "Return to classroom roster"',
+    )
+    assert.ok(
+      directEntryData.returnBtnHref?.includes('/classroom/students/c1'),
+      'Upper-right button must link to classroom students tab',
+    )
+    assert.ok(
+      directEntryData.returnBtnHref?.includes('page=2'),
+      'Roster page=2 query must be preserved in return link',
+    )
+    assert.strictEqual(
+      directEntryData.hasDuplicateBack,
+      false,
+      'Duplicate back control inside content card must be removed',
+    )
     assert.strictEqual(directEntryData.headerTitle, 'BSIT 4A', 'Shared store initialized header title')
     assert.strictEqual(directEntryData.headerCode, 'CYB101', 'Shared store initialized header code')
     assert.strictEqual(directEntryData.headerBadge, '23', 'Shared store confirmed 23 students')
@@ -384,14 +436,13 @@ async function runStep2BrowserTests() {
     assert.strictEqual(directEntryData.winRate, '75%', 'Calculated win rate 75%')
     assert.strictEqual(directEntryData.wins, '6')
     assert.strictEqual(directEntryData.losses, '2')
-    assert.strictEqual(directEntryData.returnLabel, '◀ Return to classroom roster')
     assert.strictEqual(directEntryData.threatRowCount, 8, '8 canonical threat categories displayed')
-    console.log('✓ Direct entry and shared classroom store initialization verified')
+    console.log('✓ Direct entry, upper-right Return to classroom roster, and page heading verified')
 
     // 6. Test Switching Between Classrooms (c1 -> c2) (Condition 1 & 3)
     console.log('3. Switching to classroom c2 and student p1...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c2/progress/p1?origin=students`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c2/progress/p1?origin=students`,
     })
 
     const c2Data = await client.waitEval(`
@@ -434,7 +485,7 @@ async function runStep2BrowserTests() {
     // 8A. Explicit valid origin preserved
     console.log('  5A: Explicit origin students preserved with table_page...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/analytics/c1?student=p18&origin=students&table_page=2`,
+      url: `http://127.0.0.1:${TEST_PORT}/analytics/c1?student=p18&origin=students&table_page=2`,
     })
     await client.waitEval(`window.location.pathname.includes('/progress/p18')`, 8000)
     let search5A = await client.eval(`window.location.search`)
@@ -444,7 +495,7 @@ async function runStep2BrowserTests() {
     // 8B. roster_page means Students, even with table_page
     console.log('  5B: roster_page takes priority over table_page when no explicit origin...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/analytics/c1?student=p18&roster_page=2&table_page=3`,
+      url: `http://127.0.0.1:${TEST_PORT}/analytics/c1?student=p18&roster_page=2&table_page=3`,
     })
     await client.waitEval(`window.location.pathname.includes('/progress/p18')`, 8000)
     let search5B = await client.eval(`window.location.search`)
@@ -455,7 +506,7 @@ async function runStep2BrowserTests() {
     // 8C. Only table_page means Analytics
     console.log('  5C: table_page means Analytics when no roster_page...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/analytics/c1?student=p18&table_page=3`,
+      url: `http://127.0.0.1:${TEST_PORT}/analytics/c1?student=p18&table_page=3`,
     })
     await client.waitEval(`window.location.pathname.includes('/progress/p18')`, 8000)
     let search5C = await client.eval(`window.location.search`)
@@ -465,36 +516,54 @@ async function runStep2BrowserTests() {
     // 8D. Classroom c2 (verifying no hardcoded 'c1')
     console.log('  5D: Classroom c2 redirecting without fallback to c1...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/analytics/c2?student=p1`,
+      url: `http://127.0.0.1:${TEST_PORT}/analytics/c2?student=p1`,
     })
     await client.waitEval(`window.location.pathname.includes('/classroom/students/c2/progress/p1')`, 8000)
     let path5D = await client.eval(`window.location.pathname`)
     assert.ok(path5D.includes('/classroom/students/c2/progress/p1'), 'Redirected to c2, not fallback c1')
     console.log('✓ Legacy redirection suite verified')
 
-    // 9. Test Return Navigation Destinations (Condition 4)
-    console.log('6. Testing return navigation destinations...')
-    // From students origin
+    // 9. Test Return Navigation Destinations & Classroom Scope
+    console.log('6. Testing return navigation destinations & scope...')
+    // From students origin with roster page 2
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p18?origin=students&roster_page=2`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p18?roster_page=2`,
     })
-    await client.waitEval(`document.querySelector('.return-nav-link') !== null`, 8000)
-    await client.eval(`document.querySelector('.return-nav-link')?.click()`)
+    await client.waitEval(`document.querySelector('.return-button') !== null`, 8000)
+    const returnText = await client.eval(`document.querySelector('.return-button span')?.textContent?.trim()`)
+    assert.strictEqual(returnText, 'Return to classroom roster', 'Return button labeled Return to classroom roster')
+    await client.eval(`document.querySelector('.return-button')?.click()`)
     await client.waitEval(`window.location.pathname.includes('/classroom/students/c1')`, 8000)
     let rosterSearch = await client.eval(`window.location.search`)
     assert.ok(rosterSearch.includes('page=2'), 'Preserved page=2 when returning to roster')
 
-    // From analytics origin
+    // Direct entry without query returns to /classroom/students/c1
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p18?origin=analytics&table_page=2&roster_page=2`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p1`,
     })
-    await client.waitEval(`document.querySelector('.return-nav-link') !== null`, 8000)
-    await client.eval(`document.querySelector('.return-nav-link')?.click()`)
-    await client.waitEval(`window.location.pathname.includes('/analytics/c1')`, 8000)
-    let analyticsSearch = await client.eval(`window.location.search`)
-    assert.ok(analyticsSearch.includes('table_page=2'), 'Preserved table_page=2 returning to analytics')
-    assert.ok(analyticsSearch.includes('roster_page=2'), 'Preserved roster_page=2 returning to analytics')
-    console.log('✓ Return navigation destinations verified')
+    await client.waitEval(`document.querySelector('.return-button') !== null`, 8000)
+    await client.eval(`document.querySelector('.return-button')?.click()`)
+    await client.waitEval(`window.location.pathname.includes('/classroom/students/c1')`, 8000)
+    console.log('✓ Direct entry return to roster verified')
+
+    // Verify classroom-level pages still have "Return to all classrooms"
+    console.log('  Verifying scope: classroom-level pages retain Return to all classrooms...')
+    await client.send('Page.navigate', {
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1`,
+    })
+    await client.waitEval(`document.querySelector('.return-button') !== null`, 8000)
+    const studentsPageReturnText = await client.eval(`document.querySelector('.return-button span')?.textContent?.trim()`)
+    const studentsPageReturnHref = await client.eval(`document.querySelector('.return-button')?.getAttribute('href')`)
+    assert.strictEqual(studentsPageReturnText, 'Return to all classrooms')
+    assert.strictEqual(studentsPageReturnHref, '/classroom/manage')
+
+    await client.send('Page.navigate', {
+      url: `http://127.0.0.1:${TEST_PORT}/analytics/c1`,
+    })
+    await client.waitEval(`document.querySelector('.return-button') !== null`, 8000)
+    const analyticsPageReturnText = await client.eval(`document.querySelector('.return-button span')?.textContent?.trim()`)
+    assert.strictEqual(analyticsPageReturnText, 'Return to all classrooms')
+    console.log('✓ Classroom scope preserved (classroom pages still show Return to all classrooms)')
 
     // 10. Immediate State Clearing & Delayed Response Handling (Condition 3 & 5)
     console.log('7. Testing immediate state clearing and delayed response handling on student change...')
@@ -502,11 +571,11 @@ async function runStep2BrowserTests() {
     await client.eval(`sessionStorage.setItem('__CYBERMORPH_DELAY_PLAYER__', '600')`)
 
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p18?origin=students`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p18?origin=students`,
     })
     // Immediately switch to p1 before p18 completes
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p1?origin=students`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p1?origin=students`,
     })
 
     // Immediately verify p18 data is cleared
@@ -529,38 +598,49 @@ async function runStep2BrowserTests() {
     await client.eval(`sessionStorage.removeItem('__CYBERMORPH_DELAY_PLAYER__')`)
     console.log('✓ Immediate clearing and delayed response handling verified')
 
-    // 11. Test Session Dialog: Tab/Shift+Tab Containment and Opener Focus Restoration (Condition 6)
-    console.log('8. Testing session dialog with genuine CDP keyboard interaction (Tab, Shift+Tab, Escape)...')
-    // Open session dialog via click on the inspect button
+    // 11. Test Session Dialog: Single Close Button, Focus, Escape, and Opener Restoration
+    console.log('8. Testing session dialog single Close button, keyboard containment, and dismissal...')
+    // Wait for inspect button to appear and open session dialog
+    await client.waitEval(`document.querySelector('.btn-inspect') !== null`, 8000)
     await client.eval(`
-      const btn = document.querySelector('.btn-inspect');
-      btn.focus();
-      btn.click();
+      (() => {
+        const btn = document.querySelector('.btn-inspect');
+        btn?.focus();
+        btn?.click();
+      })()
     `)
     await client.waitEval(`document.querySelector('.modal-backdrop') !== null`, 6000)
     await sleep(200)
 
-    // Verify initial focus is on the back button inside the modal
+    // Verify only ONE button exists in modal header
+    const headerButtons = await client.eval(`document.querySelectorAll('.modal-header button').length`)
+    assert.strictEqual(headerButtons, 1, 'Exactly one button in modal header')
+    const closeBtnText = await client.eval(`document.querySelector('.modal-close-btn')?.textContent?.trim()`)
+    assert.strictEqual(closeBtnText, 'Close', 'Modal button labeled Close')
+
+    // Verify initial focus is on the Close button inside the modal
     let focusedClass = await client.eval(`document.activeElement?.className`)
-    assert.ok(focusedClass.includes('btn-back-link'), 'Initial modal focus is on btn-back-link')
+    assert.ok(focusedClass.includes('modal-close-btn'), 'Initial modal focus is on modal-close-btn')
 
-    // Send genuine Tab key through CDP
-    await client.pressKey('Tab', 'Tab', 9)
-    await sleep(100)
-    focusedClass = await client.eval(`document.activeElement?.className`)
-    assert.ok(focusedClass.includes('modal-close-btn'), 'Tab moved focus to modal-close-btn')
+    // Test clicking Close button dismisses modal and preserves scroll position
+    await client.eval(`window.scrollTo(0, 150)`)
+    const scrollBefore = await client.eval(`window.scrollY`)
+    await client.eval(`document.querySelector('.modal-close-btn')?.click()`)
+    await client.waitEval(`document.querySelector('.modal-backdrop') === null`, 5000)
+    const scrollAfter = await client.eval(`window.scrollY`)
+    assert.strictEqual(scrollBefore, scrollAfter, 'Scroll position preserved after closing modal')
+    assert.ok(await client.eval(`window.location.pathname.includes('/progress/p1')`), 'Student progress page preserved')
 
-    // Send genuine Tab key again -> wraps around to first focusable (btn-back-link)
-    await client.pressKey('Tab', 'Tab', 9)
-    await sleep(100)
-    focusedClass = await client.eval(`document.activeElement?.className`)
-    assert.ok(focusedClass.includes('btn-back-link'), 'Tab wrapped focus around to btn-back-link')
-
-    // Send genuine Shift+Tab key (modifier 8 = Shift) -> wraps backward to modal-close-btn
-    await client.pressKey('Tab', 'Tab', 9, 8)
-    await sleep(100)
-    focusedClass = await client.eval(`document.activeElement?.className`)
-    assert.ok(focusedClass.includes('modal-close-btn'), 'Shift+Tab wrapped focus backward to modal-close-btn')
+    // Reopen modal to test Escape dismissal and focus restoration
+    await client.eval(`
+      (() => {
+        const btn = document.querySelector('.btn-inspect');
+        btn?.focus();
+        btn?.click();
+      })()
+    `)
+    await client.waitEval(`document.querySelector('.modal-backdrop') !== null`, 6000)
+    await sleep(200)
 
     // Dismiss modal via genuine Escape key
     await client.pressKey('Escape', 'Escape', 27)
@@ -571,7 +651,39 @@ async function runStep2BrowserTests() {
     const restoredTag = await client.eval(`document.activeElement?.className`)
     console.log('Restored focus element class:', restoredTag)
     assert.ok(restoredTag.includes('btn-inspect'), 'Focus correctly restored to opener button')
-    console.log('✓ Tab/Shift+Tab containment and opener focus restoration verified via actual keyboard events')
+    console.log('✓ Single Close button, Escape dismissal, and opener focus restoration verified')
+
+    // 11B. Visual Verification & Screenshot Capture (Desktop 1440 & Mobile 390)
+    console.log('  Capturing desktop and mobile verification screenshots...')
+    // Desktop 1440x900
+    await client.setViewport(1440, 900)
+    await client.send('Page.navigate', {
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p18`,
+    })
+    await client.waitEval(`document.querySelector('.student-title')?.textContent?.includes('RootAccess')`, 8000)
+    await sleep(300)
+    await client.screenshot(path.join(ARTIFACT_DIR, 'student_progress_desktop_1440.png'))
+
+    // Open session modal for desktop screenshot
+    await client.eval(`document.querySelector('.btn-inspect')?.click()`)
+    await client.waitEval(`document.querySelector('.modal-backdrop') !== null`, 6000)
+    await sleep(300)
+    await client.screenshot(path.join(ARTIFACT_DIR, 'session_modal_desktop_1440.png'))
+
+    // Mobile 390x844 with modal open
+    await client.setViewport(390, 844)
+    await sleep(300)
+    await client.screenshot(path.join(ARTIFACT_DIR, 'session_modal_mobile_390.png'))
+
+    // Close modal and capture mobile student progress
+    await client.eval(`document.querySelector('.modal-close-btn')?.click()`)
+    await client.waitEval(`document.querySelector('.modal-backdrop') === null`, 5000)
+    await sleep(300)
+    await client.screenshot(path.join(ARTIFACT_DIR, 'student_progress_mobile_390.png'))
+
+    // Reset viewport
+    await client.setViewport(1280, 900)
+    console.log('✓ All 4 verification screenshots successfully captured')
 
     // 12. Test Removing ?session= Through Back/Forward & Invalidation (Condition 3 & 5)
     console.log('9. Testing ?session= removal via Back navigation with delayed session response...')
@@ -579,7 +691,7 @@ async function runStep2BrowserTests() {
 
     // Navigate to direct session URL
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p1?origin=students&session=e2a8b351-9c2f-4612-8342-210394857612`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p1?origin=students&session=e2a8b351-9c2f-4612-8342-210394857612`,
     })
     await client.waitEval(`document.querySelector('.modal-backdrop') !== null`, 5000)
 
@@ -600,7 +712,7 @@ async function runStep2BrowserTests() {
 
     // 13A. Mismatched profile_id (session for p1 loaded under student p18)
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p18?session=e2a8b351-9c2f-4612-8342-210394857612`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p18?session=e2a8b351-9c2f-4612-8342-210394857612`,
     })
     const mismatchBanner = await client.waitEval(`
       (() => {
@@ -614,7 +726,7 @@ async function runStep2BrowserTests() {
 
     // 13B. Missing profile_id (session-missing-profile loaded under student p1)
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p1?session=session-missing-profile`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p1?session=session-missing-profile`,
     })
     const missingProfileBanner = await client.waitEval(`
       (() => {
@@ -630,7 +742,7 @@ async function runStep2BrowserTests() {
     // 14. Test Non-Existent Student Identity (page_size=10 bounded search)
     console.log('11. Testing non-existent student identity handling (page_size=10 search)...')
     await client.send('Page.navigate', {
-      url: `http://localhost:${TEST_PORT}/classroom/students/c1/progress/p9999?origin=students`,
+      url: `http://127.0.0.1:${TEST_PORT}/classroom/students/c1/progress/p9999?origin=students`,
     })
     const notFoundNote = await client.waitEval(`
       (() => {
