@@ -13,6 +13,7 @@ import {
   filterSessionsByMap,
   buildChartSeries,
 } from '../utils/playerSessions'
+import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -480,13 +481,8 @@ onUnmounted(() => {
         <div class="panel-header">
           <div class="panel-heading-group">
             <div class="panel-title-row">
-              <div class="panel-title-left">
-                <h3 id="recent-performance-heading" class="panel-title">Recent performance</h3>
-                <span class="scope-badge">Latest 10 sessions</span>
-              </div>
-              <router-link to="/session-history" class="btn-history-link">
-                View session history
-              </router-link>
+              <h3 id="recent-performance-heading" class="panel-title">Recent performance</h3>
+              <span class="scope-badge">Latest 10 sessions</span>
             </div>
             <p class="panel-subtitle">
               Session score is earned credits minus lost credits and false-positive penalties
@@ -494,22 +490,32 @@ onUnmounted(() => {
             </p>
           </div>
 
-          <div v-if="!sessionFailed && !hasNoSessions" class="map-filter-control">
-            <label for="overview-map-select" class="map-filter-label">Map</label>
-            <select
-              id="overview-map-select"
-              v-model="selectedMapFilter"
-              class="map-select"
-              aria-describedby="overview-map-filter-note"
-            >
-              <option value="All">All maps (latest 10)</option>
-              <option v-for="mapName in CANONICAL_SESSION_MAPS" :key="mapName" :value="mapName">
-                {{ mapName }}
-              </option>
-            </select>
-            <span id="overview-map-filter-note" class="map-filter-note">
-              Filters within your latest 10 sessions
-            </span>
+          <router-link to="/session-history" class="btn-history-link">
+            <span>View session history</span>
+            <AppIcon name="arrow-right" :size="15" />
+          </router-link>
+        </div>
+
+        <!-- Filter Row -->
+        <div v-if="!sessionFailed && !hasNoSessions" class="panel-filter-row">
+          <div class="map-filter-control">
+            <label for="overview-map-select" class="map-filter-label">Filter by map</label>
+            <div class="map-filter-input-group">
+              <select
+                id="overview-map-select"
+                v-model="selectedMapFilter"
+                class="map-select"
+                aria-describedby="overview-map-filter-note"
+              >
+                <option value="All">All maps (latest 10)</option>
+                <option v-for="mapName in CANONICAL_SESSION_MAPS" :key="mapName" :value="mapName">
+                  {{ mapName }}
+                </option>
+              </select>
+              <span id="overview-map-filter-note" class="map-filter-note">
+                Filters within your latest 10 sessions
+              </span>
+            </div>
           </div>
         </div>
 
@@ -806,7 +812,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .panel-heading-group {
@@ -846,23 +852,37 @@ onUnmounted(() => {
   line-height: 1.45;
 }
 
+.panel-filter-row {
+  display: flex;
+  align-items: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
 .map-filter-control {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .map-filter-label {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+}
+
+.map-filter-input-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .map-select {
-  padding: 0.45rem 0.75rem;
+  padding: 0.5rem 0.85rem;
+  min-height: 38px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background-color: var(--color-bg-subtle);
@@ -870,12 +890,20 @@ onUnmounted(() => {
   font-family: var(--font-sans);
   font-size: 0.88rem;
   font-weight: 600;
-  min-width: 185px;
+  min-width: 200px;
   cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.map-select:focus,
+.map-select:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
 }
 
 .map-filter-note {
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   color: var(--color-text-dim);
 }
 
@@ -1035,21 +1063,34 @@ onUnmounted(() => {
 .btn-history-link {
   display: inline-flex;
   align-items: center;
-  font-size: 0.82rem;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
   font-weight: 600;
   color: var(--color-primary);
   text-decoration: none;
-  padding: 0.35rem 0.75rem;
-  border-radius: 6px;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  border-radius: 8px;
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
+  box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
   transition: all 0.15s ease;
 }
 
 .btn-history-link:hover {
   background-color: var(--color-bg-subtle);
   border-color: var(--color-primary);
-  text-decoration: underline;
+}
+
+.btn-history-link:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
 }
 
 .loading-state {
@@ -1207,8 +1248,22 @@ onUnmounted(() => {
 
 /* Responsive layout for mobile and enlarged text without horizontal overflow */
 @media (max-width: 720px) {
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .btn-history-link {
+    width: 100%;
+  }
+
   .map-filter-control {
-    align-items: flex-start;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .map-filter-input-group {
     width: 100%;
   }
 

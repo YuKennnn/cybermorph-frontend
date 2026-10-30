@@ -1,13 +1,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
 import AppIcon from '../components/common/AppIcon.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 // Metrics (System stats)
@@ -84,16 +82,6 @@ const displayStat = (val, loading, error) => {
   if (error || val === null || val === undefined) return 'Unavailable'
   return typeof val === 'number' ? val.toLocaleString() : String(val)
 }
-
-const handleAdminAction = (action) => {
-  if (action === 'User Management') {
-    router.push('/admin/users')
-  } else if (action === 'Educator Approvals') {
-    router.push('/admin/approvals')
-  } else if (action === 'Audit Logs' || action === 'System Logs') {
-    router.push('/admin/logs')
-  }
-}
 </script>
 
 <template>
@@ -136,11 +124,9 @@ const handleAdminAction = (action) => {
       </div>
 
       <!-- Pending Educator Approvals Card (Clickable Link to /admin/approvals) -->
-      <router-link
-        to="/admin/approvals"
-        class="stat-card stat-card-link"
+      <div
+        class="stat-card"
         :class="{ 'has-attention': pendingApprovals !== null && pendingApprovals > 0 }"
-        aria-label="Pending educator approvals queue. Click to review approvals."
       >
         <div
           class="stat-value"
@@ -152,17 +138,25 @@ const handleAdminAction = (action) => {
           {{ displayStat(pendingApprovals, approvalsLoading, approvalsError) }}
         </div>
         <div class="stat-label">Pending educator approvals</div>
-        <div v-if="approvalsError" class="stat-card-retry">
+        <div class="stat-card-actions">
           <button
+            v-if="approvalsError"
             type="button"
             class="btn-retry-sm"
             aria-label="Retry loading pending educator approvals count"
-            @click.stop.prevent="loadApprovals"
+            @click="loadApprovals"
           >
             Retry
           </button>
+          <router-link
+            to="/admin/approvals"
+            class="stat-link"
+            aria-label="Review pending educator approvals"
+          >
+            Review approvals
+          </router-link>
         </div>
-      </router-link>
+      </div>
 
       <!-- Threats Detected -->
       <div class="stat-card">
@@ -170,45 +164,6 @@ const handleAdminAction = (action) => {
           {{ displayStat(threatsDetected, statsLoading, statsError) }}
         </div>
         <div class="stat-label">Threats detected</div>
-      </div>
-    </div>
-
-    <!-- Administrative Actions Grid -->
-    <div class="content-section">
-      <h4 class="section-title">Administrative actions</h4>
-      <div class="actions-grid">
-        <button
-          type="button"
-          class="action-tile"
-          @click="handleAdminAction('User Management')"
-        >
-          <span class="tile-title">User management</span>
-          <span class="tile-desc">Inspect registered accounts, roles, and user identifiers</span>
-        </button>
-
-        <button
-          type="button"
-          class="action-tile"
-          :class="{ 'highlight-tile': pendingApprovals !== null && pendingApprovals > 0 }"
-          @click="handleAdminAction('Educator Approvals')"
-        >
-          <span class="tile-title">
-            Educator approvals
-            <template v-if="pendingApprovals !== null && pendingApprovals > 0">
-              ({{ pendingApprovals }})
-            </template>
-          </span>
-          <span class="tile-desc">Review and authorize institutional instructor registrations</span>
-        </button>
-
-        <button
-          type="button"
-          class="action-tile"
-          @click="handleAdminAction('Audit Logs')"
-        >
-          <span class="tile-title">Audit logs</span>
-          <span class="tile-desc">Trace administrative actions, account registrations, and classroom events</span>
-        </button>
       </div>
     </div>
 
@@ -372,20 +327,6 @@ const handleAdminAction = (action) => {
   box-shadow: var(--shadow-card-hover, 0 4px 12px rgba(0, 0, 0, 0.05));
 }
 
-.stat-card-link {
-  text-decoration: none;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-}
-
-.stat-card-link:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
 .stat-card.has-attention {
   border-color: var(--color-warning-border);
   background-color: var(--color-warning-bg);
@@ -393,6 +334,37 @@ const handleAdminAction = (action) => {
 
 .stat-card.has-attention:hover {
   border-color: var(--color-warning);
+}
+
+.stat-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-link {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.stat-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+.stat-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .stat-value {
@@ -437,10 +409,6 @@ const handleAdminAction = (action) => {
   color: var(--color-text-dim);
   margin-top: 0.4rem;
   line-height: 1.35;
-}
-
-.stat-card-retry {
-  margin-top: 0.5rem;
 }
 
 .btn-retry-sm {
@@ -510,64 +478,6 @@ const handleAdminAction = (action) => {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: 4px;
-}
-
-/* Administrative Actions Grid */
-.actions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.25rem;
-  margin-top: 1rem;
-}
-
-.action-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 1.35rem;
-  background-color: var(--color-bg-subtle);
-  border: 1.5px solid var(--color-border);
-  border-radius: 10px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.action-tile:hover {
-  background-color: var(--color-card);
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-2px);
-}
-
-.action-tile:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.highlight-tile {
-  border-color: var(--color-warning-border);
-  background: var(--color-warning-bg);
-}
-
-.highlight-tile:hover {
-  border-color: var(--color-warning);
-  background: var(--color-warning-bg);
-}
-
-.tile-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-text-main);
-  margin-bottom: 0.35rem;
-}
-
-.tile-desc {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  line-height: 1.45;
 }
 
 /* Error Banners */
@@ -786,10 +696,6 @@ td {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
-  }
-
-  .actions-grid {
-    grid-template-columns: 1fr;
   }
 
   .stats-grid {

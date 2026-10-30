@@ -163,19 +163,20 @@ async function run() {
     await pageCdp.send('Page.navigate', { url: `${BASE_URL}/login` })
     await sleep(1000)
     await pageCdp.evaluate(`
-      localStorage.setItem('cyber_token', 'mock-admin-token');
+      localStorage.setItem('cyber_token', 'mock-jwt-token-admin:u-admin-01');
       localStorage.setItem('cyber_role', 'admin');
       localStorage.setItem('cyber_user', JSON.stringify({
-        user_id: '00000000-0000-0000-0000-000000000001',
+        user_id: 'u-admin-01',
         username: 'admin',
         email: 'admin@cybermorph.local',
-        role: 'admin'
+        role: 'admin',
+        is_active: true
       }));
     `)
 
     await pageCdp.setViewport(1440, 900)
     await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
-    await sleep(1500)
+    await sleep(4000)
 
     console.log('[4/7] Testing Initial Overview State (Desktop 1440px)...')
     const initialOverview = await pageCdp.evaluate(`
@@ -191,8 +192,8 @@ async function run() {
           href: card.getAttribute('href')
         }));
 
-        const approvalsTile = document.querySelector('.action-tile.highlight-tile');
-        const activitySection = document.querySelector('.content-section:last-of-type');
+        const actionTiles = document.querySelectorAll('.action-tile');
+        const activitySection = document.querySelector('.content-section');
         const activityTitle = activitySection?.querySelector('.section-title')?.textContent?.trim();
         const viewAllLink = activitySection?.querySelector('.link-view-all');
         const rows = Array.from(activitySection?.querySelectorAll('.activity-row') || []).map(r => ({
@@ -202,11 +203,17 @@ async function run() {
           timeStatus: r.querySelector('.time-status')?.textContent?.trim(),
         }));
 
+        const approvalsCardElem = document.querySelectorAll('.stat-card')[2];
+        const reviewApprovalsLink = approvalsCardElem?.querySelector('.stat-link');
+
         return {
           title,
           subtitle,
           cards,
-          approvalsTileText: approvalsTile?.textContent?.trim(),
+          actionTileCount: actionTiles.length,
+          hasReviewApprovalsLink: Boolean(reviewApprovalsLink),
+          reviewApprovalsHref: reviewApprovalsLink?.getAttribute('href'),
+          reviewApprovalsText: reviewApprovalsLink?.textContent?.trim(),
           activityTitle,
           hasViewAllLink: Boolean(viewAllLink),
           viewAllHref: viewAllLink?.getAttribute('href'),
@@ -219,6 +226,7 @@ async function run() {
 
     assert.equal(initialOverview.title, 'System administration')
     assert.match(initialOverview.subtitle, /Signed in as administrator:/)
+    assert.equal(initialOverview.actionTileCount, 0, 'Administrative actions tiles must be removed')
 
     // Check Sessions received (24h)
     const sessionsCard = initialOverview.cards.find(c => c.label === 'Sessions received (24h)')
@@ -229,10 +237,10 @@ async function run() {
     // Check Pending Educator Approvals card (count > 0 in default mock)
     const approvalsCard = initialOverview.cards.find(c => c.label === 'Pending educator approvals')
     assert(approvalsCard, 'Must have Pending educator approvals card')
-    assert.equal(approvalsCard.isLink, true, 'Pending educator approvals card must be a link')
-    assert.equal(approvalsCard.href, '/admin/approvals')
+    assert.equal(initialOverview.hasReviewApprovalsLink, true, 'Card must have Review approvals link')
+    assert.equal(initialOverview.reviewApprovalsHref, '/admin/approvals')
+    assert.equal(initialOverview.reviewApprovalsText, 'Review approvals')
     assert.equal(approvalsCard.hasAttention, true, 'Card must have attention styling when pending count > 0')
-    assert.match(initialOverview.approvalsTileText, /\(\d+\)/, 'Tile must display pending count')
 
     // Check Recent activity section
     assert.equal(initialOverview.activityTitle, 'Recent activity')
@@ -261,20 +269,19 @@ async function run() {
 
     const zeroApprovalsState = await pageCdp.evaluate(`
       (() => {
-        const card = document.querySelector('.stat-card-link');
-        const tile = document.querySelector('.action-tile:nth-child(2)');
+        const card = document.querySelectorAll('.stat-card')[2];
+        const link = card?.querySelector('.stat-link');
         return {
           cardValue: card?.querySelector('.stat-value')?.textContent?.trim(),
           hasAttention: card?.classList.contains('has-attention'),
-          tileText: tile?.textContent?.trim(),
-          tileHasHighlight: tile?.classList.contains('highlight-tile')
+          linkText: link?.textContent?.trim()
         };
       })()
     `)
     console.log('Zero Approvals State:', zeroApprovalsState)
     assert.equal(zeroApprovalsState.cardValue, '0', 'Zero approvals must be displayed as 0')
     assert.equal(zeroApprovalsState.hasAttention, false, 'No attention styling when pending approvals is 0')
-    assert.equal(zeroApprovalsState.tileHasHighlight, false, 'Action tile must not have highlight-tile when pending approvals is 0')
+    assert.equal(zeroApprovalsState.linkText, 'Review approvals')
 
     // Test 0 activity records
     await pageCdp.evaluate(`
@@ -450,8 +457,9 @@ async function run() {
 
     const approvalsFailureState = await pageCdp.evaluate(`
       (() => {
-        const cardVal = document.querySelector('.stat-card-link .stat-value')?.textContent?.trim();
-        const retryBtn = document.querySelector('.stat-card-link .btn-retry-sm');
+        const card = document.querySelectorAll('.stat-card')[2];
+        const cardVal = card?.querySelector('.stat-value')?.textContent?.trim();
+        const retryBtn = card?.querySelector('.btn-retry-sm');
         const userCardVal = document.querySelector('.stat-card:nth-child(1) .stat-value')?.textContent?.trim();
         const activityRows = document.querySelectorAll('.activity-row');
         return {
@@ -470,13 +478,14 @@ async function run() {
 
     // Click retry on approvals
     await pageCdp.evaluate(`
-      document.querySelector('.stat-card-link .btn-retry-sm')?.click();
+      document.querySelectorAll('.stat-card')[2]?.querySelector('.btn-retry-sm')?.click();
     `)
     await sleep(600)
     const approvalsRecovered = await pageCdp.evaluate(`
       (() => {
-        const cardVal = document.querySelector('.stat-card-link .stat-value')?.textContent?.trim();
-        const retryBtn = document.querySelector('.stat-card-link .btn-retry-sm');
+        const card = document.querySelectorAll('.stat-card')[2];
+        const cardVal = card?.querySelector('.stat-value')?.textContent?.trim();
+        const retryBtn = card?.querySelector('.btn-retry-sm');
         return { cardVal, hasRetryBtn: Boolean(retryBtn) };
       })()
     `)
@@ -485,9 +494,9 @@ async function run() {
     assert.equal(approvalsRecovered.hasRetryBtn, false)
 
     console.log('[7/7] Testing Navigation & Mobile Layout (390px) with Enlarged Text...')
-    // Test navigation: Pending Approvals card click
+    // Test navigation: Review approvals link click
     await pageCdp.evaluate(`
-      document.querySelector('.stat-card-link')?.click();
+      document.querySelectorAll('.stat-card')[2]?.querySelector('.stat-link')?.click();
     `)
     await sleep(800)
     const navigatedApprovals = await pageCdp.evaluate(`window.location.pathname`)
