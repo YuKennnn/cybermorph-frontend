@@ -1,8 +1,10 @@
 import MockAdapter from 'axios-mock-adapter'
 import apiClient from './client.js'
+import { publicClient } from './app.js'
 import { stripDisplayNameWhitespace, validateDisplayName } from '../utils/displayName.js'
 
 const mock = new MockAdapter(apiClient, { delayResponse: 200 })
+const publicMock = new MockAdapter(publicClient, { delayResponse: 200 })
 
 const MOCK_PROFILES_STORAGE_KEY = 'cyber_mock_web_profiles_v1'
 
@@ -130,6 +132,17 @@ export const mockControl = {
   delayProfileGetMs: 0,
   delayProfilePatchMs: 0,
   delayAuthMs: 0,
+  failAppVersionCount: 0,
+  delayAppVersionMs: 0,
+  appVersionOverride: undefined,
+  setAppVersionOverride(payload) {
+    mockControl.appVersionOverride = payload
+  },
+  resetAppVersion() {
+    mockControl.failAppVersionCount = 0
+    mockControl.delayAppVersionMs = 0
+    mockControl.appVersionOverride = undefined
+  },
   resetProfiles() {
     mockWebProfiles = createDefaultMockWebProfiles()
     if (typeof localStorage !== 'undefined') {
@@ -3061,6 +3074,44 @@ mock.onGet('/admin/logs').reply((config) => {
     },
   ]
 })
+
+export const defaultMockAppVersion = {
+  latest_build: 10,
+  min_supported_build: 10,
+  download_url: 'https://drive.google.com/file/d/1hkDcDrjpemlRE4K0VcNM5d6-j6AOMBDm/view?usp=sharing',
+  api_current: 1,
+  api_min_supported: 1,
+}
+
+const handleAppVersionMock = async () => {
+  if (mockControl.delayAppVersionMs > 0) {
+    await new Promise((r) => setTimeout(r, mockControl.delayAppVersionMs))
+  }
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_APP_VERSION__') || '0', 10) : 0
+  if (mockControl.failAppVersionCount > 0 || sessionFail > 0) {
+    if (mockControl.failAppVersionCount > 0) mockControl.failAppVersionCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_APP_VERSION__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Simulated backend version error' }]
+  }
+  const sessionOverride = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_APP_VERSION__') : null
+  if (sessionOverride) {
+    try {
+      return [200, JSON.parse(sessionOverride)]
+    } catch {
+      // ignore parse error
+    }
+  }
+  if (mockControl.appVersionOverride !== undefined) {
+    return [200, mockControl.appVersionOverride]
+  }
+  return [200, defaultMockAppVersion]
+}
+
+publicMock.onGet(new RegExp('/app/version')).reply(handleAppVersionMock)
+mock.onGet(new RegExp('/app/version')).reply(handleAppVersionMock)
+publicMock.onAny().reply(404, { detail: 'Endpoint not found in public mock adapter' })
 
 mock.onAny().reply(404, { detail: 'Endpoint not found in mock adapter' })
 

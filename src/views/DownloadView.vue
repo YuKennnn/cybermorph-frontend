@@ -7,6 +7,7 @@ import AppIcon from '../components/common/AppIcon.vue'
 import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
 import { getStoredReadAloud } from '../utils/accessibility.js'
 import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
+import { fetchAppVersion, extractErrorMessage } from '../api/app.js'
 
 const route = useRoute()
 
@@ -22,8 +23,129 @@ const DOWNLOAD_SECTIONS = {
   },
   install: {
     title: 'Beta Installation Guide',
-    text: 'How to install during the beta: Step 1: Download package. Download the CyberMorph APK file directly to your Android device once published. Step 2: Allow installation. If prompted by Android, enable "Install unknown apps" for your browser in system settings. Step 3: Install application. Tap the downloaded file in your notifications or downloads folder and select Install. Step 4: Sign in and play. Launch CyberMorph, sign in with your player account, and start exploring missions offline.',
+    text: 'How to install during the beta: Step 1: Download package. Open the download link to access the APK file on Google Drive or the external release host, then download it to your device. Step 2: Allow installation. If prompted by Android, enable "Install unknown apps" for your browser or file manager in system settings. Step 3: Install application. Tap the downloaded APK file in your notifications or downloads folder and select Install. Step 4: Sign in and play. Launch CyberMorph, sign in with your player account, and start exploring missions offline.',
   },
+}
+
+const releaseData = ref(null)
+const isLoading = ref(true)
+const errorMessage = ref('')
+const errorType = ref(null) // null | 'network' | 'invalid_metadata' | 'self_loop' | 'invalid_url'
+let currentRequestId = 0
+
+const isValidHttpsUrl = (urlString) => {
+  if (typeof urlString !== 'string') return false
+  const trimmed = urlString.trim()
+  if (!trimmed) return false
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+const isSelfLoopUrl = (urlString) => {
+  if (typeof urlString !== 'string') return false
+  const trimmed = urlString.trim()
+  if (!trimmed) return false
+  try {
+    if (typeof window === 'undefined') return false
+    const targetUrl = new URL(trimmed, window.location.href)
+    const isSameHost = targetUrl.host.toLowerCase() === window.location.host.toLowerCase()
+    const targetPath = targetUrl.pathname.replace(/\/+$/, '').toLowerCase()
+    const currentPath = window.location.pathname.replace(/\/+$/, '').toLowerCase()
+    return isSameHost && (targetPath === currentPath || targetPath === '/download')
+  } catch {
+    return false
+  }
+}
+
+const isGoogleDriveUrl = (urlString) => {
+  if (typeof urlString !== 'string') return false
+  try {
+    const url = new URL(urlString.trim())
+    const host = url.hostname.toLowerCase()
+    return host === 'drive.google.com' || host === 'docs.google.com'
+  } catch {
+    return false
+  }
+}
+
+const isDownloadAvailable = computed(() => {
+  if (!releaseData.value || errorType.value) return false
+  const url = releaseData.value.download_url
+  return typeof url === 'string' && url.trim().length > 0 && isValidHttpsUrl(url) && !isSelfLoopUrl(url)
+})
+
+const isDownloadEmpty = computed(() => {
+  if (!releaseData.value || errorType.value) return false
+  const url = releaseData.value.download_url
+  return !url || typeof url !== 'string' || url.trim().length === 0
+})
+
+const isGoogleDrive = computed(() => {
+  if (!isDownloadAvailable.value) return false
+  return isGoogleDriveUrl(releaseData.value.download_url)
+})
+
+const buildLabel = computed(() => {
+  if (isLoading.value && !releaseData.value) {
+    return 'Checking release...'
+  }
+  if (releaseData.value?.latest_build != null) {
+    return `Build ${releaseData.value.latest_build}`
+  }
+  if (errorType.value) {
+    return 'Unavailable'
+  }
+  return 'Beta release awaiting confirmation'
+})
+
+const fetchRelease = async () => {
+  if (isLoading.value && currentRequestId > 0) return
+
+  const requestId = ++currentRequestId
+  isLoading.value = true
+  errorMessage.value = ''
+  errorType.value = null
+
+  try {
+    const data = await fetchAppVersion()
+    if (requestId !== currentRequestId) return
+
+    if (!data || typeof data !== 'object' || typeof data.latest_build !== 'number') {
+      errorType.value = 'invalid_metadata'
+      errorMessage.value = 'Invalid release metadata received from server.'
+      releaseData.value = null
+      return
+    }
+
+    releaseData.value = data
+
+    const url = data.download_url
+    if (url && typeof url === 'string' && url.trim()) {
+      if (isSelfLoopUrl(url)) {
+        errorType.value = 'self_loop'
+        errorMessage.value = 'Release download link points back to this page (configuration error).'
+      } else if (!isValidHttpsUrl(url)) {
+        errorType.value = 'invalid_url'
+        errorMessage.value = 'Release download link is not a valid HTTPS URL (configuration error).'
+      }
+    }
+  } catch (err) {
+    if (requestId !== currentRequestId) return
+    errorType.value = 'network'
+    errorMessage.value = extractErrorMessage(
+      err,
+      'Unable to load release information. The server may still be waking up — please try again.',
+    )
+    releaseData.value = null
+  } finally {
+    if (requestId === currentRequestId) {
+      isLoading.value = false
+    }
+  }
 }
 
 const handleReadSection = (ownerId, title, text, triggerEl) => {
@@ -51,6 +173,7 @@ const scrollToSection = (id) => {
 }
 
 onMounted(() => {
+  fetchRelease()
   if (route.hash) {
     const targetId = route.hash.replace('#', '')
     setTimeout(() => {
@@ -189,24 +312,106 @@ onMounted(() => {
               <div class="apk-status-box">
                 <div class="status-row">
                   <span class="status-label">Beta release link:</span>
-                  <span class="status-badge-pending">Awaiting confirmation</span>
+                  <span v-if="isLoading && !releaseData" class="status-subtle">Checking...</span>
+                  <span v-else-if="errorType === 'network'" class="status-badge-pending">Connection error</span>
+                  <span v-else-if="errorType" class="status-badge-pending">Configuration error</span>
+                  <span v-else-if="isDownloadAvailable" class="status-badge-available">Available</span>
+                  <span v-else-if="isDownloadEmpty" class="status-subtle">Not available yet</span>
+                  <span v-else class="status-badge-pending">Awaiting confirmation</span>
                 </div>
                 <div class="status-row">
                   <span class="status-label">Build version:</span>
-                  <span class="status-subtle">Beta release awaiting confirmation</span>
+                  <span :class="releaseData?.latest_build != null ? 'status-build-num' : 'status-subtle'">
+                    {{ buildLabel }}
+                  </span>
                 </div>
-                <p class="status-hint">
+                <p v-if="isLoading && !releaseData" class="status-hint">
+                  Connecting to server to retrieve the latest build information...
+                </p>
+                <p v-else-if="errorType" class="status-hint status-hint-error">
+                  {{ errorMessage }}
+                </p>
+                <p v-else-if="isDownloadAvailable && isGoogleDrive" class="status-hint">
+                  The APK is hosted on Google Drive. Select "Get Android APK" to open the file page.
+                </p>
+                <p v-else-if="isDownloadAvailable" class="status-hint">
+                  The direct APK package link is active.
+                </p>
+                <p v-else-if="isDownloadEmpty" class="status-hint">
+                  Download not available yet.
+                </p>
+                <p v-else class="status-hint">
                   The direct APK package link will be activated once published.
                 </p>
               </div>
 
-              <div class="platform-actions">
+              <div v-if="errorType" class="release-error-action">
                 <button
                   type="button"
-                  class="btn-primary"
+                  class="btn-retry"
+                  :disabled="isLoading"
+                  aria-label="Retry loading release information"
+                  @click="fetchRelease"
                 >
-                  Download
+                  <AppIcon name="refresh" :size="15" :class="{ 'spin-icon': isLoading }" />
+                  <span>Retry loading release</span>
                 </button>
+              </div>
+
+              <div class="platform-actions">
+                <!-- State 1: Loading -->
+                <button
+                  v-if="isLoading"
+                  type="button"
+                  class="btn-disabled"
+                  disabled
+                  aria-disabled="true"
+                >
+                  <AppIcon name="refresh" :size="16" class="spin-icon" />
+                  <span>Loading release...</span>
+                </button>
+
+                <!-- State 2: Valid HTTPS download URL -->
+                <template v-else-if="isDownloadAvailable">
+                  <a
+                    :href="releaseData.download_url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn-primary"
+                    aria-label="Get Android APK (opens in a new tab)"
+                  >
+                    <AppIcon name="download" :size="16" />
+                    <span>Get Android APK</span>
+                    <span class="sr-only">(opens in a new tab)</span>
+                  </a>
+                  <p v-if="isGoogleDrive" class="destination-note">
+                    Opens Google Drive
+                  </p>
+                </template>
+
+                <!-- State 3: Download not available yet (empty URL) -->
+                <template v-else-if="isDownloadEmpty">
+                  <button
+                    type="button"
+                    class="btn-disabled"
+                    disabled
+                    aria-disabled="true"
+                  >
+                    Download not available yet
+                  </button>
+                </template>
+
+                <!-- State 4: Error or Invalid URL / Self-loop -->
+                <template v-else>
+                  <button
+                    type="button"
+                    class="btn-disabled"
+                    disabled
+                    aria-disabled="true"
+                  >
+                    Download unavailable
+                  </button>
+                </template>
               </div>
             </div>
 
@@ -298,13 +503,13 @@ onMounted(() => {
             />
             <ol class="guide-steps" style="margin-top: 1.25rem;">
               <li>
-                <strong>Download package:</strong> Download the CyberMorph APK file directly to your Android device once published.
+                <strong>Download package:</strong> Open the download link to access the APK file on Google Drive or the external release host, then download it to your device.
               </li>
               <li>
-                <strong>Allow installation:</strong> If prompted by Android, enable "Install unknown apps" for your browser in system settings.
+                <strong>Allow installation:</strong> If prompted by Android, enable "Install unknown apps" for your browser or file manager in system settings.
               </li>
               <li>
-                <strong>Install application:</strong> Tap the downloaded file in your notifications or downloads folder and select <strong>Install</strong>.
+                <strong>Install application:</strong> Tap the downloaded APK file in your notifications or downloads folder and select <strong>Install</strong>.
               </li>
               <li>
                 <strong>Sign in and play:</strong> Launch CyberMorph, sign in with your player account, and start exploring missions offline.
@@ -593,9 +798,26 @@ onMounted(() => {
   border-radius: 4px;
 }
 
+.status-badge-available {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: var(--color-success);
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
 .status-subtle {
   font-size: 0.775rem;
   color: var(--color-text-muted);
+}
+
+.status-build-num {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  font-family: var(--font-mono, monospace);
 }
 
 .status-hint {
@@ -605,6 +827,56 @@ onMounted(() => {
   margin: 0;
   padding-top: 0.4rem;
   border-top: 1px dashed var(--color-border);
+}
+
+.status-hint-error {
+  color: var(--color-danger);
+}
+
+.release-error-action {
+  margin-bottom: 1rem;
+}
+
+.btn-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 1rem;
+  min-height: 44px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-retry:hover:not(:disabled) {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+}
+
+.btn-retry:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn-retry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.destination-note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: 0.15rem 0 0 0;
+  font-weight: 500;
 }
 
 .disabled-status-note {
@@ -630,6 +902,7 @@ onMounted(() => {
   gap: 0.5rem;
   width: 100%;
   padding: 0.65rem 1rem;
+  min-height: 44px;
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
@@ -656,8 +929,13 @@ onMounted(() => {
 }
 
 .btn-disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
   padding: 0.65rem 1rem;
+  min-height: 44px;
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
@@ -667,6 +945,19 @@ onMounted(() => {
   border-radius: 6px;
   cursor: not-allowed;
   opacity: 0.85;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Install Guide Panel */
