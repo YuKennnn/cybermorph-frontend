@@ -1,46 +1,40 @@
 # Environment Configuration, CORS, & Network Latency Resilience
 
-## Context & Problem Statement
+## Context & Principles
 
-CyberMorph developers often alternate between three execution environments:
+CyberMorph developers alternate between three primary environments:
 1. **Offline Mock Mode**: Fast, disconnected UI development using `axios-mock-adapter`.
-2. **Local Full-Stack**: Frontend on `http://localhost:5173` and local FastAPI on `http://127.0.0.1:8000`.
-3. **Hosted Production/Staging**: Frontend connecting to a cloud-hosted backend on Render (`https://cybermorph-backend.onrender.com`).
-
-Moving across these environments introduces common operational pitfalls:
-- **Cached Environment Variables**: Vite reads `.env` files once on startup. Modifying `.env` while `npm run dev` is running does not immediately take effect until restarted.
-- **Cross-Origin Resource Sharing (CORS) Drift**: Browsers treat `http://localhost:5173` and `http://127.0.0.1:5173` as distinct origins. If the backend only whitelists one, the other fails silently with a network error.
-- **Render Cold-Start Latency**: Free-tier cloud instances spin down after 15 minutes of inactivity. The first wake-up request takes 30–50 seconds. Without clear visual feedback, users perceive the app as frozen or broken.
+2. **Local Full-Stack**: Frontend on `http://localhost:5173` and local FastAPI on `http://127.0.0.1:8000/v1`.
+3. **Hosted Production/Staging**: Frontend connecting to a cloud-hosted backend on Render (`https://cybermorph-backend.onrender.com/v1`).
 
 ---
 
-## Recommended Architecture & Best Practices
+## Environment Variable Architecture
 
-### 1. Environment Variable Architecture
-Maintain `.env.example` in source control and keep local secrets and endpoints in `.env` (which is excluded by `.gitignore`):
+Maintain `.env.example` in source control and keep local configuration in `.env` (excluded by `.gitignore`):
 
 ```ini
 # .env.example (template committed to git)
-VITE_API_BASE_URL=https://cybermorph-backend.onrender.com
+VITE_API_BASE_URL=https://cybermorph-backend.onrender.com/v1
 VITE_USE_MOCK=false
 ```
 
 ```ini
 # .env (local override for local backend testing)
-VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000/v1
 VITE_USE_MOCK=false
 ```
 
-To switch back to offline mock development, simply toggle:
+To switch to offline mock development:
 ```ini
 VITE_USE_MOCK=true
 ```
 
-In `src/main.js`, make mock loading strictly opt-in:
+In `src/main.js`, mock loading is active only in development mode when explicitly enabled:
 ```javascript
 // src/main.js
 if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true') {
-  import('./api/mock')
+  await import('./api/mock.js')
 }
 ```
 
@@ -49,24 +43,22 @@ if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true') {
 
 ---
 
-### 2. Understanding Browser CORS Boundaries
-FastAPI enforces CORS via `CORSMiddleware`. Ensure the backend includes both common loopback addresses in its `CORS_ORIGINS` configuration:
+## CORS Boundaries
 
-```python
-# FastAPI backend configuration
-CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://cybermorph-portal.edu"
-]
-```
+FastAPI enforces CORS via `CORSMiddleware` using the `CORS_ORIGINS` environment variable on the backend. Browsers treat `http://localhost:5173` and `http://127.0.0.1:5173` as distinct origins.
 
-On the frontend, always use the consistent loopback address in your browser address bar matching your configuration.
+If cross-origin errors occur, verify that your browser origin is explicitly included in the backend's `CORS_ORIGINS` configuration. Frontend headers cannot bypass server CORS restrictions.
 
 ---
 
-### 3. Handling Cold Starts with Resilient UI Feedback
-When calling remote endpoints hosted on sleeping cloud servers (such as Render or Fly.io), provide proactive feedback if the request duration exceeds 4 seconds:
+## Network Resilience & Cloud Cold Starts
+
+The hosted free-tier backend spins down after ~15 minutes of inactivity. When waking up, the first request may take 30–50 seconds.
+
+However, **do not assume every network error is a hosting cold start**:
+- Check for client offline state (`navigator.onLine === false`).
+- Differentiate between connection timeouts (`ECONNABORTED`, request taking > 4s) and immediate connection refused errors (`ERR_CONNECTION_REFUSED`, e.g. local backend not running).
+- Show clear, actionable status messages without technical jargon:
 
 ```vue
 <script setup>
@@ -85,7 +77,7 @@ const handleSubmit = async (credentials) => {
   isServerWakingUp.value = false
   errorMessage.value = ''
 
-  // Notify user if waiting longer than 4s for a sleeping server to wake up
+  // Provide notice only if request takes longer than 4s
   wakeUpTimer = setTimeout(() => {
     if (isLoading.value) {
       isServerWakingUp.value = true
@@ -103,32 +95,19 @@ const handleSubmit = async (credentials) => {
   }
 }
 
-// Clean up timer to prevent memory leaks when user navigates away
 onUnmounted(() => {
   if (wakeUpTimer) clearTimeout(wakeUpTimer)
 })
 </script>
-
-<template>
-  <div v-if="isServerWakingUp" class="info-banner" role="status">
-    Connecting to backend... Free cloud instances take 30–45s to wake up on first request.
-  </div>
-</template>
 ```
 
 ---
 
 ## Verification Steps
-
-1. **Verify Local Loopback**:
-   Run `curl.exe -I http://127.0.0.1:8000/docs`. Ensure the local FastAPI server responds with `HTTP/1.1 200 OK`.
-2. **Verify CORS Headers**:
-   Run:
+1. Run non-fixing linting:
    ```powershell
-   curl.exe -I -X OPTIONS http://127.0.0.1:8000/auth/login `
-     -H "Origin: http://localhost:5173" `
-     -H "Access-Control-Request-Method: POST"
+   npx oxlint .
+   npx eslint .
    ```
-   Confirm `access-control-allow-origin: http://localhost:5173` is present.
-3. **Verify Timeout & Wake-Up Handling**:
-   Simulate a slow network in browser DevTools ("Slow 3G") and ensure the `info-banner` appears smoothly after 4 seconds without errors.
+2. Verify that mock mode activates only when `import.meta.env.DEV` is true and `VITE_USE_MOCK === 'true'`.
+3. Verify that network error messages clearly guide the user without exposing raw Axios error payloads.

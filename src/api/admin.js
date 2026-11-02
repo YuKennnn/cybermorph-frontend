@@ -130,3 +130,49 @@ export const fetchAdminLogs = async (params = {}) => {
   const response = await apiClient.get('/admin/logs', { params: query })
   return response.data
 }
+
+/**
+ * Fetch paginated list of play data research telemetry logs.
+ * Endpoint: GET /admin/play-data
+ * Uses dedicated 60-second timeout to accommodate backend cold starts.
+ * @param {Object} [params] - Query parameters
+ * @param {number} [params.page=1] - 1-based page number
+ * @param {number} [params.page_size=20] - Number of items per page
+ * @param {Object} [options] - Additional request options
+ * @param {number} [options.timeout=60000] - Request timeout in ms
+ * @param {AbortSignal} [options.signal] - Abort signal for cancellation
+ * @returns {Promise<{ items: Array, total_count: number, page: number, page_size: number }>}
+ */
+export const fetchAdminPlayData = async (params = {}, options = {}) => {
+  const query = {}
+  if (params.page !== undefined) query.page = params.page
+  if (params.page_size !== undefined) query.page_size = params.page_size
+
+  const response = await apiClient.get('/admin/play-data', {
+    params: query,
+    timeout: options.timeout ?? 60000,
+    signal: options.signal,
+  })
+  return response.data
+}
+
+/**
+ * Fetch detailed play data record including the raw CMLOG1 text payload.
+ * Endpoint: GET /admin/play-data/{uploadId}
+ * Uses dedicated 60-second timeout to accommodate backend cold starts.
+ * @param {string} uploadId - UUID of the play data upload
+ * @param {Object} [options] - Additional request options
+ * @param {number} [options.timeout=60000] - Request timeout in ms
+ * @param {AbortSignal} [options.signal] - Abort signal for cancellation
+ * @returns {Promise<{ upload_id: string, username: string, participant_code: string, row_count: number, uploaded_at: string, payload: string }>}
+ */
+export const fetchAdminPlayDataDetail = async (uploadId, options = {}) => {
+  if (typeof uploadId !== 'string' || !uploadId.trim()) {
+    throw new TypeError('Play data uploadId must be a non-empty string')
+  }
+  const response = await apiClient.get(`/admin/play-data/${encodeURIComponent(uploadId)}`, {
+    timeout: options.timeout ?? 60000,
+    signal: options.signal,
+  })
+  return response.data
+}

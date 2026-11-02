@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/authStore'
 import { fetchAdminLogs, fetchAdminUsers } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { ACTION_OPTIONS, getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
@@ -8,6 +9,7 @@ import AppIcon from '../components/common/AppIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -19,6 +21,24 @@ const selectedAction = ref('')
 const selectedUserId = ref('')
 const appliedAccount = ref(null)
 const pendingAccount = ref(null)
+
+const knownAccountsById = new Map()
+
+const cacheAccount = (account) => {
+  if (!account?.user_id) return
+  const existing = knownAccountsById.get(account.user_id) || {}
+  knownAccountsById.set(account.user_id, {
+    user_id: account.user_id,
+    email: account.email || existing.email || null,
+    display_name: account.display_name || existing.display_name || null,
+    username: account.username || existing.username || null,
+    role: account.role || existing.role || null,
+  })
+}
+
+if (authStore.user?.user_id) {
+  cacheAccount(authStore.user)
+}
 
 const lookupQuery = ref('')
 const suggestions = ref([])
@@ -41,6 +61,7 @@ const appliedAccountDisplay = computed(() => {
   if (!selectedUserId.value) return ''
   return (
     appliedAccount.value?.email ||
+    appliedAccount.value?.display_name ||
     appliedAccount.value?.user_id ||
     selectedUserId.value
   )
@@ -69,9 +90,21 @@ const isPickerDifferingFromApplied = computed(() => {
   return true
 })
 
+let isComponentMounted = false
+let currentSessionEpoch = 0
 let latestLogsRequestId = 0
 let latestLookupRequestId = 0
 let searchDebounceTimer = null
+
+const invalidateLookup = () => {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+  latestLookupRequestId++
+  lookupLoading.value = false
+  lookupLoadingMore.value = false
+}
 
 const isApplyEnabled = computed(() => {
   return Boolean(
@@ -91,23 +124,34 @@ const formatUserOptionLabel = (user) => {
   return name ? `${user.email} (${name})` : user.email
 }
 
-// Background lookup for existing user_id from URL without blocking log retrieval
-const lookupAccountById = async (userId) => {
-  try {
-    const res = await fetchAdminUsers({ search: userId, page: 1, page_size: 5 })
-    const match = res?.items?.find(
-      (u) => String(u.user_id).toLowerCase() === String(userId).toLowerCase(),
-    )
-    if (match && selectedUserId.value === userId) {
-      appliedAccount.value = { ...match }
-      if (!pendingAccount.value || pendingAccount.value.user_id === userId) {
-        pendingAccount.value = { ...match }
-        lookupQuery.value = match.email
-      }
-    }
-  } catch {
-    // Gracefully ignore directory lookup failures for initial URL state
+// Resolves a human-readable account label from existing memory or audit rows without directory search
+const resolveAccountForUserId = (userId) => {
+  if (!userId) return null
+  const cached = knownAccountsById.get(userId)
+  if (cached?.email || cached?.display_name || cached?.username) {
+    return { ...cached }
   }
+  if (authStore.user?.user_id === userId) {
+    return {
+      user_id: userId,
+      email: authStore.user.email || null,
+      display_name: authStore.user.display_name || null,
+      username: authStore.user.username || null,
+      role: authStore.userRole || null,
+    }
+  }
+  const matchingRow = logs.value.find(
+    (r) => r.user_id && String(r.user_id).toLowerCase() === String(userId).toLowerCase() && r.user_email,
+  )
+  if (matchingRow) {
+    return {
+      user_id: userId,
+      email: matchingRow.user_email,
+      display_name: null,
+      username: null,
+    }
+  }
+  return cached ? { ...cached } : null
 }
 
 // Parse initial query params from route URL
@@ -129,10 +173,16 @@ const initFromQueryParams = () => {
   const queryUserId = String(route.query.user_id || '').trim()
   if (queryUserId && UUID_REGEX.test(queryUserId)) {
     selectedUserId.value = queryUserId
-    appliedAccount.value = { user_id: queryUserId, email: null, display_name: null }
-    pendingAccount.value = { user_id: queryUserId, email: null, display_name: null }
-    lookupQuery.value = queryUserId
-    lookupAccountById(queryUserId)
+    const resolved = resolveAccountForUserId(queryUserId)
+    const email = resolved?.email || null
+    appliedAccount.value = {
+      user_id: queryUserId,
+      email,
+      display_name: resolved?.display_name || null,
+      username: resolved?.username || null,
+    }
+    pendingAccount.value = { ...appliedAccount.value }
+    lookupQuery.value = email || queryUserId
   } else {
     selectedUserId.value = ''
     appliedAccount.value = null
@@ -194,7 +244,15 @@ const isDescriptionExpanded = (logId) => {
 }
 
 const loadLogs = async () => {
+  if (!isComponentMounted || !authStore.isAuthenticated || !authStore.isAdmin) {
+    isLoading.value = false
+    logs.value = []
+    totalCount.value = 0
+    return
+  }
+
   const reqId = ++latestLogsRequestId
+  const reqSession = currentSessionEpoch
   isLoading.value = true
   errorMessage.value = ''
 
@@ -212,20 +270,70 @@ const loadLogs = async () => {
 
     const data = await fetchAdminLogs(params)
 
-    // Discard stale responses if a newer request was dispatched
-    if (reqId !== latestLogsRequestId) return
+    // Discard stale responses if unmounted, session changed, newer request, or unauthenticated
+    if (
+      !isComponentMounted ||
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestLogsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
 
     logs.value = Array.isArray(data?.items) ? data.items : []
     totalCount.value = typeof data?.total_count === 'number' ? data.total_count : 0
     if (typeof data?.page === 'number') page.value = data.page
     if (typeof data?.page_size === 'number') pageSize.value = data.page_size
     syncUrlQuery()
+
+    // Cache accounts from returned log rows
+    for (const row of logs.value) {
+      if (row.user_id && row.user_email) {
+        cacheAccount({ user_id: row.user_id, email: row.user_email })
+      }
+    }
+
+    // Resolve readable label for active account filter if missing
+    if (selectedUserId.value && (!appliedAccount.value?.email || appliedAccount.value.email === selectedUserId.value)) {
+      const match = logs.value.find(
+        (r) => r.user_id && String(r.user_id).toLowerCase() === String(selectedUserId.value).toLowerCase() && r.user_email,
+      )
+      if (match) {
+        appliedAccount.value = {
+          ...appliedAccount.value,
+          user_id: selectedUserId.value,
+          email: match.user_email,
+        }
+        cacheAccount({ user_id: selectedUserId.value, email: match.user_email })
+
+        // Only update search input if input currently shows the raw UUID or is empty
+        if (lookupQuery.value === selectedUserId.value || !lookupQuery.value) {
+          lookupQuery.value = match.user_email
+          if (pendingAccount.value?.user_id === selectedUserId.value) {
+            pendingAccount.value = { ...appliedAccount.value }
+          }
+        }
+      }
+    }
   } catch {
-    if (reqId !== latestLogsRequestId) return
+    if (
+      !isComponentMounted ||
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestLogsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     errorMessage.value =
       'Unable to load audit logs. Please verify your connection or try again.'
   } finally {
-    if (reqId === latestLogsRequestId) {
+    if (
+      isComponentMounted &&
+      reqSession === currentSessionEpoch &&
+      reqId === latestLogsRequestId
+    ) {
       isLoading.value = false
     }
   }
@@ -238,7 +346,30 @@ const handleActionChange = () => {
 
 // Account Directory Lookup
 const executeSearch = async (query, pageToLoad = 1, append = false) => {
+  const trimmed = String(query || '').trim()
+
+  if (!isComponentMounted || !authStore.isAuthenticated || !authStore.isAdmin) {
+    lookupLoading.value = false
+    lookupLoadingMore.value = false
+    return
+  }
+
+  // Contract rule: /admin/users only matches email, username, or display_name.
+  // Never dispatch directory search with a UUID.
+  if (UUID_REGEX.test(trimmed)) {
+    invalidateLookup()
+    const cached = resolveAccountForUserId(trimmed)
+    suggestions.value = cached ? [cached] : []
+    lookupTotalCount.value = cached ? 1 : 0
+    lookupPage.value = 1
+    isDropdownOpen.value = Boolean(cached)
+    lookupLoading.value = false
+    lookupLoadingMore.value = false
+    return
+  }
+
   const reqId = ++latestLookupRequestId
+  const reqSession = currentSessionEpoch
   if (append) {
     lookupLoadingMore.value = true
   } else {
@@ -248,14 +379,28 @@ const executeSearch = async (query, pageToLoad = 1, append = false) => {
 
   try {
     const data = await fetchAdminUsers({
-      search: query,
+      search: trimmed,
       page: pageToLoad,
       page_size: 5,
     })
 
-    if (reqId !== latestLookupRequestId) return
+    if (
+      !isComponentMounted ||
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestLookupRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
 
     const items = Array.isArray(data?.items) ? data.items : []
+    for (const item of items) {
+      if (item?.user_id) {
+        cacheAccount(item)
+      }
+    }
+
     if (append) {
       suggestions.value = [...suggestions.value, ...items]
     } else {
@@ -266,14 +411,26 @@ const executeSearch = async (query, pageToLoad = 1, append = false) => {
     isDropdownOpen.value = true
     highlightedIndex.value = -1
   } catch {
-    if (reqId !== latestLookupRequestId) return
+    if (
+      !isComponentMounted ||
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestLookupRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     lookupError.value = 'Account directory lookup unavailable. Please try again.'
     if (!append) {
       suggestions.value = []
     }
     isDropdownOpen.value = true
   } finally {
-    if (reqId === latestLookupRequestId) {
+    if (
+      isComponentMounted &&
+      reqSession === currentSessionEpoch &&
+      reqId === latestLookupRequestId
+    ) {
       lookupLoading.value = false
       lookupLoadingMore.value = false
     }
@@ -284,24 +441,46 @@ const handleSearchInput = (event) => {
   if (event?.target && typeof event.target.value === 'string') {
     lookupQuery.value = event.target.value
   }
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+
+  // Any typing or pasting immediately invalidates running lookups and cancels debounce
+  invalidateLookup()
+
+  const trimmed = lookupQuery.value.trim()
+
+  // Direct UUID paste: do not call /admin/users; stage as pendingAccount
+  if (UUID_REGEX.test(trimmed)) {
+    const resolved = resolveAccountForUserId(trimmed)
+    pendingAccount.value = {
+      user_id: trimmed,
+      email: resolved?.email || null,
+      display_name: resolved?.display_name || null,
+      username: resolved?.username || null,
+    }
+    suggestions.value = resolved ? [resolved] : []
+    isDropdownOpen.value = false
+    lookupLoading.value = false
+    lookupLoadingMore.value = false
+    lookupError.value = ''
+    return
+  }
 
   // Explicit selection required: free typing clears unapplied pending selection
   if (
     pendingAccount.value &&
     lookupQuery.value !== formatUserOptionLabel(pendingAccount.value) &&
-    lookupQuery.value !== pendingAccount.value.email
+    lookupQuery.value !== pendingAccount.value.email &&
+    lookupQuery.value !== pendingAccount.value.user_id
   ) {
     pendingAccount.value = null
   }
 
-  const trimmed = lookupQuery.value.trim()
   if (trimmed.length < 2) {
     suggestions.value = []
     lookupTotalCount.value = 0
     lookupPage.value = 1
     isDropdownOpen.value = false
     lookupLoading.value = false
+    lookupLoadingMore.value = false
     lookupError.value = ''
     highlightedIndex.value = -1
     return
@@ -339,6 +518,8 @@ const retrySearch = () => {
 
 const selectAccount = (user) => {
   if (!user?.user_id) return
+  invalidateLookup()
+  cacheAccount(user)
   pendingAccount.value = {
     user_id: user.user_id,
     email: user.email,
@@ -381,11 +562,14 @@ const closeDropdown = () => {
 }
 
 const clearLookupInput = () => {
+  invalidateLookup()
   lookupQuery.value = ''
   pendingAccount.value = null
   suggestions.value = []
   isDropdownOpen.value = false
   lookupError.value = ''
+  lookupPage.value = 1
+  lookupTotalCount.value = 0
   highlightedIndex.value = -1
 }
 
@@ -400,29 +584,45 @@ const applyAccountFilter = () => {
 // Row-level filter for historical/active actors
 const quickFilterByActor = (userId, userEmail) => {
   if (!userId || !UUID_REGEX.test(userId)) return
+  invalidateLookup()
+  if (userEmail) {
+    cacheAccount({ user_id: userId, email: userEmail })
+  }
   selectedUserId.value = userId
+  const resolved = resolveAccountForUserId(userId)
+  const email = userEmail || resolved?.email || null
   appliedAccount.value = {
     user_id: userId,
-    email: userEmail || null,
-    display_name: null,
-    username: null,
+    email,
+    display_name: resolved?.display_name || null,
+    username: resolved?.username || null,
   }
   pendingAccount.value = { ...appliedAccount.value }
-  lookupQuery.value = userEmail || userId
+  lookupQuery.value = email || userId
   isDropdownOpen.value = false
   page.value = 1
   loadLogs()
 }
 
-const clearActorFilter = () => {
+const resetActorFilterState = () => {
+  invalidateLookup()
   selectedUserId.value = ''
   appliedAccount.value = null
   pendingAccount.value = null
   lookupQuery.value = ''
   suggestions.value = []
   isDropdownOpen.value = false
+  lookupLoading.value = false
+  lookupLoadingMore.value = false
   lookupError.value = ''
+  lookupPage.value = 1
+  lookupTotalCount.value = 0
+  highlightedIndex.value = -1
   page.value = 1
+}
+
+const clearActorFilter = () => {
+  resetActorFilterState()
   loadLogs()
 }
 
@@ -444,19 +644,33 @@ const handleClickOutside = (event) => {
 }
 
 onMounted(() => {
+  isComponentMounted = true
   initFromQueryParams()
-  loadLogs()
+  if (authStore.isAuthenticated && authStore.isAdmin) {
+    loadLogs()
+  } else {
+    isLoading.value = false
+  }
   document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  isComponentMounted = false
+  currentSessionEpoch++
+  latestLogsRequestId++
+  latestLookupRequestId++
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
   document.removeEventListener('click', handleClickOutside)
+  knownAccountsById.clear()
 })
 
 watch(
   () => route.query,
   () => {
+    if (!authStore.isAuthenticated || !authStore.isAdmin) return
     // Sync external navigation changes (e.g. browser back/forward)
     const queryPage = parseInt(route.query.page, 10) || 1
     const queryAction = String(route.query.action_type || '').trim()
@@ -472,13 +686,20 @@ watch(
       hasChange = true
     }
     if (selectedUserId.value !== queryUserId) {
-      selectedUserId.value = queryUserId
-      if (queryUserId) {
-        appliedAccount.value = { user_id: queryUserId, email: null, display_name: null }
-        pendingAccount.value = { user_id: queryUserId, email: null, display_name: null }
-        lookupQuery.value = queryUserId
-        lookupAccountById(queryUserId)
+      if (queryUserId && UUID_REGEX.test(queryUserId)) {
+        selectedUserId.value = queryUserId
+        const resolved = resolveAccountForUserId(queryUserId)
+        const email = resolved?.email || null
+        appliedAccount.value = {
+          user_id: queryUserId,
+          email,
+          display_name: resolved?.display_name || null,
+          username: resolved?.username || null,
+        }
+        pendingAccount.value = { ...appliedAccount.value }
+        lookupQuery.value = email || queryUserId
       } else {
+        selectedUserId.value = ''
         appliedAccount.value = null
         pendingAccount.value = null
         lookupQuery.value = ''
@@ -488,6 +709,36 @@ watch(
 
     if (hasChange) {
       loadLogs()
+    }
+  },
+)
+
+watch(
+  () => [authStore.user?.user_id, authStore.token, authStore.isAdmin],
+  ([newUserId, newToken, newIsAdmin], [oldUserId, oldToken, oldIsAdmin]) => {
+    if (newUserId !== oldUserId || newToken !== oldToken || newIsAdmin !== oldIsAdmin) {
+      currentSessionEpoch++
+      latestLogsRequestId++
+      latestLookupRequestId++
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer)
+        searchDebounceTimer = null
+      }
+      knownAccountsById.clear()
+      if (authStore.user?.user_id) {
+        cacheAccount(authStore.user)
+      }
+      resetActorFilterState()
+      errorMessage.value = ''
+      isLoading.value = false
+
+      if (newToken && newIsAdmin) {
+        initFromQueryParams()
+        loadLogs()
+      } else {
+        logs.value = []
+        totalCount.value = 0
+      }
     }
   },
 )

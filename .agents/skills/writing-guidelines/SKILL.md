@@ -3,22 +3,26 @@ name: writing-guidelines
 description: Enforces technical writing, API documentation, domain terminology, and UI copy standards for CyberMorph based on the official API Guide and system architecture. Use when reviewing documentation, writing API guides, verifying UI text and error banners, or checking domain naming consistency.
 metadata:
   category: documentation
-  version: "2.0.0"
+  version: "2.1.0"
   argument-hint: <file-or-pattern>
 ---
 
-# CyberMorph Writing & API Documentation Guidelines
+# CyberMorph Writing & Copy Guidelines
 
-This skill enforces technical writing precision, canonical domain vocabulary, UI messaging standards, and strict adherence to the backend API Guide across all documentation, UI text, error banners, and code comments in CyberMorph.
+This skill enforces technical writing precision, canonical domain vocabulary, UI messaging standards, and consistency with backend contracts across all documentation, UI text, error banners, and code comments in CyberMorph.
 
 ---
 
 ## 1. Core Principles
 
-1. **Adhere to the Real Backend Contract**: Document only what exists in the backend implementation. Never speculate, assume endpoints, or describe hypothetical features as active.
-2. **Honor Infrastructure Realities**: Acknowledge that the backend is hosted on a Render free tier with a 30–50 second cold start after ~15 minutes idle. Describe this transparently in UI notices and documentation; never categorize it as a system bug.
-3. **Maintain User-Centric Error Tone**: Backend errors must be translated into clear, friendly, and actionable messages. Never expose raw backend exceptions, tracebacks, or JSON payloads to end users.
-4. **Enforce Canonical Terminology & Clear UI Copy**: Maintain exact domain strings for roles, threat categories, simulation maps, and outcome states in all API requests, responses, and store logic. For user-facing portal UI, use clean sentence-case labels and plain language for navigation and actions (*"Educator overview"*, *"Create classroom"*, *"Threat analytics"*) while preserving canonical data integrity.
+1. **Adhere to the Backend Contract as Source of Truth**: Document only what exists in the backend contract (`C:/Cyber-Morph/cybermorph-backend/API_GUIDE.md` and `docs/api.md`). Do not duplicate full endpoint inventories into secondary skills; refer to `API_GUIDE.md` for live endpoint details.
+2. **Concise, Helpful UI Copy**: Keep UI copy clear, actionable, and beginner-friendly. Avoid routine technical error banners or unnecessary jargon. Explain what happened and what action the user should take.
+3. **Preserve Data Uncertainty & Semantic Distinctions**:
+   - **Missing vs. Zero**: Never render `null` as "0%" or "0". In analytics, `null` means unattempted/no data yet.
+   - **Unlocks vs. Proficiency**: Distinguish between Threat Index unlocks (`threat_unlocked_count`, `threat_index`) and actual decision performance (`category_fail_rates`, `threat_events`).
+   - **Scores vs. Averages**: Clearly distinguish individual best scores (`best_score_by_map`) from class averages (`avg_best_score_by_map`).
+   - **Player Telemetry vs. Research Play Data**: Godot player telemetry (`/analytics/*`) is for classroom instruction; research play-data logs (`/sync/play-data`, `/admin/play-data`) are raw research data for system administrators.
+4. **Do Not Attribute All Network Failures to Cold Starts**: Free-tier cloud instances experience a 30–50s cold start after ~15 minutes idle, but client offline states (`navigator.onLine === false`) or immediate connection rejections should not be mislabeled as server wake-ups.
 
 ---
 
@@ -26,18 +30,11 @@ This skill enforces technical writing precision, canonical domain vocabulary, UI
 
 ### User Roles
 - **Player**: The game-client account. Enrolls via `POST /auth/register`. Role string: `"player"`.
-- **Educator**: Institutional instructor account for the web portal. Registers via `POST /auth/register-web`. Role string: `"educator"`.
-- **Admin**: System oversight with Level 0 authority. Created strictly via backend seeding/provisioning. Role string: `"admin"`. **Never describe admin accounts as self-service.**
-
-### Institutional Constraints
-- Educator registration emails **must strictly end in `@dnsc.edu.ph`**.
-- Newly registered educator accounts default to `is_active: false` (`approval_status: "pending"`) and require administrator approval before portal login is permitted.
-- Seeded test accounts for local/staging verification:
-  - `admin@cybermorph.local`
-  - `educator@cybermorph.local`
+- **Educator**: Instructor account for the web portal. Registers via `POST /auth/register-web` with required `display_name` and `@dnsc.edu.ph` email. Starts inactive pending admin approval.
+- **Admin**: System administrator account. Created strictly via backend provisioning/seeding. **Never describe admin accounts as self-service.**
 
 ### The 8 Canonical DICT Threat Categories
-When writing documentation, telemetry displays, or analytics summaries, threat categories must appear in this exact canonical order and spelling:
+Threat categories must appear in this exact canonical order and spelling:
 1. `Phishing`
 2. `Smishing`
 3. `Vishing`
@@ -49,7 +46,7 @@ When writing documentation, telemetry displays, or analytics summaries, threat c
 
 ### Canonical Simulation Maps
 Maps must be referenced by their exact names and 0-based progression indices (`map_progress` 0–3):
-0. `Home` (always unlocked on start)
+0. `Home` (unlocked on start)
 1. `Office`
 2. `Internet Cafe`
 3. `Public Park`
@@ -63,63 +60,38 @@ Game session results are restricted to:
 
 ---
 
-## 3. Backend & Network Documentation Rules
+## 3. UI Messaging Standards
 
-### Base URL & Environment
-- Production Base URL: `https://cybermorph-backend.onrender.com/v1` (endpoints under `/v1/*`, version endpoint at host root `/app/version`)
-- Swagger UI / OpenAPI docs: Available at `/docs` on the host.
-- Environment Variable: Documented as `VITE_API_BASE_URL`. Code should fall back cleanly to the hosted URL if unset.
-- **CORS**: Cross-Origin Resource Sharing is controlled exclusively by the backend's server-side `CORS_ORIGINS` environment variable on Render (e.g. `http://localhost:5173`). Do not write documentation suggesting CORS can be resolved via frontend client headers.
+### Friendly Error Translation
+Translate raw error payloads into clear, concise, actionable feedback:
 
-### Authentication Flow
-- Single login endpoint for all users: `POST /auth/login` (`{ "email": "...", "password": "..." }`).
-- Returns: `200 { "access_token": "<jwt>", "token_type": "bearer" }`.
-- Header format: `Authorization: Bearer <access_token>`.
-- Token lifespan: 30 days. No refresh endpoint exists; users re-authenticate upon expiration.
-- Password requirements: Minimum 12 characters, including at least one uppercase letter, one lowercase letter, one digit, one special character, and maximum 72 bytes.
-
----
-
-## 4. Error Shapes & UI Messaging Standards
-
-All API errors return JSON with a top-level `"detail"` key. Documentation and error-handling code must distinguish these four distinct shapes:
-
-| HTTP Status | Backend Payload Shape | UI Message Writing Rule |
-|-------------|-----------------------|-------------------------|
-| `401 Unauthorized` | `{"detail": "Could not validate credentials"}` or `{"detail": "Incorrect email or password"}` | Never reveal whether an email exists. State: *"Invalid email or password."* For expired sessions: *"Session expired. Please log in again."* |
-| `403 Forbidden` | `{"detail": "<plain string>"}` | Inform user of access limits clearly (e.g., *"Account pending approval"*, *"Educator access required"*). |
-| `404 Not Found` | `{"detail": "<plain string>"}` | State clearly what was not found (e.g., *"Classroom not found. Please verify the 6-character code."*). |
-| `409 Conflict` | `{"detail": {"field": "<field>", "message": "<string>"}}` | **Nested object**. Extract `detail.message` and guide the user on resolving the conflict (e.g., duplicate username, already enrolled). |
-| `422 Unprocessable` | FastAPI validation array: `[{ "loc": [...], "msg": "...", "type": "..." }]` | Extract `detail[0].msg` or format field-level validation feedback clearly. |
+| Scenario / Code | UI Writing Guideline | Example |
+| :--- | :--- | :--- |
+| `401 Unauthorized` | State credentials or session issue without leaking account existence. | *"Invalid email or password."* / *"Session expired. Please sign in again."* |
+| `403 Forbidden` | Explain account state or permission boundaries simply. | *"Account pending approval."* / *"Educator access required."* |
+| `404 Not Found` | Clearly state the missing item. | *"Classroom not found. Please check the code."* |
+| `409 Conflict` | Extract nested `detail.message` and provide resolution steps. | *"You are already in a classroom."* / *"Display name required before creating a class."* |
+| `422 Unprocessable` | Point to the specific field requirement. | *"Display name must be between 1 and 100 characters."* |
+| Network Timeout | Advise retrying after a brief pause if the server is waking up. | *"Connection timed out. Please try again in a few moments."* |
 
 ---
 
-## 5. Telemetry & Analytics Nuances
+## 4. What NOT to Document or Assume as Active
 
-When documenting or implementing analytics displays:
-- **Missing vs. Zero**: In `/analytics/classroom`, unplayed maps are **absent** from `avg_best_score_by_map`. Threat categories without attempts have a value of `null`, **not** `0`. Always write UI copy presenting `null` as *"No attempts recorded yet"*, never as *"0% fail rate"*.
-- **Empty Threat Events**: In `/analytics/session`, the `threat_events` array reflects decisions uploaded from the Godot game client via `POST /sync/threat-events`. It returns an empty list `[]` for older sessions or devices that have not synced events yet. Document this as an expected empty state, never an error.
-- **Client UUID & Datetime**: Sessions submitted via `POST /sessions` require a client-generated UUID `session_id` (for idempotent retry safety) and an ISO 8601 `played_at` timestamp with explicit timezone offset or `'Z'` suffix (naive datetimes trigger 422).
-
----
-
-## 6. What NOT to Document or Assume as Active
-
-Do not write guides, instructions, or features assuming the existence of:
-- **Unbuilt Admin Routes**: Modifying or deleting user accounts (`PATCH/DELETE /admin/users/{id}`) and deleted-records log/restore (`/admin/deleted-records`) are not yet built on the backend. (Note: The 9 core admin routes documented in `API_GUIDE.md`—`/admin/users`, `/admin/approvals`, `/admin/classrooms`, `/admin/logs`, `/admin/stats`—are documented contracts, though live endpoint behavior has not been independently tested).
-- **Web Portal Offline Sync**: Offline sync endpoints (`/sync/*`) are exclusively reserved for Godot mobile client synchronization; do not integrate into the web portal.
-- **Profile Mutations**: No endpoints currently exist for updating `display_name`, uploading profile avatars, or self-service password resets.
+Do not write guides or UI copy assuming the existence of:
+- **Unbuilt Admin Routes**: Modifying or deleting user accounts (`PATCH/DELETE /admin/users/{id}`) and deleted-records log/restore (`/admin/deleted-records`).
+- **Web Portal Offline Sync**: Offline sync endpoints (`/sync/*`) are exclusively reserved for Godot mobile game sync.
+- **Unbuilt Profile Features**: Profile avatars or self-service password reset.
 
 ---
 
-## 7. Review Checklist for Documentation & Copy
+## 5. Review Checklist for Documentation & Copy
 
-When using this skill to review any document or copy:
-- [ ] Are all role names capitalized as Player, Educator, and Admin?
+When using this skill to review any document or UI copy:
+- [ ] Are role names capitalized as Player, Educator, and Admin?
 - [ ] Are threat categories using the exact 8 canonical strings?
 - [ ] Are map names using Home, Office, Internet Cafe, and Public Park?
-- [ ] Is educator email validation stated as `@dnsc.edu.ph`?
+- [ ] Is educator registration stated as requiring `@dnsc.edu.ph` and `display_name`?
 - [ ] Are error handlers accounting for nested 409 conflict objects?
-- [ ] Are server wake-up times (30–50s) acknowledged for initial cold calls?
-- [ ] Are unbuilt endpoints (admin, sync, profile edit) properly marked as pending or omitted?
-- [ ] Are all findings formatted in clear `file:line` or section-by-section audit notes?
+- [ ] Are network errors described accurately without assuming every failure is a hosting cold start?
+- [ ] Are `null` metrics described as "No attempts recorded" rather than "0%"?

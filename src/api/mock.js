@@ -212,6 +212,21 @@ export const mockControl = {
     mockControl.failAdminLogsCount = 0
     mockControl.adminLogsOverride = undefined
   },
+  failAdminPlayDataCount: 0,
+  delayAdminPlayDataMs: 0,
+  adminPlayDataOverride: undefined,
+  failAdminPlayDataDetailCount: 0,
+  delayAdminPlayDataDetailMs: 0,
+  setAdminPlayDataOverride(payload) {
+    mockControl.adminPlayDataOverride = payload
+  },
+  resetAdminPlayData() {
+    mockControl.failAdminPlayDataCount = 0
+    mockControl.delayAdminPlayDataMs = 0
+    mockControl.adminPlayDataOverride = undefined
+    mockControl.failAdminPlayDataDetailCount = 0
+    mockControl.delayAdminPlayDataDetailMs = 0
+  },
   resetAdminClassrooms() {
     mockControl.failAdminClassroomsCount = 0
     mockControl.delayAdminClassroomsMs = 0
@@ -2324,11 +2339,25 @@ mock.onGet('/admin/stats').reply((config) => {
   ]
 })
 
-mock.onGet('/admin/users').reply((config) => {
+mock.onGet('/admin/users').reply(async (config) => {
+  if (typeof window !== 'undefined') {
+    window.__cybermorphAdminUsersCalls = (window.__cybermorphAdminUsersCalls || 0) + 1
+    window.__capturedUsersRequests = window.__capturedUsersRequests || []
+    window.__capturedUsersRequests.push({ url: config.url, params: config.params, auth: Boolean(config.headers?.Authorization || config.headers?.authorization) })
+  }
+
   const authHeader = config.headers?.Authorization || config.headers?.authorization
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  let delay = 0
+  if (typeof sessionStorage !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_ADMIN_USERS__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
 
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_USERS__') || '0', 10) : 0
   if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
@@ -2981,11 +3010,25 @@ export const mockLogs = [
   },
 ]
 
-mock.onGet('/admin/logs').reply((config) => {
+mock.onGet('/admin/logs').reply(async (config) => {
+  if (typeof window !== 'undefined') {
+    window.__cybermorphAdminLogsCalls = (window.__cybermorphAdminLogsCalls || 0) + 1
+    window.__capturedLogsRequests = window.__capturedLogsRequests || []
+    window.__capturedLogsRequests.push({ url: config.url, params: config.params, auth: Boolean(config.headers?.Authorization || config.headers?.authorization) })
+  }
+
   const authHeader = config.headers?.Authorization || config.headers?.authorization
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin access required' }]
+
+  let delay = 0
+  if (typeof sessionStorage !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_ADMIN_LOGS__') || '0', 10) || 0
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
 
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_LOGS__') || '0', 10) : 0
   if (mockControl.failAdminLogsCount > 0 || sessionFail > 0) {
@@ -3073,6 +3116,301 @@ mock.onGet('/admin/logs').reply((config) => {
       page_size: pageSize,
     },
   ]
+})
+
+export const mockPlayData = [
+  {
+    upload_id: 'a0000001-0000-0000-0000-000000000001',
+    username: 'player_alex',
+    participant_code: 'K9X2P4',
+    row_count: 85,
+    uploaded_at: '2026-10-31T09:15:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCANZ7y00PAAAA',
+  },
+  {
+    upload_id: 'a0000002-0000-0000-0000-000000000002',
+    username: 'cyber_cadet',
+    participant_code: 'H7M3Q8',
+    row_count: 142,
+    uploaded_at: '2026-10-31T08:42:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCABad400PAAAA',
+  },
+  {
+    upload_id: 'a0000003-0000-0000-0000-000000000003',
+    username: 'net_defender',
+    participant_code: 'W4R8N2',
+    row_count: 53,
+    uploaded_at: '2026-10-30T16:20:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCACcd700PAAAA',
+  },
+  {
+    upload_id: 'a0000004-0000-0000-0000-000000000004',
+    username: 'byte_sentinel',
+    participant_code: 'T2C6V9',
+    row_count: 210,
+    uploaded_at: '2026-10-30T14:10:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCADEe200PAAAA',
+  },
+  {
+    upload_id: 'a0000005-0000-0000-0000-000000000005',
+    username: 'shield_scout',
+    participant_code: 'F8K4M7',
+    row_count: 19,
+    uploaded_at: '2026-10-30T11:05:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAGge100PAAAA',
+  },
+  {
+    upload_id: 'a0000006-0000-0000-0000-000000000006',
+    username: 'phish_hunter',
+    participant_code: 'P3X9L5',
+    row_count: 320,
+    uploaded_at: '2026-10-29T20:30:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAHzf600PAAAA',
+  },
+  {
+    upload_id: 'a0000007-0000-0000-0000-000000000007',
+    username: 'crypto_knight',
+    participant_code: 'Y6N2B8',
+    row_count: 98,
+    uploaded_at: '2026-10-29T18:15:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAJ2g900PAAAA',
+  },
+  {
+    upload_id: 'a0000008-0000-0000-0000-000000000008',
+    username: 'malware_medic',
+    participant_code: 'R5W7K1',
+    row_count: 165,
+    uploaded_at: '2026-10-29T15:00:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAK4h300PAAAA',
+  },
+  {
+    upload_id: 'a0000009-0000-0000-0000-000000000009',
+    username: null,
+    participant_code: 'J8P4Q3',
+    row_count: 44,
+    uploaded_at: '2026-10-29T12:45:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAL6j500PAAAA',
+  },
+  {
+    upload_id: 'a0000010-0000-0000-0000-000000000010',
+    username: 'zero_day_zen',
+    participant_code: 'M2V6T9',
+    row_count: 112,
+    uploaded_at: '2026-10-28T22:10:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAM8k700PAAAA',
+  },
+  {
+    upload_id: 'a0000011-0000-0000-0000-000000000011',
+    username: 'probe_ranger',
+    participant_code: 'D4H8N3',
+    row_count: 76,
+    uploaded_at: '2026-10-28T19:50:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCANEi800PAAAA',
+  },
+  {
+    upload_id: 'a0000012-0000-0000-0000-000000000012',
+    username: 'firewall_fox',
+    participant_code: 'Z9K5M2',
+    row_count: 245,
+    uploaded_at: '2026-10-28T17:25:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAOLm200PAAAA',
+  },
+  {
+    upload_id: 'a0000013-0000-0000-0000-000000000013',
+    username: 'packet_pilot',
+    participant_code: 'C7X3Q6',
+    row_count: 88,
+    uploaded_at: '2026-10-28T14:40:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAP1n400PAAAA',
+  },
+  {
+    upload_id: 'a0000014-0000-0000-0000-000000000014',
+    username: 'guard_guru',
+    participant_code: 'B5V8R1',
+    row_count: 61,
+    uploaded_at: '2026-10-27T23:05:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAQ3o600PAAAA',
+  },
+  {
+    upload_id: 'a0000015-0000-0000-0000-000000000015',
+    username: 'trace_tracker',
+    participant_code: 'L3N9W4',
+    row_count: 180,
+    uploaded_at: '2026-10-27T21:15:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAR5p800PAAAA',
+  },
+  {
+    upload_id: 'a0000016-0000-0000-0000-000000000016',
+    username: 'wifi_watcher',
+    participant_code: 'G8P2M5',
+    row_count: 37,
+    uploaded_at: '2026-10-27T18:30:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAT7q100PAAAA',
+  },
+  {
+    upload_id: 'a0000017-0000-0000-0000-000000000017',
+    username: 'sec_specter',
+    participant_code: 'K4X7T2',
+    row_count: 129,
+    uploaded_at: '2026-10-27T16:00:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAU3r500PAAAA',
+  },
+  {
+    upload_id: 'a0000018-0000-0000-0000-000000000018',
+    username: 'patch_paladin',
+    participant_code: 'H9M4Q7',
+    row_count: 94,
+    uploaded_at: '2026-10-27T13:20:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAW7s900PAAAA',
+  },
+  {
+    upload_id: 'a0000019-0000-0000-0000-000000000019',
+    username: 'risk_reaper',
+    participant_code: 'W2R6N8',
+    row_count: 155,
+    uploaded_at: '2026-10-26T22:45:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAX9t200PAAAA',
+  },
+  {
+    upload_id: 'a0000020-0000-0000-0000-000000000020',
+    username: 'cyber_sage',
+    participant_code: 'T7C3V1',
+    row_count: 73,
+    uploaded_at: '2026-10-26T20:10:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAY1u400PAAAA',
+  },
+  {
+    upload_id: 'a0000021-0000-0000-0000-000000000021',
+    username: 'smish_shield',
+    participant_code: 'F5K9M3',
+    row_count: 48,
+    uploaded_at: '2026-10-26T17:35:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAZ5v600PAAAA',
+  },
+  {
+    upload_id: 'a0000022-0000-0000-0000-000000000022',
+    username: 'auth_anchor',
+    participant_code: 'P8X4L9',
+    row_count: 204,
+    uploaded_at: '2026-10-26T15:00:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAa7w800PAAAA',
+  },
+  {
+    upload_id: 'a0000023-0000-0000-0000-000000000023',
+    username: 'dns_diver',
+    participant_code: 'Y3N7B2',
+    row_count: 67,
+    uploaded_at: '2026-10-26T12:20:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAb9x100PAAAA',
+  },
+  {
+    upload_id: 'a0000024-0000-0000-0000-000000000024',
+    username: 'log_lynx',
+    participant_code: 'R9W3K6',
+    row_count: 131,
+    uploaded_at: '2026-10-25T21:40:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAc3y500PAAAA',
+  },
+  {
+    upload_id: 'a0000025-0000-0000-0000-000000000025',
+    username: 'key_keeper',
+    participant_code: 'J4P8Q1',
+    row_count: 92,
+    uploaded_at: '2026-10-25T19:00:00Z',
+    payload: 'CMLOG1:H4sICAAAAAAA/8tIzcnJVyjPL8pJUeQCAe7z900PAAAA',
+  },
+]
+
+mock.onGet(new RegExp('^/admin/play-data(?:\\?.*)?$')).reply(async (config) => {
+  if (mockControl.delayAdminPlayDataMs > 0) {
+    await new Promise((r) => setTimeout(r, mockControl.delayAdminPlayDataMs))
+  }
+  const authErr = verifyAdminMockAuth(config)
+  if (authErr) return authErr
+
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_PLAY_DATA__') || '0', 10) : 0
+  if (mockControl.failAdminPlayDataCount > 0 || sessionFail > 0) {
+    if (mockControl.failAdminPlayDataCount > 0) mockControl.failAdminPlayDataCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_PLAY_DATA__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Play data uploads unavailable' }]
+  }
+
+  const sessionOverride = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_ADMIN_PLAY_DATA__') : null
+  if (sessionOverride) {
+    try {
+      return [200, JSON.parse(sessionOverride)]
+    } catch {
+      // ignore parse error
+    }
+  }
+  if (mockControl.adminPlayDataOverride !== undefined) {
+    return [200, mockControl.adminPlayDataOverride]
+  }
+
+  const params = config.params || {}
+  const page = Math.max(1, parseInt(params.page, 10) || 1)
+  const pageSize = Math.max(1, parseInt(params.page_size, 10) || 20)
+
+  // Omit payload from metadata list
+  const metadataList = mockPlayData.map(({ upload_id, username, participant_code, row_count, uploaded_at }) => ({
+    upload_id,
+    username,
+    participant_code,
+    row_count,
+    uploaded_at,
+  }))
+
+  const totalCount = metadataList.length
+  const startIndex = (page - 1) * pageSize
+  const items = metadataList.slice(startIndex, startIndex + pageSize)
+
+  return [
+    200,
+    {
+      items,
+      total_count: totalCount,
+      page,
+      page_size: pageSize,
+    },
+  ]
+})
+
+mock.onGet(new RegExp('^/admin/play-data/([^/?]+)$')).reply(async (config) => {
+  if (mockControl.delayAdminPlayDataDetailMs > 0) {
+    await new Promise((r) => setTimeout(r, mockControl.delayAdminPlayDataDetailMs))
+  }
+  const authErr = verifyAdminMockAuth(config)
+  if (authErr) return authErr
+
+  const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_PLAY_DATA_DETAIL__') || '0', 10) : 0
+  if (mockControl.failAdminPlayDataDetailCount > 0 || sessionFail > 0) {
+    if (mockControl.failAdminPlayDataDetailCount > 0) mockControl.failAdminPlayDataDetailCount--
+    if (sessionFail > 0 && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('__CYBERMORPH_FAIL_ADMIN_PLAY_DATA_DETAIL__', String(sessionFail - 1))
+    }
+    return [500, { detail: 'Failed to retrieve play data payload' }]
+  }
+
+  const match = config.url.match(new RegExp('^/admin/play-data/([^/?]+)'))
+  const uploadId = match ? decodeURIComponent(match[1]) : ''
+
+  const record = mockPlayData.find((p) => p.upload_id === uploadId)
+  if (!record) {
+    return [404, { detail: 'Play data not found' }]
+  }
+
+  // Use valid default payload if record has stale placeholder
+  const defaultPayload =
+    'CMLOG1:H4sIAAAAAAAACtWSwWocMQyGXyXo1IC32NOmED9BSigspIfSUoTGo5kV67EHW5OwhLx7mZ2SpnST9NBLr/8vBPr03cNERSXIREkx5I7Bw/Xll2b7HgyUfFfBf7t/cahyrZITSgce6sZZBwZIlcIeYx7WnJx1G3usauBERfJabK8+4prrrjAp6mFa1m93UneSBjAgFSMPojKSMoryCL6nWPnJrk76XsIc9QAeWh4kJS5gYIp04IIUVHJaqpjDnrt1a8ilcFDwWmY2EAp3ohWp7zkod+CdNVC4TjlVRpWRcazgXWOtgZiHgTskBQ+NbT5snN28c5/tpXfWW/sVDOTScUFJ+BMRePcLV5rHlssxkoo6ay5C8fEyqdhS5SiJH7NpR3VhU+YEBkaaMNG4BFd55IXsXmLEyLcccSEpx/IJjcqRjyRwylHCwmqdrlok6O8TJbfUSpQFqX17YaCdJXZ4y2W9BZqzN8fozLlzeDD/zpLmD0tuPp225GZ80ZL1r6clkaRcRu6ElE+IQjHmu78W5eKUJ417xZPmWU+a/9aT5lVRvj/8AHY8Dip1BAAA'
+
+  const effectivePayload =
+    record.payload && !record.payload.startsWith('CMLOG1:H4sICAAAAAAA')
+      ? record.payload
+      : defaultPayload
+
+  return [200, { ...record, payload: effectivePayload }]
 })
 
 export const defaultMockAppVersion = {

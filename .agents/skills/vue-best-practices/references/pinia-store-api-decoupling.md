@@ -1,182 +1,162 @@
 # Pinia State Architecture & API Decoupling
 
-## Context & Problem Statement
+## Architecture Overview
 
-Rule 3 of `AGENTS.md` explicitly specifies:
+Rule 3 of `AGENTS.md` specifies:
 > *"API communication should be separated from Vue components."*
 > *"Authentication state should be managed through Pinia."*
 
-While views in CyberMorph now delegate to dedicated API modules (`src/api/classroom.js`, `src/api/leaderboard.js`, `src/api/admin.js`, `src/api/player.js`), the primary store **`src/stores/authStore.js` still directly imports and calls `apiClient`**:
-
-```javascript
-// src/stores/authStore.js (Current implementation)
-import apiClient from '../api/client'
-
-const login = async (credentials) => {
-  const response = await apiClient.post('/auth/login', credentials)
-  ...
-}
-
-const registerPlayer = async (playerData) => {
-  const response = await apiClient.post('/auth/register', playerData)
-  ...
-}
-```
-
-### Architectural Deficiencies
-1. **Direct Transport Coupling**: The store is tightly coupled to Axios and hardcoded endpoint paths (`/auth/login`, `/auth/register`, `/auth/register-web`), instead of consuming a clean service interface.
-2. **Missing Getters / Computed Properties**: Views and components throughout the application repeatedly write ad-hoc expressions:
-   - `authStore.user?.username || authStore.user?.email || 'Agent'`
-   - `authStore.userRole === 'educator'`
-   - `authStore.userRole === 'admin'`
-   - `!!authStore.token`
+Pinia stores manage global application state, while all network calls are delegated to dedicated modules under `src/api/`.
 
 ---
 
-## Recommended Architecture
+## Recommended Store Architecture
 
-Create a dedicated API client module `src/api/auth.js` and introduce reactive computed getters in `authStore.js`.
+### 1. Setup Store Pattern with Explicit State, Getters, and Actions
+All Pinia stores in CyberMorph use the Setup Store syntax (`defineStore(id, () => { ... })`).
 
-### 1. `src/api/auth.js` (Dedicated Auth API Module)
 ```javascript
-import apiClient from './client'
-
-/**
- * Authenticate user with credentials.
- * Endpoint: POST /auth/login
- */
-export const loginUser = async (credentials) => {
-  const response = await apiClient.post('/auth/login', credentials)
-  return response.data
-}
-
-/**
- * Register a new player account.
- * Endpoint: POST /auth/register
- */
-export const registerPlayerAccount = async (playerData) => {
-  const response = await apiClient.post('/auth/register', playerData)
-  return response.data
-}
-
-/**
- * Register a new web user (educator or admin).
- * Endpoint: POST /auth/register-web
- */
-export const registerWebAccount = async (webUserData) => {
-  const response = await apiClient.post('/auth/register-web', webUserData)
-  return response.data
-}
-```
-
-### 2. `src/stores/authStore.js` (Refactored Setup Store with Getters)
-```javascript
+// Example: src/stores/authStore.js
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
   loginUser,
-  registerPlayerAccount,
-  registerWebAccount,
-} from '../api/auth'
+  fetchWebUserProfile,
+  fetchPlayerProfile,
+} from '../api/auth.js'
+import { useClassroomStore } from './classroomStore.js'
+import { useThreatIndexStore } from './threatIndexStore.js'
+import { usePlayerClassroomStore } from './playerClassroomStore.js'
 
 export const useAuthStore = defineStore('auth', () => {
-  // ==========================================
   // 1. STATE
-  // ==========================================
   const token = ref(localStorage.getItem('cyber_token') || null)
-
-  const getInitialUser = () => {
-    try {
-      const rawUser = localStorage.getItem('cyber_user')
-      return rawUser ? JSON.parse(rawUser) : null
-    } catch {
-      return null
-    }
-  }
-  const initialUser = getInitialUser()
-  const user = ref(initialUser)
-
-  const storedRole = localStorage.getItem('cyber_role') || initialUser?.role || null
+  const storedRole = localStorage.getItem('cyber_role') || null
+  const user = ref(null)
   const userRole = ref(storedRole)
+  const isProfileLoading = ref(false)
 
-  // ==========================================
-  // 2. GETTERS (Computed Properties)
-  // ==========================================
+  // Concurrency & session isolation guards
+  let sessionEpoch = 0
+
+  // 2. GETTERS
   const isAuthenticated = computed(() => !!token.value)
   const isEducator = computed(() => userRole.value === 'educator')
   const isAdmin = computed(() => userRole.value === 'admin')
   const isPlayer = computed(() => userRole.value === 'player')
-  const displayName = computed(() => user.value?.username || user.value?.email || 'Agent')
+  const displayName = computed(() => {
+    return user.value?.display_name || user.value?.username || user.value?.email || 'User'
+  })
 
-  // ==========================================
   // 3. ACTIONS
-  // ==========================================
+  const resolveProfile = async (fallbackEmail = '') => {
+    const epochAtStart = sessionEpoch
+    const expectedToken = token.value
+
+    if (!expectedToken) return null
+    isProfileLoading.value = true
+
+    try {
+      // Step A: Check if token belongs to educator or admin
+      try {
+        const webProfile = await fetchWebUserProfile()
+        if (epochAtStart !== sessionEpoch || token.value !== expectedToken) return null
+
+        user.value = webProfile
+        userRole.value = webProfile.role
+        localStorage.setItem('cyber_user', JSON.stringify(user.value))
+        localStorage.setItem('cyber_role', userRole.value)
+        return user.value
+      } catch (webErr) {
+        if (webErr.response?.status !== 403 && webErr.response?.status !== 404) {
+          throw webErr
+        }
+      }
+
+      // Step B: Check if token belongs to game player
+      const playerProfile = await fetchPlayerProfile()
+      if (epochAtStart !== sessionEpoch || token.value !== expectedToken) return null
+
+      user.value = {
+        ...playerProfile,
+        email: fallbackEmail || '',
+        role: 'player',
+      }
+      userRole.value = 'player'
+      localStorage.setItem('cyber_user', JSON.stringify(user.value))
+      localStorage.setItem('cyber_role', 'player')
+      return user.value
+    } finally {
+      if (epochAtStart === sessionEpoch) {
+        isProfileLoading.value = false
+      }
+    }
+  }
+
   const login = async (credentials) => {
+    sessionEpoch++
+    // Reset domain stores on login to ensure clean state
+    useThreatIndexStore().reset?.()
+    usePlayerClassroomStore().reset?.()
+
+    const loginEpoch = sessionEpoch
     const data = await loginUser(credentials)
 
-    const authToken = data.access_token || data.token
-    token.value = authToken
-    localStorage.setItem('cyber_token', authToken)
+    if (loginEpoch !== sessionEpoch) return data
 
-    const extractedUser = data.user || {
-      email: credentials.email,
-      username: credentials.email?.split('@')[0] || 'User',
-    }
-    const rawRole = data.user?.role || data.role || 'player'
-    const validRoles = ['player', 'educator', 'admin']
-    const extractedRole = validRoles.includes(rawRole.toLowerCase())
-      ? rawRole.toLowerCase()
-      : 'player'
+    token.value = data.access_token
+    user.value = null
+    userRole.value = null
+    localStorage.setItem('cyber_token', data.access_token)
 
-    user.value = extractedUser
-    userRole.value = extractedRole
-
-    localStorage.setItem('cyber_user', JSON.stringify(extractedUser))
-    localStorage.setItem('cyber_role', extractedRole)
-
+    await resolveProfile(credentials.email)
     return data
   }
 
-  const registerPlayer = async (playerData) => {
-    return await registerPlayerAccount(playerData)
-  }
-
-  const registerWeb = async (webUserData) => {
-    return await registerWebAccount(webUserData)
-  }
-
   const logout = () => {
+    sessionEpoch++
     token.value = null
     user.value = null
     userRole.value = null
     localStorage.removeItem('cyber_token')
     localStorage.removeItem('cyber_user')
     localStorage.removeItem('cyber_role')
+
+    // Reset domain stores on logout
+    useClassroomStore().reset?.()
+    useThreatIndexStore().reset?.()
+    usePlayerClassroomStore().reset?.()
   }
 
   return {
-    // State
     token,
     user,
     userRole,
-    // Getters
+    isProfileLoading,
     isAuthenticated,
     isEducator,
     isAdmin,
     isPlayer,
     displayName,
-    // Actions
     login,
     logout,
-    registerPlayer,
-    registerWeb,
+    resolveProfile,
   }
 })
 ```
 
+### 2. Core Invariants for Pinia Stores
+1. **Never default an unresolved role to player**: Do not guess roles or fallback to `player` when unverified. If an account cannot be resolved, clear authentication state or reject the session.
+2. **Session Isolation & State Cleanup**: On `logout()` (and before `login()`), reset all related domain stores (`classroomStore`, `threatIndexStore`, `playerClassroomStore`) to prevent previous account data from leaking into the next session.
+3. **Stale Response Protection**: Increment a `sessionEpoch` counter whenever logging in, logging out, or switching accounts. Asynchronous network responses must check `sessionEpoch` before committing state to avoid overwriting newer session data with stale responses.
+4. **Keep Local State Local**: Component-specific UI state (modals, search input buffers, pagination indexes) belongs in component `ref()`s, not global stores, unless multiple distinct views share that state.
+
 ---
 
 ## Verification Steps
-1. In `src/components/SidebarNav.vue` and `src/views/DashboardView.vue`, consume the new getters `authStore.displayName` and `authStore.isAuthenticated`.
-2. Confirm with `npm run lint` that all imports resolve cleanly without circular dependencies.
-3. Test login and logout flows to confirm credentials and user states update reactively.
+1. Run non-fixing linting:
+   ```powershell
+   npx oxlint .
+   npx eslint .
+   ```
+2. Verify that logging in as one user, logging out, and logging in as another completely clears the previous account's classrooms, progress, and threat index entries.

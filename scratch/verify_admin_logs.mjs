@@ -12,7 +12,7 @@ const TEST_PORT = 5198
 const CDP_PORT = 9248
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-admin-logs-cdp-${Date.now()}`)
-const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/e915d42a-bc70-4315-86d7-18b50753d36f'
+const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/bf7d1fc1-9e66-4899-ae20-f96344a21757'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -80,15 +80,8 @@ async function waitForServer(url, timeoutMs = 15000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
-      const statusCode = await new Promise((resolve, reject) => {
-        const req = http.get(url, (res) => {
-          res.resume()
-          resolve(res.statusCode)
-        })
-        req.on('error', reject)
-        req.setTimeout(1000, () => req.destroy())
-      })
-      if (statusCode >= 200 && statusCode < 400) {
+      const res = await fetch(url)
+      if (res.ok || res.status < 400) {
         return true
       }
     } catch {
@@ -120,9 +113,17 @@ async function run() {
           ...process.env,
           VITE_USE_MOCK: 'true',
         },
-        stdio: 'pipe',
+        stdio: ['ignore', 'pipe', 'pipe'],
       },
     )
+
+    viteProc.stdout.on('data', (d) => {
+      const str = d.toString()
+      if (str.includes('ready in') || str.includes('Local:')) {
+        console.log('Vite:', str.trim())
+      }
+    })
+    viteProc.stderr.on('data', (d) => console.error('Vite err:', d.toString().trim()))
 
     const serverReady = await waitForServer(`${BASE_URL}/`)
     if (!serverReady) {
@@ -142,22 +143,32 @@ async function run() {
         '--no-default-browser-check',
         '--disable-background-networking',
         '--disable-extensions',
+        '--disable-gpu',
+        '--no-sandbox',
         '--window-size=1440,900',
+        'about:blank',
       ],
       { stdio: 'ignore' }
     )
 
-    await sleep(1500)
-    const browserWs = await getCDPWebSocketUrl(CDP_PORT)
-    const cdp = new CDPClient(browserWs)
-    await cdp.connect()
-
-    const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
-    const targetWs = `ws://127.0.0.1:${CDP_PORT}/devtools/page/${targetId}`
-    const pageCdp = new CDPClient(targetWs)
-    await pageCdp.connect()
-    await pageCdp.send('Page.enable')
-    await pageCdp.send('Runtime.enable')
+    let pageCdp = null
+    for (let i = 0; i < 20; i++) {
+      try {
+        const browserWs = await getCDPWebSocketUrl(CDP_PORT)
+        const cdp = new CDPClient(browserWs)
+        await cdp.connect()
+        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' })
+        const targetWs = `ws://127.0.0.1:${CDP_PORT}/devtools/page/${targetId}`
+        pageCdp = new CDPClient(targetWs)
+        await pageCdp.connect()
+        await pageCdp.send('Page.enable')
+        await pageCdp.send('Runtime.enable')
+        break
+      } catch {
+        await sleep(250)
+      }
+    }
+    if (!pageCdp) throw new Error('Failed to connect to Chrome CDP')
 
     console.log('[3/8] Setting up Admin Session & Loading /admin/logs...')
     await pageCdp.send('Page.navigate', { url: `${BASE_URL}/login` })
@@ -699,11 +710,418 @@ async function run() {
       document.documentElement.removeAttribute('data-text-size');
     `)
 
+    console.log('[9/9] Testing Account-Filter Restoration & Contract Alignment...')
+    // Track requests to /admin/users by instrumenting XMLHttpRequest
+    await pageCdp.evaluate(`
+      (() => {
+        window.__capturedUserSearches = [];
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          if (typeof url === 'string' && url.includes('/admin/users')) {
+            window.__capturedUserSearches.push(url);
+          }
+          return origOpen.call(this, method, url, ...rest);
+        };
+      })()
+    `)
+
+    // Subtest A: Filtered-URL reload with matching logs
+    console.log('Subtest A: Filtered-URL reload with matching logs...')
+    const matchingUserId = '00000000-0000-0000-0000-000000000005'
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/admin/logs?user_id=${matchingUserId}` })
+    await sleep(1500)
+
+    const subtestACheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const appliedIndicator = document.querySelector('#actor-filter-applied');
+        const rows = Array.from(document.querySelectorAll('.logs-table tbody tr')).map(r => ({
+          actorEmail: r.querySelector('.actor-email')?.textContent?.trim(),
+        }));
+        const userSearches = window.__capturedUserSearches || [];
+        return {
+          inputValue: input ? input.value : '',
+          appliedIndicatorText: appliedIndicator ? appliedIndicator.textContent.trim() : null,
+          userSearches,
+          hasRows: rows.length > 0,
+          allRowsMatch: rows.every(r => r.actorEmail === 'prof.delacruz@dnsc.edu.ph'),
+        };
+      })()
+    `)
+    console.log('Subtest A state:', subtestACheck)
+    const uuidSearchesA = subtestACheck.userSearches.filter(url => url.includes(matchingUserId))
+    assert.equal(uuidSearchesA.length, 0, 'No UUID directory-search request should ever be sent')
+    assert.equal(subtestACheck.inputValue, 'prof.delacruz@dnsc.edu.ph', 'Readable label must be resolved from returned logs')
+    assert.equal(subtestACheck.hasRows, true, 'Matching logs should be displayed')
+    assert.equal(subtestACheck.allRowsMatch, true, 'All returned rows must match actor')
+
+    // Subtest B: Filtered-URL reload with NO matching logs
+    console.log('Subtest B: Filtered-URL reload with NO matching logs...')
+    const emptyUserId = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/admin/logs?user_id=${emptyUserId}` })
+    await sleep(1500)
+
+    const subtestBCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const appliedIndicator = document.querySelector('#actor-filter-applied');
+        const url = window.location.search;
+        const emptyState = document.querySelector('.empty-state');
+        const userSearches = window.__capturedUserSearches || [];
+        return {
+          inputValue: input ? input.value : '',
+          appliedIndicatorText: appliedIndicator ? appliedIndicator.textContent.trim() : null,
+          url,
+          hasEmptyState: Boolean(emptyState),
+          userSearches,
+        };
+      })()
+    `)
+    console.log('Subtest B state:', subtestBCheck)
+    const uuidSearchesB = subtestBCheck.userSearches.filter(url => url.includes(emptyUserId))
+    assert.equal(uuidSearchesB.length, 0, 'No UUID directory-search request should ever be sent for empty user')
+    assert.equal(subtestBCheck.inputValue, emptyUserId, 'UUID must be retained as fallback when no label is available')
+    assert.equal(subtestBCheck.hasEmptyState, true, 'Empty state shown when no logs match')
+    assert.match(subtestBCheck.url, new RegExp(`user_id=${emptyUserId}`), 'Valid filter and URL must be preserved')
+
+    // Subtest C: Back/Forward navigation
+    console.log('Subtest C: Back/Forward navigation...')
+    await pageCdp.evaluate(`window.history.back()`)
+    await sleep(1500)
+    const subtestCCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const url = window.location.search;
+        return {
+          inputValue: input ? input.value : '',
+          url,
+        };
+      })()
+    `)
+    console.log('Subtest C (after back):', subtestCCheck)
+    assert.match(subtestCCheck.url, new RegExp(`user_id=${matchingUserId}`), 'Back navigation must restore previous user_id')
+    assert.equal(subtestCCheck.inputValue, 'prof.delacruz@dnsc.edu.ph', 'Back navigation must restore resolved label')
+
+    // Subtest D: Unapplied typed search text remains separate from applied filter
+    console.log('Subtest D: Unapplied typed search text remains separate...')
+    await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        input.value = 'typed_unapplied_text';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()
+    `)
+    await sleep(400)
+    // Trigger log refresh while input has unapplied text
+    await pageCdp.evaluate(`document.querySelector('.btn-refresh')?.click()`)
+    await sleep(800)
+
+    const subtestDCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const appliedIndicator = document.querySelector('#actor-filter-applied');
+        return {
+          inputValue: input ? input.value : '',
+          appliedText: appliedIndicator ? appliedIndicator.textContent.trim() : '',
+        };
+      })()
+    `)
+    console.log('Subtest D state:', subtestDCheck)
+    assert.equal(subtestDCheck.inputValue, 'typed_unapplied_text', 'Delayed logs response must not overwrite typed input')
+    assert.equal(subtestDCheck.appliedText, 'Applied: prof.delacruz@dnsc.edu.ph', 'Active filter indicator must display resolved applied label')
+
+    console.log('[10/10] Testing Request-Lifecycle Fixes & Concurrency Robustness...')
+
+    // 10A: Delayed search followed by clearing input must not reopen suggestions
+    console.log('Test 10A: Delayed search followed by clearing input must not reopen suggestions...')
+    await pageCdp.evaluate(`
+      sessionStorage.setItem('__CYBERMORPH_DELAY_ADMIN_USERS__', '600');
+      const input = document.querySelector('#performed-by-filter');
+      input.value = 'alex';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    `)
+    // Wait for the 300ms debounce to fire and request to enter flight
+    await sleep(350)
+    // Clear input while search is in flight
+    await pageCdp.evaluate(`
+      const clearBtn = document.querySelector('.btn-clear-input');
+      if (clearBtn) {
+        clearBtn.click();
+      } else {
+        const input = document.querySelector('#performed-by-filter');
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    `)
+    // Input is cleared immediately and dropdown is closed
+    const immediateClearCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        return {
+          val: input ? input.value : null,
+          hasDropdown: Boolean(dropdown),
+        };
+      })()
+    `)
+    assert.equal(immediateClearCheck.val, '')
+    assert.equal(immediateClearCheck.hasDropdown, false, 'Dropdown must close immediately upon clearing')
+
+    // Wait for the delayed search to resolve (600ms delay + buffer)
+    await sleep(750)
+
+    const delayedAfterClearCheck = await pageCdp.evaluate(`
+      (() => {
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        const items = document.querySelectorAll('.suggestion-item');
+        return {
+          hasDropdown: Boolean(dropdown),
+          itemCount: items.length,
+        };
+      })()
+    `)
+    console.log('State after delayed search finishes (10A):', delayedAfterClearCheck)
+    assert.equal(delayedAfterClearCheck.hasDropdown, false, 'Stale search must not reopen dropdown after input was cleared')
+    assert.equal(delayedAfterClearCheck.itemCount, 0, 'Suggestions list must remain empty')
+    await pageCdp.evaluate(`sessionStorage.removeItem('__CYBERMORPH_DELAY_ADMIN_USERS__')`)
+
+    // 10B: Delayed search followed by UUID input must not overwrite that selection
+    console.log('Test 10B: Delayed search followed by UUID input must not overwrite that selection...')
+    const testUuid = '00000000-0000-0000-0000-000000000001'
+    // Start debounced search with 600ms delay
+    await pageCdp.evaluate(`
+      (() => {
+        sessionStorage.setItem('__CYBERMORPH_DELAY_ADMIN_USERS__', '600');
+        const input = document.querySelector('#performed-by-filter');
+        input.value = 'alex';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()
+    `)
+    await sleep(350) // debounce fires, request in flight
+
+    // Paste UUID into input while search is in flight
+    await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        input.value = '${testUuid}';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()
+    `)
+
+    const uuidStagedCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const applyBtn = document.querySelector('.btn-apply-actor');
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        return {
+          val: input.value,
+          applyDisabled: applyBtn ? applyBtn.disabled : true,
+          hasDropdown: Boolean(dropdown),
+        };
+      })()
+    `)
+    assert.equal(uuidStagedCheck.val, testUuid)
+    assert.equal(uuidStagedCheck.applyDisabled, false, 'UUID selection must be staged and enable Apply')
+    assert.equal(uuidStagedCheck.hasDropdown, false, 'Dropdown should be closed for UUID input')
+
+    // Wait for the delayed "alex" search to resolve
+    await sleep(750)
+
+    const uuidAfterDelayedCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const applyBtn = document.querySelector('.btn-apply-actor');
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        return {
+          val: input.value,
+          applyDisabled: applyBtn ? applyBtn.disabled : true,
+          hasDropdown: Boolean(dropdown),
+        };
+      })()
+    `)
+    console.log('State after delayed search finishes (10B):', uuidAfterDelayedCheck)
+    assert.equal(uuidAfterDelayedCheck.val, testUuid, 'UUID in input must not be overwritten by stale search')
+    assert.equal(uuidAfterDelayedCheck.applyDisabled, false, 'UUID selection remains staged')
+    assert.equal(uuidAfterDelayedCheck.hasDropdown, false, 'Stale search must not reopen dropdown over UUID selection')
+
+    // Apply the UUID filter and verify it works
+    await pageCdp.evaluate(`document.querySelector('.btn-apply-actor')?.click()`)
+    await sleep(600)
+    const afterUuidApply = await pageCdp.evaluate(`
+      (() => {
+        const url = window.location.search;
+        const rows = Array.from(document.querySelectorAll('.logs-table tbody tr')).map(r => ({
+          actorEmail: r.querySelector('.actor-email')?.textContent?.trim(),
+        }));
+        return { url, rows };
+      })()
+    `)
+    assert.match(afterUuidApply.url, new RegExp(`user_id=${testUuid}`))
+    assert(afterUuidApply.rows.length > 0)
+    assert(afterUuidApply.rows.every(r => r.actorEmail === 'admin@cybermorph.local'))
+
+    // Clear delays and filters
+    await pageCdp.evaluate(`
+      sessionStorage.removeItem('__CYBERMORPH_DELAY_ADMIN_USERS__');
+      document.querySelector('.btn-clear-filters')?.click();
+    `)
+    await sleep(600)
+
+    // 10C: Logout during pending requests must not start another protected request or restore stale account data
+    console.log('Test 10C: Logout during pending requests must not start another protected request...')
+    await pageCdp.evaluate(`
+      (() => {
+        sessionStorage.setItem('__CYBERMORPH_DELAY_ADMIN_LOGS__', '800');
+        sessionStorage.setItem('__CYBERMORPH_DELAY_ADMIN_USERS__', '800');
+        const input = document.querySelector('#performed-by-filter');
+        input.value = 'alex';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        document.querySelector('.btn-refresh')?.click();
+      })()
+    `)
+    await sleep(350) // debounced search + refresh in flight
+
+    const logsCallsBeforeLogout = await pageCdp.evaluate(`window.__cybermorphAdminLogsCalls || 0`)
+
+    // Click logout
+    await pageCdp.evaluate(`
+      (() => {
+        const logoutBtn = document.querySelector('.logout-btn');
+        if (logoutBtn) logoutBtn.click();
+      })()
+    `)
+    await sleep(200)
+    await pageCdp.evaluate(`
+      (() => {
+        const confirmBtn = document.querySelector('.btn-confirm-signout');
+        if (confirmBtn) confirmBtn.click();
+      })()
+    `)
+    await sleep(300)
+
+    const logsCallsImmediatelyAfterLogout = await pageCdp.evaluate(`window.__cybermorphAdminLogsCalls || 0`)
+    assert.equal(
+      logsCallsImmediatelyAfterLogout,
+      logsCallsBeforeLogout,
+      'Logout must not trigger another protected request to /admin/logs',
+    )
+
+    // Wait for the delayed in-flight requests (800ms) to resolve
+    await sleep(1000)
+
+    const logsCallsAfterDelay = await pageCdp.evaluate(`window.__cybermorphAdminLogsCalls || 0`)
+    assert.equal(
+      logsCallsAfterDelay,
+      logsCallsBeforeLogout,
+      'No protected requests should have been triggered after logout',
+    )
+
+    // Verify account-specific data was NOT restored by stale response
+    const loggedOutState = await pageCdp.evaluate(`
+      (() => {
+        const rows = document.querySelectorAll('.logs-table tbody tr');
+        const input = document.querySelector('#performed-by-filter');
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        const err = document.querySelector('.suggestion-error, .page-error-banner, [role="alert"]');
+        return {
+          hasRows: rows.length > 0,
+          inputVal: input ? input.value : null,
+          hasDropdown: Boolean(dropdown),
+          hasError: Boolean(err),
+          token: localStorage.getItem('cyber_token'),
+        };
+      })()
+    `)
+    console.log('Logged out state after delayed responses resolve (10C):', loggedOutState)
+    assert.equal(loggedOutState.token, null, 'User must be signed out')
+    assert.equal(loggedOutState.hasRows, false, 'Stale logs response must not populate table after logout')
+    assert.equal(loggedOutState.hasDropdown, false, 'Stale user search response must not open suggestions after logout')
+    assert.equal(loggedOutState.hasError, false, 'Stale error responses must not be displayed after logout')
+
+    await pageCdp.evaluate(`
+      sessionStorage.removeItem('__CYBERMORPH_DELAY_ADMIN_LOGS__');
+      sessionStorage.removeItem('__CYBERMORPH_DELAY_ADMIN_USERS__');
+    `)
+
+    // 10D: Re-login as Admin and confirm normal search and filter restoration still work
+    console.log('Test 10D: Re-login as Admin & Confirm normal search and filter restoration still work...')
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/login` })
+    await sleep(1000)
+    await pageCdp.evaluate(`
+      localStorage.setItem('cyber_token', 'mock-admin-token');
+      localStorage.setItem('cyber_role', 'admin');
+      localStorage.setItem('cyber_user', JSON.stringify({
+        user_id: '00000000-0000-0000-0000-000000000001',
+        username: 'admin',
+        email: 'admin@cybermorph.local',
+        role: 'admin'
+      }));
+      sessionStorage.clear();
+    `)
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/admin/logs` })
+    await sleep(1500)
+
+    // Test normal search works
+    await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        input.value = 'alex';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()
+    `)
+    await sleep(600)
+    const normalSearchCheck = await pageCdp.evaluate(`
+      (() => {
+        const dropdown = document.querySelector('#performed-by-suggestions');
+        const items = document.querySelectorAll('.suggestion-item');
+        return {
+          hasDropdown: Boolean(dropdown),
+          itemCount: items.length,
+        };
+      })()
+    `)
+    console.log('Normal search check after re-login:', normalSearchCheck)
+    assert.equal(normalSearchCheck.hasDropdown, true, 'Dropdown must open on valid search')
+    assert.equal(normalSearchCheck.itemCount, 2, 'Should find 2 accounts for "alex"')
+
+    // Test URL filter restoration still works
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/admin/logs?user_id=${matchingUserId}` })
+    await sleep(1500)
+    const urlRestorationCheck = await pageCdp.evaluate(`
+      (() => {
+        const input = document.querySelector('#performed-by-filter');
+        const rows = Array.from(document.querySelectorAll('.logs-table tbody tr')).map(r => ({
+          actorEmail: r.querySelector('.actor-email')?.textContent?.trim(),
+        }));
+        return {
+          inputValue: input ? input.value : '',
+          rowsCount: rows.length,
+          allMatch: rows.every(r => r.actorEmail === 'prof.delacruz@dnsc.edu.ph'),
+        };
+      })()
+    `)
+    console.log('URL filter restoration check after re-login:', urlRestorationCheck)
+    assert.equal(urlRestorationCheck.inputValue, 'prof.delacruz@dnsc.edu.ph', 'Resolved account label must be restored')
+    assert(urlRestorationCheck.rowsCount > 0, 'Rows must be loaded for restored filter')
+    assert.equal(urlRestorationCheck.allMatch, true, 'All rows must match restored actor')
+
     console.log('\nALL ADMIN AUDIT LOGS FILTER USABILITY TESTS PASSED SUCCESSFULLY!')
   } finally {
     try {
-      if (chromeProc) chromeProc.kill('SIGTERM')
-      if (viteProc) viteProc.kill('SIGTERM')
+      if (chromeProc) {
+        if (process.platform === 'win32') {
+          spawn('taskkill', ['/pid', String(chromeProc.pid), '/T', '/F'])
+        } else {
+          chromeProc.kill('SIGTERM')
+        }
+      }
+      if (viteProc) {
+        if (process.platform === 'win32') {
+          spawn('taskkill', ['/pid', String(viteProc.pid), '/T', '/F'])
+        } else {
+          viteProc.kill('SIGTERM')
+        }
+      }
     } catch {
       // ignore
     }

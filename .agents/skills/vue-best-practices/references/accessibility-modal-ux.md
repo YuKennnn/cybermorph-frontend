@@ -1,20 +1,8 @@
 # Accessibility (a11y) & Modal Dialog Standards
 
-## Context & Problem Statement
+## Context & Principles
 
-CyberMorph is an educational platform intended for students and educators. Modal overlays and forms in views like `ClassroomManagementView.vue` and `EducatorAnalyticsView.vue` currently lack standard accessible markup:
-
-1. **Missing ARIA Roles**:
-   ```vue
-   <!-- Current modal markup in ClassroomManagementView.vue -->
-   <div v-if="isCreateModalOpen" class="modal-overlay" @click.self="isCreateModalOpen = false">
-     <div class="modal-card">
-   ```
-   Screen readers cannot determine that a modal layer has taken over the interface.
-2. **Missing Keyboard Dismissal (`Escape` Key)**:
-   - When a modal opens, pressing the `Escape` key does not dismiss it. Users must use a mouse to find and click the close button or backdrop.
-3. **No Focus Trapping**:
-   - Tabbing moves focus behind the backdrop into the inactive document, disorienting keyboard-only users.
+CyberMorph is an educational platform intended for students, educators, and administrators. Modal overlays and dialogs must adhere to standard accessible dialog specifications (WAI-ARIA Dialog Modal).
 
 ---
 
@@ -24,7 +12,7 @@ All modal dialogs in CyberMorph should follow the WAI-ARIA Dialog (Modal) specif
 
 ### Required Accessibility Features
 1. **Container Attributes**:
-   - `role="dialog"` or `role="alertdialog"` (for destructive confirmation modals).
+   - `role="dialog"` or `role="alertdialog"` (for destructive confirmation dialogs).
    - `aria-modal="true"` to signal that background contents are inert.
    - `aria-labelledby="modal-title-id"` to announce the dialog title immediately upon focus.
 2. **Keyboard Handlers**:
@@ -32,12 +20,14 @@ All modal dialogs in CyberMorph should follow the WAI-ARIA Dialog (Modal) specif
    - Remove the listener immediately in `onUnmounted`.
 3. **Close Buttons**:
    - Provide an explicit `aria-label="Close dialog"` on any dismissal button.
+   - Use clean, accessible labels or functional SVG icons (`AppIcon`), avoiding decorative monospace text.
 
 ### Implementation Pattern
 
 ```vue
 <script setup>
 import { onMounted, onUnmounted, watch } from 'vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 const props = defineProps({
   isOpen: {
@@ -95,14 +85,15 @@ onUnmounted(() => {
           aria-label="Close dialog"
           @click="emit('close')"
         >
-          [ CLOSE ]
+          <AppIcon name="close" size="16" aria-hidden="true" />
+          <span class="sr-only">Close</span>
         </button>
       </header>
-      <section class="modal-body">
+      <div class="modal-body">
         <slot />
-      </section>
-      <footer v-if="$slots.actions" class="modal-actions">
-        <slot name="actions" />
+      </div>
+      <footer v-if="$slots.footer" class="modal-footer">
+        <slot name="footer" />
       </footer>
     </div>
   </div>
@@ -111,15 +102,12 @@ onUnmounted(() => {
 
 ---
 
-## Form Input Accessibility Guidelines
-
-1. **Associated Labels**: Every `<input>` or `<select>` must have a matching `<label>` with `for="element-id"`.
-2. **Autocomplete Attributes**: Passwords, emails, and usernames must include appropriate `autocomplete` tokens (`email`, `current-password`, `new-password`, `username`).
-3. **Descriptive Errors**: Form validation errors must be associated with the input using `aria-describedby="error-id"` or placed directly adjacent to the input field.
-
----
-
 ## Verification Steps
-1. Open any modal dialog in the application.
-2. Press the `Escape` key on your keyboard and confirm that the modal closes cleanly.
-3. Test with Chrome DevTools **Accessibility** tree inspection to ensure the dialog announces its title and role.
+1. Run non-fixing linting:
+   ```powershell
+   npx oxlint .
+   npx eslint .
+   ```
+2. Verify that pressing `Escape` dismisses an open modal.
+3. Verify that screen readers announce the dialog title via `aria-labelledby`.
+4. Verify that close buttons have accessible names (`aria-label` or visible text).

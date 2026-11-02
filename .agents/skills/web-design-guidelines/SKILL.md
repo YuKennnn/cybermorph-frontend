@@ -9,6 +9,9 @@ metadata:
 
 # Web Interface Guidelines
 
+> [!NOTE]
+> **CyberMorph Skill Responsibility**: In this repository, `cybermorph-ui-system` governs routine UI implementation. `web-design-guidelines` is invoked when the user explicitly requests a UI audit, accessibility review, or design compliance inspection.
+
 Review files for compliance with Web Interface Guidelines.
 
 ## How It Works

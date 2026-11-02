@@ -1,26 +1,20 @@
 # Defensive API Contract Parsing & Schema Drift Resilience
 
-## Context & Problem Statement
+## Context & Principles
 
-In distributed client-server applications like CyberMorph (where the Vue 3 frontend connects to a FastAPI backend alongside a Godot game client), frontend and backend contracts inevitably evolve. During frontend integration, views and components frequently encounter subtle schema mismatches:
+In distributed client-server applications like CyberMorph (where the Vue 3 frontend connects to a FastAPI backend alongside a Godot game client), the backend contract is the authoritative source of truth.
 
-1. **Envelope Differences**:
-   - The backend might return a direct JSON array (`[...]`), while legacy mock or stub code wraps it in an object (`{ classrooms: [...] }`).
-   - Paginated endpoints use an envelope (`{ items: [...], total_count: 42, page: 1, page_size: 20 }`), while frontend views might search for `data.students` or `data.results`.
-2. **Identifier & Field Key Drift**:
-   - Backend database models often use prefixed identifier keys (`code_id`, `code_value`, `web_profile_id`), whereas initial UI mockups commonly assume simplified keys (`id`, `code`).
-   - Leaderboard endpoints provide `total_score`, while local simulations might name the field `score`. Directly calling `.toLocaleString()` on an undefined property causes fatal runtime crashes.
-3. **Semantic Ambiguity (`null` vs `0`)**:
-   - In analytics endpoints (e.g. `GET /analytics/classroom`), an unattempted threat category yields `null`, whereas a category where all students succeeded yields `0.0`. Rendering `null` as "0%" provides misleading pedagogical feedback to educators.
-4. **Nested Error Payloads**:
-   - FastAPI errors are not always flat strings. A `409 Conflict` error returns `{ detail: { field: "email", message: "Email already registered" } }`, while `422 Unprocessable Entity` returns an array of validation errors.
+Adhering to Rule 3 of `AGENTS.md` and ADR-006:
+> *"Treat documented API contracts and the actual backend implementation as the source of truth; do not invent endpoints, request fields, response fields, or authentication behavior."*
+
+Frontend code must not invent aliases (such as substituting `code` for `code_value`, or `score` for `total_score`). Instead, frontend components must consume the exact documented fields and handle data defensively against missing records, unattempted items, and network errors.
 
 ---
 
 ## Recommended Architecture & Best Practices
 
-### 1. Defensive List Normalization
-Never assume a single shape for collection responses. Normalize incoming payloads immediately inside data-fetching actions:
+### 1. Robust Collection Handling
+Endpoints return documented types (e.g. `GET /classroom/my-codes` returns a flat array of `ClassroomResponse`, while paginated endpoints return `{ items, total_count, page, page_size }`). Ensure data-fetching actions guard against unexpected nulls:
 
 ```javascript
 // Recommended pattern for collection endpoints
@@ -30,35 +24,34 @@ const fetchClassrooms = async () => {
 
   try {
     const data = await fetchMyClassrooms()
-    // Supports both flat array [ ... ] and envelope { classrooms: [ ... ] } or { items: [ ... ] }
-    classrooms.value = Array.isArray(data) ? data : data.classrooms || data.items || []
+    classrooms.value = Array.isArray(data) ? data : []
   } catch (error) {
-    errorMessage.value = extractErrorMessage(error, 'Failed to retrieve classroom rosters.')
+    errorMessage.value = extractErrorMessage(error, 'Failed to retrieve classrooms.')
   } finally {
     isLoading.value = false
   }
 }
 ```
 
-### 2. Dual-Key Binding with Fallbacks
-When binding keys in child components or template loops, safeguard against schema drift by checking the canonical backend key first, followed by fallbacks:
+### 2. Strict Key Binding with Safe Numerical Defaults
+Use the exact documented backend keys (`code_value`, `code_id`, `total_score`). When formatting numbers that could be undefined or null in early states, use nullish coalescing:
 
 ```vue
-<!-- In ClassroomCard.vue or table rows -->
+<!-- In classroom cards or tables -->
 <div class="code-badge">
-  CODE: {{ classroom.code_value || classroom.code || 'UNKNOWN' }}
+  Class code: {{ classroom.code_value }}
 </div>
 
-<button @click="$emit('inspect', classroom.code_id || classroom.id)">
-  View Telemetry
+<button @click="$emit('inspect', classroom.code_id)">
+  View students
 </button>
 ```
 
-For numerical formatting, always use nullish coalescing before invoking number methods:
+For numerical formatting:
 ```vue
-<!-- Safe numerical formatting -->
+<!-- Safe numerical formatting with documented key -->
 <span class="score-value">
-  {{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }} PTS
+  {{ (entry.total_score ?? 0).toLocaleString() }} PTS
 </span>
 ```
 
@@ -70,12 +63,12 @@ Distinguish between "no data yet" and "zero":
 <div v-for="threat in CANONICAL_THREATS" :key="threat.name" class="threat-metric">
   <span class="threat-name">{{ threat.name }}</span>
   
-  <!-- Explicit check: null is unattempted, not 0% -->
+  <!-- Explicit check: null means unattempted, not 0% fail rate -->
   <span v-if="analytics?.category_fail_rates?.[threat.name] !== null && analytics?.category_fail_rates?.[threat.name] !== undefined">
-    {{ Math.round(analytics.category_fail_rates[threat.name] * 100) }}% Fail Rate
+    {{ Math.round(analytics.category_fail_rates[threat.name] * 100) }}% fail rate
   </span>
   <span v-else class="text-muted">
-    No Telemetry Yet
+    No attempts recorded yet
   </span>
 </div>
 ```
@@ -98,7 +91,7 @@ export const extractErrorMessage = (error, defaultMessage = 'An unexpected error
   const data = error.response.data
   if (!data) return defaultMessage
 
-  // Flat detail string (401, 403, 404)
+  // Flat detail string (401, 403, 404, 500)
   if (typeof data.detail === 'string') {
     return data.detail
   }
@@ -122,9 +115,11 @@ export const extractErrorMessage = (error, defaultMessage = 'An unexpected error
 
 ## Verification Steps
 
-1. Test API calls with mock data and verify that views render correctly.
-2. Switch `.env` to live backend (`VITE_USE_MOCK=false`) and confirm that missing or renamed keys do not cause uncaught `TypeError` exceptions.
-3. Test edge-case states:
-   - Empty classroom roster (`[]`).
-   - Null analytics values (confirm "No Telemetry Yet" renders instead of "0%").
-   - 409 duplicate registration (confirm user-friendly text renders instead of `[object Object]`).
+1. Run non-fixing linting:
+   ```powershell
+   npx oxlint .
+   npx eslint .
+   ```
+2. Verify that views render empty states cleanly when lists are empty (`[]`).
+3. Verify that unattempted categories in analytics render "No attempts recorded yet" instead of "0%".
+4. Verify that nested 409 conflict errors display friendly, human-readable text instead of `[object Object]`.

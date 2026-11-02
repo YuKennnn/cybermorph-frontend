@@ -72,20 +72,20 @@ Web users register through:
 Authentication:
 None.
 
-The backend distinguishes web-user roles and applies additional registration rules.
+Request body:
+`{ "email": "...", "password": "...", "display_name": "..." }`
 
-The planned educator registration workflow includes:
+The backend distinguishes web-user roles and applies additional registration rules:
+1. Validates the permitted institutional email domain (`@dnsc.edu.ph`).
+2. Requires a non-empty `display_name` (1–100 Unicode characters, single-line, trimmed).
+3. Creates the web-user profile and assigns the `educator` role.
+4. Sets the account to inactive (`is_active: false`) and approval status to `pending`.
+5. Prevents login until administrator approval is granted via `/admin/approvals`.
 
-1. Validate the permitted institutional email domain.
-2. Create the web-user profile.
-3. Assign the educator role.
-4. Set the educator account to inactive.
-5. Set the approval status to `pending`.
-6. Prevent login until the account has been approved.
+Admin accounts are never self-service; they are provisioned directly on the backend.
 
-Admin registration behavior differs because the backend plan specifies that administrative accounts are active immediately according to the registration rules.
-
-Exact role-selection rules and request fields must be verified against the implemented backend.
+Status:
+CONFIRMED
 
 ## 5. Login
 
@@ -126,15 +126,24 @@ Inactive accounts must not be permitted to authenticate.
 
 ## 6. Token
 
-The backend plan specifies JWT-based authentication.
+Authentication uses JWT bearer tokens returned on successful login (`POST /auth/login`):
 
-The access token is used to prove that subsequent protected API requests are associated with an authenticated user.
+```json
+{
+  "access_token": "<jwt>",
+  "token_type": "bearer"
+}
+```
 
-The frontend must treat the token as sensitive authentication material.
+The token is attached to protected API requests via the standard header:
+`Authorization: Bearer <access_token>`
 
-The exact JWT payload fields, token type, expiration behavior, and frontend persistence strategy must be verified against the implemented backend.
+- Token lifespan: 30 days.
+- Refresh endpoint: None. Users re-authenticate with credentials upon expiration.
+- Persistence: Stored securely in `localStorage` under `cyber_token`.
 
-The frontend must not assume a token field name or token structure that is not defined by the actual API contract.
+Status:
+CONFIRMED
 
 ## 7. Authentication State in the Frontend
 
@@ -269,14 +278,13 @@ Approval changes the user's activation and portal-access state according to the 
 
 ## 11. Logout
 
-The frontend must clear its local authentication state when the user logs out.
-
-At minimum, the frontend should remove the authentication state it manages and return the user to the authentication interface.
-
-Whether the backend also requires a token revocation or server-side invalidation operation is not established in the backend plan.
+Logout is handled completely on the client side:
+- The backend does not maintain server-side token revocation or session invalidation tables for JWTs.
+- The frontend `authStore.logout()` action clears in-memory state (`token.value = null`, `user.value = null`, `userRole.value = null`), removes stored items from `localStorage` (`cyber_token`, `cyber_user`, `cyber_role`), and resets domain stores (`classroomStore`, `threatIndexStore`, `playerClassroomStore`).
+- The application then redirects the user to `/login`.
 
 Status:
-TO BE VERIFIED.
+CONFIRMED
 
 ## 12. Authentication Failure Handling
 
@@ -326,15 +334,8 @@ The frontend must follow these rules:
 
 ## 14. Unknown / To Be Verified
 
-The following implementation details require verification against the actual backend:
+The following cross-repository implementation details require confirmation with the Godot client and backend deployment:
 
-- Exact login request schema
-- Exact login response schema
-- JWT claims
-- Token expiration duration
-- Token storage strategy
-- Refresh-token behavior, if any
-- Logout/revocation behavior
-- Godot-to-web authentication handoff
-- Deep-link or custom URL behavior, if used
-- Final production authentication domain
+- Godot-to-web authentication handoff mechanism
+- Deep-link or custom URL scheme behavior, if supported
+- Final custom domain and DNS routing for production deployment

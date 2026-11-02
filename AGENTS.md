@@ -45,6 +45,7 @@ This frontend currently uses:
 - Follow the existing project structure before creating new structures.
 - Do not assume undocumented backend API behavior.
 - Do not put secrets in frontend source code.
+- Backend repository files (`C:/Cyber-Morph/cybermorph-backend/`) are strictly read-only. Never attempt to edit, create, or delete backend files.
 
 
 ## 5. Learning Rule
@@ -84,16 +85,14 @@ Do not replace understanding with large unexplained code dumps.
   - Do not present a score from recent session history as an all-time best score.
 
 
-## 7. Mandatory Context-Reading Requirement
+## 7. Context-Reading & Verification Requirement
 
 Before proposing changes, creating implementation plans, or starting implementation on any task in this repository:
 
-1. Read the root `AGENTS.md`.
-2. Inventory `.agents/skills/` and `docs/`.
-3. Read every `SKILL.md` and every Markdown document under `docs/`.
-4. Read supporting skill references relevant to the task (e.g. in `.agents/skills/*/references/`).
-5. Read `C:/Cyber-Morph/cybermorph-backend/API_GUIDE.md` for backend-facing work when accessible.
-6. Inspect the actual source files before proposing changes. Do not rely only on previous conversation summaries.
-7. List the context files actually read. Report missing, empty, or conflicting documentation rather than guessing.
-
-Supporting reference files should be read when applicable; generated files, dependencies, and unrelated skill datasets do not need exhaustive reading.
+1. **Root Instructions & Inventory**: Read root `AGENTS.md` and inventory available skills (`.agents/skills/`) and docs (`docs/`).
+2. **Relevant Skills & Documentation**: Read skills and documentation files relevant to the specific task at hand (e.g. `cybermorph-api-contract` for network/API changes, `cybermorph-ui-system` for UI changes, `pinia-store` for state management).
+3. **Session Context Reuse**: When working in a continuous session, reuse unchanged context already read earlier rather than rereading identical, unmodified files in every turn.
+4. **Backend Contract Verification**: For backend-facing work, consult the relevant sections of `C:/Cyber-Morph/cybermorph-backend/API_GUIDE.md` (read-only). Never invent unconfirmed request or response schemas.
+5. **Inspect Affected Source Files**: Always inspect the actual source code files that will be modified or affected before proposing changes. Do not rely solely on memory or previous conversation summaries.
+6. **Expanded Inspection for Audits**: Broaden file inspection across related skills, docs, and references when conducting comprehensive audits, refactoring cross-cutting architecture, resolving dependencies, or investigating conflicting evidence.
+7. **Report Context & Discrepancies**: List the context files actually read. Report missing, empty, or conflicting documentation rather than guessing.

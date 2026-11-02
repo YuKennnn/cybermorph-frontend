@@ -1,32 +1,29 @@
 # Reactivity & Computed Properties Optimization
 
-## Context & Problem Statement
+## Context & Principles
 
-In Vue 3 templates, any method invoked in the template (e.g. `{{ totalPages() }}` or `:disabled="page >= totalPages()"`) is executed **every time the component renders or any reactive dependency in the component changes**.
+In Vue 3 templates, unparameterized calculations should be defined as `computed()` properties rather than plain methods, because `computed()` caches results based on reactive dependencies.
 
-In `src/views/LeaderboardView.vue`:
-```javascript
-// src/views/LeaderboardView.vue (line 67)
-const totalPages = () => Math.ceil(totalCount.value / pageSize.value) || 1
-```
-
-In the template:
-```vue
-<span class="pagination-info">Page {{ page }} of {{ totalPages() }}</span>
-...
-<button :disabled="page >= totalPages()" @click="handleNextPage">Next</button>
-```
-
-### Why This is an Anti-Pattern
-1. **No Caching / Memoization**: Methods do not cache their results. If another ref (such as `isLoading` or `searchQuery`) changes, Vue re-evaluates `totalPages()` repeatedly, even if `totalCount` and `pageSize` remain identical.
-2. **Template Clutter**: Calling functions with parentheses `totalPages()` inside templates makes template expressions imperative rather than declarative.
-3. **Performance Degradation**: While computing `Math.ceil` is fast, this anti-pattern scaled across complex calculations (e.g. data filtering, sorting, or graph analytics in `EducatorAnalyticsView.vue`) causes noticeable frame drops and CPU spikes.
+However, **not every function in a template can or should be converted to a computed property**. Parameterized formatting helpers (e.g. `formatDate(item.timestamp)` or `isCurrentPlayer(entry)` inside a `v-for` loop) and event handlers must remain functions.
 
 ---
 
-## Remediation: Declarative `computed()` Properties
+## When to Use Computed vs Functions
 
-Convert derived state into cached `computed` properties:
+| Feature | `computed` Property | Parameterized Helper Function | Method / Action |
+| :--- | :--- | :--- | :--- |
+| **Purpose** | Derive, filter, or aggregate reactive state | Format or inspect a specific item passed as argument | Handle user interactions (`@click`, `@submit`) |
+| **Parameters** | **No** (pure derived state) | **Yes** (`(item) => ...`) | **Optional** (`(event) => ...`) |
+| **Caching** | **Yes** (cached until dependencies change) | **No** (runs on render) | N/A |
+| **Template Usage** | Direct property: `{{ totalPages }}` | In loops: `{{ formatDate(row.date) }}` | Direct binding: `@click="save"` |
+| **Side Effects?** | **No** (pure calculations only) | **No** (pure formatting only) | **Yes** (network, state mutation) |
+
+---
+
+## Implementation Patterns
+
+### 1. Cached Derived State (`computed`)
+Use `computed()` for values derived from reactive state that take no parameters:
 
 ```javascript
 import { ref, computed } from 'vue'
@@ -35,33 +32,48 @@ const totalCount = ref(0)
 const pageSize = ref(10)
 const page = ref(1)
 
-// Optimized: Cached and only recalculated when totalCount or pageSize changes
+// Computed: Cached and only recalculated when totalCount or pageSize changes
 const totalPages = computed(() => {
-  return Math.ceil(totalCount.value / pageSize.value) || 1
+  if (totalCount.value <= 0) return 1
+  return Math.ceil(totalCount.value / pageSize.value)
 })
 ```
 
 In the template:
 ```vue
 <span class="pagination-info">Page {{ page }} of {{ totalPages }}</span>
-...
 <button :disabled="page >= totalPages" @click="handleNextPage">Next</button>
+```
+
+### 2. Parameterized Formatting in Loops (Functions)
+When formatting items inside a `v-for` loop where each item passes its own data, use a small, pure helper function:
+
+```javascript
+// Parameterized helper: correctly kept as a function because it depends on an argument
+const formatTimestamp = (isoString) => {
+  if (!isoString) return '—'
+  try {
+    return new Date(isoString).toLocaleDateString()
+  } catch {
+    return '—'
+  }
+}
+```
+
+In the template:
+```vue
+<tr v-for="session in sessions" :key="session.session_id">
+  <td>{{ formatTimestamp(session.played_at) }}</td>
+</tr>
 ```
 
 ---
 
-## When to Use Computed vs Methods vs Watchers
-
-| Feature | `computed` | `method` | `watch` |
-| :--- | :--- | :--- | :--- |
-| **Purpose** | Derive and transform existing reactive state | Handle user actions / events (`@click`, `@submit`) | Perform side effects (network calls, localStorage) |
-| **Caching** | **Yes** (cached by reactive dependencies) | **No** (re-executes on every invocation) | N/A |
-| **Template Usage** | Property access: `{{ fullName }}` | Event binding: `@click="saveData"` | Never used in templates |
-| **Side Effects Allowed?** | **No** (must be pure calculation) | **Yes** | **Yes** |
-
----
-
 ## Verification Steps
-1. Inspect templates in `src/views/` and replace all function evaluations `fn()` with `computed` property bindings.
-2. Ensure computed properties return values synchronously without modifying outside state.
-3. Verify that `npm run lint` passes with 0 warnings.
+1. Verify with non-fixing linting:
+   ```powershell
+   npx oxlint .
+   npx eslint .
+   ```
+2. Verify that unparameterized derived calculations in templates use `computed` properties rather than function calls with parentheses.
+3. Verify that computed properties remain pure and do not perform asynchronous calls or state mutations.

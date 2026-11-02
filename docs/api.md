@@ -549,7 +549,7 @@ DOCUMENTED IN BACKEND CONTRACT
 
 ## 10. Admin Endpoints
 
-The backend integration guide (`API_GUIDE.md`) documents 9 active administrative endpoints. All require an admin access token (`Authorization: Bearer <access_token>`).
+The backend integration guide (`API_GUIDE.md`) documents 11 active administrative endpoints. All require an admin access token (`Authorization: Bearer <access_token>`).
 
 > [!NOTE]
 > **Implementation Status**: These endpoints are documented in the backend integration contract (`API_GUIDE.md`). Live endpoint behavior has not been independently verified via live test credentials by the frontend team.
@@ -563,16 +563,19 @@ The backend integration guide (`API_GUIDE.md`) documents 9 active administrative
 | `POST` | `/admin/approvals/{user_id}/approve` | None | `200 { user_id, email, approval_status, created_at }` |
 | `POST` | `/admin/approvals/{user_id}/reject` | None | `200 { user_id, email, approval_status, created_at }` |
 | `GET` | `/admin/classrooms` | `?search=&page=&page_size=` (default `page_size: 20`) | Paginated `ClassroomResponse` plus `{ owner_user_id, owner_email, owner_display_name }`, newest first |
-| `PATCH` | `/admin/classrooms/{code_id}` | Body: `{ is_active?, owner_user_id? }` (at least one required) | `200` with updated classroom object |
+| `PATCH` | `/admin/classrooms/{code_id}` | Body: `{ is_active }` (required boolean; `owner_user_id` is rejected with 422) | `200` with updated classroom object |
 | `DELETE` | `/admin/classrooms/{code_id}` | None | `204` (no body) |
 | `GET` | `/admin/logs` | `?action_type=&user_id=&page=&page_size=` (default `page_size: 20`) | Paginated `{ log_id, user_id, user_email, action_type, target_table, target_id, description, logged_at }`, newest first |
+| `GET` | `/admin/play-data` | `?page=&page_size=` (default `page_size: 20`) | Paginated `{ upload_id, username, participant_code, row_count, uploaded_at }`, newest first (no payload) |
+| `GET` | `/admin/play-data/{upload_id}` | None | `200 { upload_id, username, participant_code, row_count, uploaded_at, payload }` |
 | `GET` | `/admin/stats` | None | `200 { total_users, sessions_last_24h, threats_detected, uptime_seconds }` |
 
 ### Documented Behavior Details
 - **User Accounts (`/admin/users`)**: Lists all live accounts. `username` is present for players; `display_name` is present for web users (`string | null`). `search` filters email, username, or display name case-insensitively.
 - **Approval Review Queue (`/admin/approvals`)**: `pending` by default, ordered oldest first. Rejecting an account leaves the email registered so the user cannot re-register; an admin can approve previously rejected accounts later. Approve accepts `pending` or `rejected` registrations; Reject accepts `pending` only.
-- **Classroom Oversight (`/admin/classrooms`)**: Lists all live classrooms across all educators. Admins can deactivate a class or transfer ownership to another approved educator via `PATCH`. An admin cannot rename a class. `DELETE` soft-deletes the classroom (`204`).
+- **Classroom Management (`/admin/classrooms`)**: Lists all live classrooms across all educators. Admins can toggle active status (`is_active: boolean`) via `PATCH`. An admin cannot transfer ownership to another educator (`owner_user_id` is rejected with 422) or rename a class; classes remain with their creator. `DELETE` soft-deletes the classroom (`204`).
 - **Audit Logs (`/admin/logs`)**: Paginated audit trail, newest first. Filterable by `user_id` (the actor) and `action_type`.
+- **Play Data Logs (`/admin/play-data`, `/admin/play-data/{upload_id}`)**: Decision logs uploaded by Godot game testers for analysis. The list endpoint omits the payload; the detail endpoint returns the full base64 `CMLOG1:` text.
 - **System Metrics (`/admin/stats`)**:
   - `total_users`: Total live user accounts.
   - `sessions_last_24h`: Completed sessions synchronized to the server within the past 24 hours (preserves metric meaning: recent sessions, not active concurrent sessions).
@@ -595,6 +598,7 @@ Documented synchronization routes:
 - `GET /sync/player-state`: Pulls current cloud progress and threat unlocks for the authenticated player.
 - `POST /sync/threat-events`: Uploads client-logged attack event telemetry (`1 to 100` events per batch) tied to a client UUID `session_id`.
 - `POST /sync/threat-index`: Uploads newly unlocked canonical threat categories (`1 to 8` unlocks).
+- `POST /sync/play-data`: Uploads tester decision log payload (`CMLOG1:`) from the Godot client for research analysis.
 
 ## 12. Authentication and Authorization Rules
 
@@ -639,8 +643,8 @@ Every error response returns a JSON object with a top-level `"detail"` key:
 - Leaderboard scores (`GET /leaderboard` with `map_name`, `page`, `page_size`; top 50 cap)
 - Classroom management (`POST /classroom/generate`, `GET /classroom/my-codes`, `POST /classroom/join`, `GET /classroom/{code_id}/students`, `PATCH /classroom/{code_id}`, `DELETE /classroom/{code_id}`)
 - Educator analytics (`GET /analytics/classroom`, `GET /analytics/player`, `GET /analytics/session`)
-- Admin operations (`GET /admin/users`, `GET /admin/approvals`, `POST /admin/approvals/{id}/approve`, `POST /admin/approvals/{id}/reject`, `GET /admin/classrooms`, `PATCH /admin/classrooms/{id}`, `DELETE /admin/classrooms/{id}`, `GET /admin/logs`, `GET /admin/stats`)
-- Godot sync endpoints (`GET /sync/player-state`, `POST /sync/threat-events`, `POST /sync/threat-index`)
+- Admin operations (`GET /admin/users`, `GET /admin/approvals`, `POST /admin/approvals/{id}/approve`, `POST /admin/approvals/{id}/reject`, `GET /admin/classrooms`, `PATCH /admin/classrooms/{id}`, `DELETE /admin/classrooms/{id}`, `GET /admin/logs`, `GET /admin/stats`, `GET /admin/play-data`, `GET /admin/play-data/{upload_id}`)
+- Godot sync endpoints (`GET /sync/player-state`, `POST /sync/threat-events`, `POST /sync/threat-index`, `POST /sync/play-data`)
 
 ### Explicitly Unbuilt on Backend (Do Not Implement or Assume)
 - User profile modification or deletion (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)

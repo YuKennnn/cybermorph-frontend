@@ -16,6 +16,7 @@ In CyberMorph, all Pinia stores must use the modern Setup Store syntax (`defineS
 ```javascript
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { fetchFeatureItems } from '../api/feature.js'
 
 export const useFeatureStore = defineStore('feature', () => {
   // 1. STATE (ref / reactive)
@@ -29,7 +30,7 @@ export const useFeatureStore = defineStore('feature', () => {
   const loadItems = async () => {
     isLoading.value = true
     try {
-      // Use imported API module, not direct apiClient
+      // Delegate network requests to imported API module
       const data = await fetchFeatureItems()
       items.value = data
     } finally {
@@ -43,33 +44,43 @@ export const useFeatureStore = defineStore('feature', () => {
 ```
 
 ### 2. Authentication & Authorization Invariants
-- **Never Infer Roles on the Client**: Do not assign user roles (e.g. `admin` or `educator`) based on client-side heuristics such as checking if an email contains `"admin"`. The backend is the sole authority for roles. If role information is absent or unverified, fallback strictly to `'player'`.
-- **LocalStorage State Sanitization**: When storing tokens or profiles in `localStorage`, ensure that tampering with local storage values cannot escalate backend privileges. Frontend route guards are for UX only, not security boundaries.
-- **Clean Session Termination (`logout`)**: The logout action must completely clear in-memory state (`ref(null)`) and remove all persisted keys (`cyber_token`, `cyber_user`, `cyber_role`).
+- **Never Default an Unresolved Role to Player**: The backend is the sole authority for roles (`player`, `educator`, `admin`). If role information is absent, pending, or unverified, the role must remain `null` or unauthenticated. Never infer roles from client heuristics (e.g. email strings) and never default an unknown identity to `'player'`.
+- **Authoritative Profile-Resolution Flow**: Follow the documented profile resolution pattern:
+  1. Authenticate with `POST /auth/login` to obtain the bearer `access_token`.
+  2. Query `GET /web-users/me` to check for educator or admin profile.
+  3. If `GET /web-users/me` returns 403 or 404, query `GET /players/me` for player profile.
+  4. If neither endpoint verifies the account, invalidate the session and redirect to `/login`.
+- **Session Isolation & State Cleanup**: On `logout()` (and prior to resolving a new `login()`), thoroughly clean up all authentication and domain state:
+  - Reset in-memory refs (`token.value = null`, `user.value = null`, `userRole.value = null`).
+  - Clear persisted storage keys (`localStorage.removeItem('cyber_token')`, `'cyber_user'`, `'cyber_role'`).
+  - Reset all active domain stores (e.g. `classroomStore.reset()`, `threatIndexStore.reset()`, `playerClassroomStore.reset()`) to prevent data leaking across sessions.
+- **Stale-Response Protection**: Maintain session counters or epoch guards (e.g. `sessionEpoch`, mutation counters). When an asynchronous profile fetch or mutation resolves, ensure the current session epoch and token still match the in-flight request before updating reactive state, preventing delayed or out-of-order network responses from corrupting newer sessions.
+- **Keep Page-Local State Local**: State that is only relevant to a single view (such as modal open/close flags, temporary form inputs, table filters, or search pagination) should remain inside component-level `ref`s. Use Pinia only when state must be shared across distinct views or maintained across routes.
 
 ### 3. Separation of Concerns
-- Stores orchestrate application state and domain logic.
-- Network requests inside actions should delegate to functions in `src/api/` rather than embedding raw Axios configurations.
-- Components consume stores via `storeToRefs()` when destructuring state/getters to maintain reactivity:
+- Stores orchestrate application state and domain actions.
+- Network communication inside actions must delegate to functions in `src/api/` rather than calling Axios or embedding request configurations directly.
+- Components consume stores via `storeToRefs()` when destructuring reactive state and getters:
   ```javascript
   import { storeToRefs } from 'pinia'
   import { useAuthStore } from '@/stores/authStore'
 
   const authStore = useAuthStore()
-  const { user, userRole } = storeToRefs(authStore)
+  const { user, userRole, isAuthenticated } = storeToRefs(authStore)
   ```
 
 ### 4. Error Handling & Privacy
 - Catch errors inside store actions to control side effects and avoid unhandled promise rejections.
-- Do not log Axios error objects containing credentials to `console.error`.
+- Do not log Axios error objects containing credentials, tokens, or sensitive user data to the console.
 
 ## Instructions
 
 1. **Naming & Placement**: All stores live in `src/stores/<name>Store.js`.
 2. **Setup Pattern**: Always use setup functions (`defineStore(name, () => { ... })`).
 3. **API Delegation**: Call typed API modules from `src/api/`.
-4. **Validation**: Check that stores pass oxlint and ESLint:
+4. **Validation with Non-Fixing Commands**:
    ```powershell
-   npm run lint
+   npx oxlint .
+   npx eslint .
    ```
-5. **Learning Rule**: Explain what state, getters, and actions were introduced and why they belong in the store rather than a local component ref.
+5. **Learning Rule**: Explain what state, getters, and actions were introduced and why they belong in a global store rather than a local component ref.

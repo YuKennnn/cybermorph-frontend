@@ -1,84 +1,71 @@
 # Design System Tokens & Style Hygiene
 
-## Context & Problem Statement
+## Context & Principles
 
-CyberMorph enforces a centralized design system located in `src/assets/main.css`. The system uses CSS custom properties (`:root`) for colors, backgrounds, borders, elevation, and fonts.
+CyberMorph enforces a centralized design system located in `src/assets/main.css`. The system uses CSS custom properties (`:root`) for colors, backgrounds, borders, elevation, and typography.
 
-While past refactorings eliminated many hardcoded hex codes, several views still contain residual hardcoded hex codes, ad-hoc linear gradients, and arbitrary colors:
-
-1. **`src/views/LeaderboardView.vue` (lines 416-429)**:
-   - Rank 1 Gold: `background: linear-gradient(135deg, #fef08a 0%, #fde047 100%); color: #854d0e;`
-   - Rank 2 Silver: `background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #334155;`
-   - Rank 3 Bronze: `background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); color: #9a3412;`
-2. **`src/views/PlayerDashboard.vue` (lines 133-164)**:
-   - `background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);`
-   - `background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);`
-3. **`src/views/LandingView.vue` (lines 1218-1430)**:
-   - Hex codes `#0f172a`, `#1e1b4b`, `#f1f5f9` hardcoded into CSS declarations.
-
-### Architectural Risks
-- **Design Drift**: When global theme colors or contrast ratios are adjusted, hardcoded elements break visual coherence.
-- **Dark Mode / Accessibility Inflexibility**: The inability to switch themes because colors are hardcoded rather than referencing tokens.
-- **Contract Violation**: Violates `.agents/skills/cybermorph-ui-system/SKILL.md` Instruction 1: *"Tokens before hex. Never hardcode hex codes or re-declare shared classes."*
+Following `cybermorph-ui-system`:
+- Reach for existing tokens and shared classes first.
+- Never hardcode hex codes or arbitrary colors in component styles.
+- Follow Direction 1: Modern Academic Cybersecurity (clean sans-serif typography, neutral slate surfaces, quiet borders, and functional SVG icons with visible labels).
 
 ---
 
 ## Token Mapping Reference
 
-Always map arbitrary colors to the design tokens in `src/assets/main.css`:
+Always map colors to the design tokens defined in `src/assets/main.css`:
 
-| Hardcoded Value | Intended Role | Standard Design System Token |
+| Role | Standard Design System Token | Example Token Value |
 | :--- | :--- | :--- |
-| `#7c3aed` | Brand primary | `var(--color-primary)` |
-| `#6d28d9` | Brand primary hover | `var(--color-primary-hover)` |
-| `#8b5cf6` | Brand secondary | `var(--color-secondary)` |
-| `#c084fc` | Brand accent | `var(--color-accent)` |
-| `#fafafa` | Page background | `var(--color-bg)` |
-| `#f5f3ff` | Subtle background | `var(--color-bg-subtle)` |
-| `#ede9fe` | Muted background | `var(--color-bg-muted)` |
-| `#ffffff` | Card surface | `var(--color-card)` |
-| `#faf8ff` | Card hover | `var(--color-card-hover)` |
-| `#e9d5ff` | Border standard | `var(--color-border)` |
-| `#f3e8ff` | Border subtle | `var(--color-border-subtle)` |
-| `#1e1b4b` | Text main | `var(--color-text-main)` |
-| `#6d6b7a` | Text muted | `var(--color-text-muted)` |
-| `#94a3b8` | Text dim | `var(--color-text-dim)` |
-| `#059669` | Success alert | `var(--color-success)` |
-| `#ecfdf5` | Success background | `var(--color-success-bg)` |
-| `#dc2626` | Danger alert | `var(--color-danger)` |
-| `#fef2f2` | Danger background | `var(--color-danger-bg)` |
-| `#d97706` | Warning alert | `var(--color-warning)` |
-| `#fffbeb` | Warning background | `var(--color-warning-bg)` |
+| Brand primary | `var(--color-primary)` | `#7c3aed` |
+| Brand primary hover | `var(--color-primary-hover)` | `#6d28d9` |
+| Brand secondary | `var(--color-secondary)` | `#8b5cf6` |
+| Page background | `var(--color-bg)` | `#f8fafc` |
+| Subtle background | `var(--color-bg-subtle)` | `#f1f5f9` |
+| Muted background | `var(--color-bg-muted)` | `#e2e8f0` |
+| Card surface | `var(--color-card)` | `#ffffff` |
+| Border standard | `var(--color-border)` | `#e2e8f0` |
+| Border subtle | `var(--color-border-subtle)` | `#f1f5f9` |
+| Border hover | `var(--color-border-hover)` | `#cbd5e1` |
+| Text main | `var(--color-text-main)` | `#0f172a` |
+| Text muted | `var(--color-text-muted)` | `#475569` |
+| Text dim | `var(--color-text-dim)` | `#94a3b8` |
+| Success alert | `var(--color-success)` | `#059669` |
+| Success background | `var(--color-success-bg)` | `#ecfdf5` |
+| Danger alert | `var(--color-danger)` | `#dc2626` |
+| Danger background | `var(--color-danger-bg)` | `#fef2f2` |
+| Warning alert | `var(--color-warning)` | `#d97706` |
+| Warning background | `var(--color-warning-bg)` | `#fffbeb` |
 
 ---
 
 ## Shared Utilities to Reuse
 
 Instead of inventing custom CSS blocks, reuse the shared utility classes declared in `src/assets/main.css`:
-- **Buttons**: `.btn-primary`, `.btn-outline`
+- **Buttons**: `.btn-primary`, `.btn-outline`, `.btn-subtle`
 - **Pills & Badges**: `.status-pill.active`, `.status-pill.inactive`, `.risk-badge.risk-low`, `.risk-badge.risk-moderate`, `.risk-badge.risk-high`, `.badge-dot`
 - **Feedback Alerts**: `.error-banner`, `.success-banner`
 - **Loading Indicators**: `.spinner`
 
 ---
 
-## Text-Only Minimalist Convention
+## UI Presentation Conventions
 
-As dictated by the project instructions:
-- **Zero Decorative Emojis**: Do not use `⚡`, `🎉`, `⚠️`, `👥`, `🛡️`, `📜` in UI markup.
-- **Zero Glyph Icons**: Do not use icon fonts or arbitrary unicode arrow glyphs (`←`, `✕`) in production markup.
-- **Monospace Tags**: Use uppercase monospace eyebrow tags:
-  ```html
-  <span class="eyebrow-tag">SECTOR 01</span>
-  <span class="eyebrow-tag">THREAT 04</span>
-  <span class="eyebrow-tag">[ DISMISS ]</span>
-  ```
+- **Sentence Case**: Use standard sentence case for navigation, headings, section titles, and action labels (*"Create classroom"*, *"Threat analytics"*, *"Enrolled students"*).
+- **No Decorative Monospace Tags**: Avoid decorative uppercase monospace tags. Monospace (`--font-mono`: JetBrains Mono) is reserved for actual codes, UUIDs, and data identifiers.
+- **Zero Decorative Emojis**: Do not use emojis in production UI markup. Use functional SVG icons via `src/components/common/AppIcon.vue` with accessible labels.
+- **Accessible Focus States**: Maintain visible `:focus-visible` outlines on all interactive elements.
 
 ---
 
 ## Verification Steps
-1. Run ripgrep across `src/views/` and `src/components/`:
+1. Verify with non-fixing linting:
    ```powershell
-   git grep -E "#[0-9a-fA-F]{3,8}\b" -- src/
+   npx oxlint .
+   npx eslint .
    ```
-2. Verify that any matched hex codes are within legitimate inline SVG graphics (e.g. game map illustrations) and not in component `<style>` blocks.
+2. Search for raw hex codes in component style blocks:
+   ```powershell
+   git grep -E "#[0-9a-fA-F]{3,8}\b" -- "src/views/" "src/components/"
+   ```
+   Confirm that any matched hex codes are within legitimate inline graphics (such as SVG illustrations) and not in component `<style>` declarations.

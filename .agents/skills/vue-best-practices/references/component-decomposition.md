@@ -8,36 +8,39 @@ The CyberMorph frontend follows a domain-driven component structure under `src/c
 src/
 ├── components/
 │   ├── analytics/
-│   │   ├── ThreatPerformanceGauge.vue      # Reusable SVG telemetry dial gauge
-│   │   ├── StudentProficiencyModal.vue     # Level 2 student telemetry breakdown modal
-│   │   └── SessionTelemetryModal.vue       # Level 3 session attack event telemetry modal
+│   │   ├── ThreatPerformanceGauge.vue      # Reusable SVG gauge for threat success rates
+│   │   ├── StudentProficiencyModal.vue     # Student progress and attack breakdown modal
+│   │   └── SessionTelemetryModal.vue       # Session attack events and decisions modal
 │   ├── classroom/
-│   │   ├── ClassroomCard.vue               # Reusable classroom deployment card with code copy
-│   │   ├── ClassroomCreateModal.vue        # Generation flow modal for new classroom access codes
-│   │   ├── ClassroomEditModal.vue          # Modal to update classroom metadata and active state
+│   │   ├── ClassroomCard.vue               # Reusable classroom card with code copy
+│   │   ├── ClassroomCreateModal.vue        # Creation modal for new classroom join codes
+│   │   ├── ClassroomEditModal.vue          # Modal to update classroom name, description, and status
 │   │   └── ClassroomDeleteModal.vue        # Soft-delete confirmation modal
 │   ├── common/
 │   │   └── AppIcon.vue                     # Zero-dependency accessible functional SVG icons
 │   ├── landing/
-│   │   ├── HeroSimulationCanvas.vue        # 2D procedural HTML5 canvas mini-game
-│   │   ├── ThreatCurriculumCard.vue        # Modular threat category showcase card
-│   │   └── MapShowcaseCard.vue             # Retro 4:3 simulation sector showcase card
-│   └── SidebarNav.vue                      # Primary authenticated navigation sidebar with mobile drawer
+│   │   ├── HeroSimulationCanvas.vue        # 2D procedural HTML5 canvas preview
+│   │   ├── ThreatCurriculumCard.vue        # Threat category showcase card
+│   │   └── MapShowcaseCard.vue             # Game map showcase card
+│   └── SidebarNav.vue                      # Primary navigation sidebar with responsive mobile drawer
 ```
-
-### Component Principles
-- **Maintainability First**: Keep Vue single-file components with `<script setup>`, `<template>`, and `<style scoped>`. Do not split single components into separate files solely to meet arbitrary line counts.
-- **Component Reuse**: Reuse existing components (such as `ClassroomCard.vue` on both the dashboard and management views) with conditional props to avoid duplicating presentation logic.
-- **Props and Emits**: Explicitly define interface contracts with `defineProps` and `defineEmits`.
-- **API & State Boundaries**: Keep network communication in `src/api/` and global authentication in Pinia stores.
-
 
 ---
 
-## Implementation Example: Extracting `BaseModal.vue`
+## Component Design Principles
 
-### `src/components/common/BaseModal.vue`
+1. **Maintainability First**: Use Single-File Components (`.vue`) with `<script setup>`, `<template>`, and `<style scoped>`. Do not fragment single components into separate files solely to meet arbitrary line count thresholds.
+2. **Component Reuse**: Reuse existing components (such as `ClassroomCard.vue` on both the dashboard and management views) with conditional props to avoid duplicating presentation logic.
+3. **Explicit Props and Emits**: Explicitly define interface contracts with `defineProps` and `defineEmits`.
+4. **API & State Boundaries**: Keep network communication in `src/api/` and global authentication in Pinia stores. Keep transient UI state (such as modal open/close states) local to the view or component.
+5. **Approved Terminology**: Use academic and beginner-friendly terms (e.g. *classrooms*, *maps*, *student progress*, *types of threats*) instead of sci-fi or military jargon (*sectors*, *telemetry*, *attack vectors*).
+
+---
+
+## Implementation Example: Reusable Modal Pattern
+
 ```vue
+<!-- src/components/common/BaseModal.vue -->
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 
@@ -99,6 +102,9 @@ onUnmounted(() => {
 ---
 
 ## Verification Steps
-1. Break down each monolith incrementally, verifying that props and emits (`defineProps`, `defineEmits`) are strictly typed.
-2. Confirm that parent views handle state changes via emitted events (`@close`, `@success`).
-3. Run `npm run lint` and `npm run build` after extracting each component.
+1. Run non-fixing linting:
+   ```powershell
+   npx oxlint .
+   npx eslint .
+   ```
+2. Verify that extracted components communicate solely via props and emits without direct cross-component mutations.
