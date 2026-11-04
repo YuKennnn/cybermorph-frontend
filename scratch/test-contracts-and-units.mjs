@@ -1,5 +1,12 @@
 /* global process */
 import assert from 'node:assert'
+import { register } from 'node:module'
+
+try {
+  register('./png-loader.mjs', import.meta.url)
+} catch {
+  // Ignore if register already called or not supported
+}
 
 if (typeof globalThis.localStorage === 'undefined') {
   const store = new Map()
@@ -168,8 +175,309 @@ async function runContractTests() {
   assert.strictEqual(joinedStudent.username, 'AgentZero')
   console.log('✓ POST /classroom/join returns 201 with documented fields and creates correctly shaped student record in items')
 
+  console.log('\n--- 2. Testing Session Reliability & Stale 401 Rejection ---')
+
+  const { default: mock } = await import('../src/api/mock.js')
+  const { setUnauthorizedSessionHandler } = clientModule
+
+  // Temporarily pop onAny fallback handler so our test endpoints match
+  const onAnyHandler = mock.handlers.pop()
+
+  mock.onGet('/test/delayed-protected-session').reply(async () => {
+    await new Promise((r) => setTimeout(r, 60))
+    return [401, { detail: 'Token expired' }]
+  })
+  mock.onGet('/test/immediate-protected-session').reply(401, { detail: 'Session revoked' })
+  mock.onGet('/test/public-endpoint-401').reply(401, { detail: 'Unauthenticated rate limit' })
+  mock.onPost('/auth/login-failure-test').reply(401, { detail: 'Invalid credentials' })
+
+  // Re-append fallback 404 handler
+  mock.handlers.push(onAnyHandler)
+
+  let unauthorizedHandlerInvocations = 0
+  setUnauthorizedSessionHandler(async () => {
+    unauthorizedHandlerInvocations++
+  })
+
+  // Test Case 2.1: Delayed 401 from previous session (Account A) must NOT clear new session (Account B)
+  console.log('\nTesting Case 2.1: Delayed 401 from previous session does NOT clear new session...')
+  globalThis.localStorage.setItem('cyber_token', 'token-account-a')
+  unauthorizedHandlerInvocations = 0
+
+  const pendingReqA = client.get('/test/delayed-protected-session')
+
+  // Allow request interceptor to execute and tag _sessionToken with Account A's token
+  await new Promise((r) => setTimeout(r, 10))
+
+  // User switches account immediately while request A is in-flight over the wire
+  globalThis.localStorage.setItem('cyber_token', 'token-account-b')
+  globalThis.localStorage.setItem('cyber_role', 'admin')
+
+  try {
+    await pendingReqA
+    assert.fail('Request A should have rejected with 401')
+  } catch (err) {
+    assert.strictEqual(err.response?.status, 401, 'Request A must fail with 401')
+  }
+
+  assert.strictEqual(
+    unauthorizedHandlerInvocations,
+    0,
+    'Delayed 401 from account A must NOT invoke unauthorized session handler'
+  )
+  assert.strictEqual(
+    globalThis.localStorage.getItem('cyber_token'),
+    'token-account-b',
+    'Account B token must remain untouched in localStorage'
+  )
+  console.log('✓ Account A delayed 401 did not trigger logout or clear Account B session')
+
+  // Test Case 2.2: Current-session protected-call 401 DOES invoke handler and sign user out
+  console.log('\nTesting Case 2.2: Current-session protected-call 401 signs user out...')
+  globalThis.localStorage.setItem('cyber_token', 'token-account-b')
+  unauthorizedHandlerInvocations = 0
+
+  try {
+    await client.get('/test/immediate-protected-session')
+    assert.fail('Request should have rejected with 401')
+  } catch (err) {
+    assert.strictEqual(err.response?.status, 401)
+  }
+
+  assert.strictEqual(
+    unauthorizedHandlerInvocations,
+    1,
+    'Current session 401 MUST invoke unauthorized session handler'
+  )
+  console.log('✓ Current session 401 invoked unauthorized session handler as expected')
+
+  // Test Case 2.3: Unauthenticated / public request 401 does NOT trigger logout
+  console.log('\nTesting Case 2.3: Public request 401 does not trigger logout...')
+  globalThis.localStorage.setItem('cyber_token', 'token-account-b')
+  unauthorizedHandlerInvocations = 0
+
+  try {
+    // Send request with skipAuth
+    await client.get('/test/public-endpoint-401', { skipAuth: true })
+    assert.fail('Request should have rejected with 401')
+  } catch (err) {
+    assert.strictEqual(err.response?.status, 401)
+  }
+
+  assert.strictEqual(
+    unauthorizedHandlerInvocations,
+    0,
+    'Public request 401 must NOT invoke unauthorized session handler'
+  )
+  assert.strictEqual(
+    globalThis.localStorage.getItem('cyber_token'),
+    'token-account-b',
+    'Token must remain active'
+  )
+  console.log('✓ Public request 401 did not trigger logout')
+
+  // Test Case 2.4: /auth/login credential failure 401 does NOT trigger logout
+  console.log('\nTesting Case 2.4: /auth/login failure 401 does not trigger logout...')
+  unauthorizedHandlerInvocations = 0
+
+  try {
+    await client.post('/auth/login-failure-test', { username: 'bad', password: 'bad' })
+    assert.fail('Login request should have rejected with 401')
+  } catch (err) {
+    assert.strictEqual(err.response?.status, 401)
+  }
+
+  assert.strictEqual(
+    unauthorizedHandlerInvocations,
+    0,
+    'Login failure 401 must NOT invoke unauthorized session handler'
+  )
+  console.log('✓ /auth/login 401 did not trigger unauthorized handler')
+
+  // Test Case 2.5: Pinia authStore integration
+  console.log('\nTesting Case 2.5: Pinia authStore session integration...')
+  const { createPinia, setActivePinia } = await import('pinia')
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const { useAuthStore } = await import('../src/stores/authStore.js')
+  const authStore = useAuthStore()
+
+  authStore.token = 'active-pinia-jwt'
+  authStore.user = { user_id: 'u-admin-test', role: 'admin', email: 'adm@local' }
+  globalThis.localStorage.setItem('cyber_token', 'active-pinia-jwt')
+
+  assert.strictEqual(authStore.isAuthenticated, true)
+
+  // Current session 401
+  try {
+    await client.get('/test/immediate-protected-session')
+  } catch {
+    // expected
+  }
+
+  assert.strictEqual(authStore.isAuthenticated, false, 'authStore must be signed out')
+  assert.strictEqual(authStore.token, null, 'authStore token must be null')
+  assert.strictEqual(authStore.user, null, 'authStore user must be null')
+  assert.strictEqual(globalThis.localStorage.getItem('cyber_token'), null, 'localStorage cyber_token must be cleared')
+  console.log('✓ authStore logout cleanly executed by unauthorizedSessionHandler')
+
+  // Test Case 2.6: Lifecycle & race-condition logic verification
+  console.log('\nTesting Case 2.6: Search invalidation and epoch guard race-condition logic...')
+
+  // Simulate AdminUsersView request tracking
+  let sessionEpoch = 1
+  let reqCounter = 0
+  let renderedUsers = []
+  let activeLoading = false
+
+  const simulateLoadUsers = async (searchParam, delayMs) => {
+    const currentReq = ++reqCounter
+    const currentEpoch = sessionEpoch
+    activeLoading = true
+
+    await new Promise((r) => setTimeout(r, delayMs))
+
+    // Discard stale response
+    if (currentEpoch !== sessionEpoch || currentReq !== reqCounter) {
+      return
+    }
+
+    renderedUsers = [`Results for ${searchParam} (req ${currentReq})`]
+    activeLoading = false
+  }
+
+  // User types "query1" with slow response (80ms)
+  const slowPromise = simulateLoadUsers('query1', 80)
+
+  // User immediately clears or types "query2" (invalidation: reqCounter++)
+  reqCounter++ // immediate invalidation on input change
+  const fastPromise = simulateLoadUsers('query2', 20)
+
+  await Promise.all([slowPromise, fastPromise])
+
+  assert.strictEqual(activeLoading, false)
+  assert.deepStrictEqual(renderedUsers, ['Results for query2 (req 3)'])
+  console.log('✓ Immediate request invalidation prevents slow query from overwriting newer query')
+
+  // Simulate account switch during in-flight request
+  const slowAccountAPromise = simulateLoadUsers('accountAData', 80)
+  // Account switch occurs: epoch advances and state is reset
+  sessionEpoch++
+  reqCounter++
+  renderedUsers = []
+
+  await slowAccountAPromise
+  assert.deepStrictEqual(renderedUsers, [], 'Stale response from previous account must be discarded')
+  console.log('✓ Epoch guard prevents previous account response from populating state')
+
+  // Test Case 2.7: Audit logs row expansion & description mechanics
+  console.log('\nTesting Case 2.7: Audit logs row expansion & description mechanics...')
+
+  const hasDescription = (log) => {
+    return typeof log?.description === 'string' && log.description.trim().length > 0
+  }
+
+  // hasDescription validation
+  assert.strictEqual(hasDescription({ description: 'Valid details' }), true)
+  assert.strictEqual(hasDescription({ description: '   Multi-line \n details   ' }), true)
+  assert.strictEqual(hasDescription({ description: null }), false)
+  assert.strictEqual(hasDescription({ description: undefined }), false)
+  assert.strictEqual(hasDescription({ description: '' }), false)
+  assert.strictEqual(hasDescription({ description: '    ' }), false)
+  assert.strictEqual(hasDescription({}), false)
+  assert.strictEqual(hasDescription(null), false)
+  console.log('✓ hasDescription correctly detects content and excludes null/empty/whitespace')
+
+  // Expansion set & toggle mechanics
+  let expandedDescriptions = new Set()
+  const toggleDescriptionExpand = (logId) => {
+    if (!logId) return
+    const updated = new Set(expandedDescriptions)
+    if (updated.has(logId)) {
+      updated.delete(logId)
+    } else {
+      updated.add(logId)
+    }
+    expandedDescriptions = updated
+  }
+  const isDescriptionExpanded = (logId) => Boolean(logId && expandedDescriptions.has(logId))
+  const clearExpansion = () => {
+    if (expandedDescriptions.size > 0) expandedDescriptions = new Set()
+  }
+
+  // Initial state: none expanded
+  assert.strictEqual(isDescriptionExpanded('log-1'), false)
+  assert.strictEqual(isDescriptionExpanded('log-2'), false)
+
+  // Expand log-1
+  toggleDescriptionExpand('log-1')
+  assert.strictEqual(isDescriptionExpanded('log-1'), true)
+  assert.strictEqual(isDescriptionExpanded('log-2'), false)
+
+  // Expand log-2 independently
+  toggleDescriptionExpand('log-2')
+  assert.strictEqual(isDescriptionExpanded('log-1'), true)
+  assert.strictEqual(isDescriptionExpanded('log-2'), true)
+
+  // Collapse log-1
+  toggleDescriptionExpand('log-1')
+  assert.strictEqual(isDescriptionExpanded('log-1'), false)
+  assert.strictEqual(isDescriptionExpanded('log-2'), true)
+
+  // Clear expansion on page / filter / account change
+  clearExpansion()
+  assert.strictEqual(isDescriptionExpanded('log-1'), false)
+  assert.strictEqual(isDescriptionExpanded('log-2'), false)
+  assert.strictEqual(expandedDescriptions.size, 0)
+  console.log('✓ Independent expansion by log_id and reset lifecycle verified')
+
+  console.log('\n--- 11. Testing Threat Lessons Content & Slugs ---')
+  const { THREAT_LESSONS, getThreatLessonBySlug, getAllThreatLessons } = await import('../src/data/threatLessons.js')
+  const { CANONICAL_THREAT_CATEGORIES, getCanonicalBySlug } = await import('../src/stores/threatIndexStore.js')
+
+  const expectedSlugs = [
+    'phishing',
+    'smishing',
+    'vishing',
+    'social-engineering',
+    'credential-theft',
+    'public-wi-fi-attack',
+    'malware-infection',
+    'ransomware',
+  ]
+
+  assert.strictEqual(CANONICAL_THREAT_CATEGORIES.length, 8)
+  assert.strictEqual(getAllThreatLessons().length, 8)
+
+  expectedSlugs.forEach((slug, idx) => {
+    const canonical = CANONICAL_THREAT_CATEGORIES[idx]
+    assert.strictEqual(canonical.slug, slug, `Canonical threat at ${idx} must have slug ${slug}`)
+    assert.strictEqual(getCanonicalBySlug(slug)?.threat_name, canonical.threat_name)
+
+    const lesson = getThreatLessonBySlug(slug)
+    assert.ok(lesson, `Lesson for slug ${slug} must exist`)
+    assert.strictEqual(lesson.slug, slug)
+    assert.strictEqual(lesson.threatName, canonical.threat_name)
+    assert.strictEqual(lesson.number, canonical.number)
+    assert.ok(lesson.summary.length > 20, 'summary must be detailed')
+    assert.ok(lesson.gameScenario.setting.length > 0, 'setting must be present')
+    assert.ok(lesson.gameScenario.description.length > 20, 'scenario description must be detailed')
+    assert.ok(lesson.gameScenario.warningSigns.length >= 3, 'must have at least 3 warning signs')
+    assert.ok(lesson.recommendedAction.whatToDo.length > 20, 'whatToDo must be detailed')
+    assert.ok(lesson.recommendedAction.whyItMatters.length > 20, 'whyItMatters must be detailed')
+    assert.ok(lesson.preventionTips.length >= 3, 'must have at least 3 prevention tips')
+    assert.ok(lesson.keyTakeaway.length > 15, 'keyTakeaway must be present')
+    assert.ok(lesson.screenshot.image, 'screenshot image must be present')
+    assert.ok(lesson.screenshot.caption.length > 20, 'screenshot caption must be present')
+    assert.ok(lesson.screenshot.alt.length > 10, 'screenshot alt must be present')
+  })
+
+  assert.strictEqual(getThreatLessonBySlug('non-existent'), null)
+  assert.strictEqual(getCanonicalBySlug('non-existent'), null)
+  console.log('✓ All 8 threat lessons validated with correct structure, slugs, and educational content')
+
   console.log('\n=========================================')
-  console.log('ALL MOCK CONTRACT ASSERTIONS PASSED (100%)')
+  console.log('ALL MOCK CONTRACT & RELIABILITY ASSERTIONS PASSED (100%)')
   console.log('=========================================\n')
 }
 

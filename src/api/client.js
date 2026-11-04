@@ -4,11 +4,49 @@ const apiClient = axios.create({
     baseURL: import.meta.env?.VITE_API_BASE_URL || 'https://cybermorph-backend.onrender.com/v1',
 })
 
+export const extractBearerToken = (authHeader) => {
+    if (typeof authHeader !== 'string') return null
+    const match = authHeader.match(/^Bearer\s+(.+)$/i)
+    return match ? match[1].trim() : null
+}
+
+let unauthorizedSessionHandler = null
+
+export const setUnauthorizedSessionHandler = (handler) => {
+    unauthorizedSessionHandler = handler
+}
+
+export const getUnauthorizedSessionHandler = () => unauthorizedSessionHandler
+
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('cyber_token')
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`
+        if (!config.headers) {
+            config.headers = {}
+        }
+
+        if (config.skipAuth || config.headers.Authorization === null || config.headers.Authorization === false) {
+            delete config.headers.Authorization
+            delete config.headers.authorization
+            config._sessionToken = null
+            return config
+        }
+
+        const existingAuth =
+            config.headers.Authorization ||
+            config.headers.authorization ||
+            (typeof config.headers.get === 'function' ? config.headers.get('Authorization') : null)
+
+        if (!existingAuth) {
+            const token = localStorage.getItem('cyber_token')
+            if (token) {
+                config.headers.Authorization = `Bearer ${token}`
+                config._sessionToken = token
+            }
+        } else {
+            const token = extractBearerToken(existingAuth)
+            if (token) {
+                config._sessionToken = token
+            }
         }
         return config
     },
@@ -18,14 +56,43 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        // If receiving 401 on a protected call (not during the initial login attempt)
-        const isLoginEndpoint = error.config?.url?.includes('/auth/login')
-        if (error.response?.status === 401 && !isLoginEndpoint) {
-            localStorage.removeItem('cyber_token')
-            localStorage.removeItem('cyber_user')
-            localStorage.removeItem('cyber_role')
-            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-                window.location.assign('/login')
+        const status = error.response?.status
+        const config = error.config || {}
+        const requestUrl = config.url || ''
+        const isLoginEndpoint = requestUrl.includes('/auth/login')
+
+        if (status === 401 && !isLoginEndpoint) {
+            const sentToken =
+                config._sessionToken ||
+                extractBearerToken(
+                    config.headers?.Authorization ||
+                    config.headers?.authorization ||
+                    (typeof config.headers?.get === 'function' ? config.headers.get('Authorization') : null),
+                )
+
+            const currentToken = localStorage.getItem('cyber_token')
+
+            // A 401 only terminates authentication if it belongs to the currently active session.
+            // If the user has logged out (currentToken is null) or logged into a new account
+            // (sentToken !== currentToken), the response is obsolete and must not clear the new session.
+            if (sentToken && currentToken && sentToken === currentToken) {
+                if (typeof unauthorizedSessionHandler === 'function') {
+                    try {
+                        unauthorizedSessionHandler()
+                    } catch {
+                        localStorage.removeItem('cyber_token')
+                        localStorage.removeItem('cyber_user')
+                        localStorage.removeItem('cyber_role')
+                    }
+                } else {
+                    localStorage.removeItem('cyber_token')
+                    localStorage.removeItem('cyber_user')
+                    localStorage.removeItem('cyber_role')
+                }
+
+                if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                    window.location.assign('/login')
+                }
             }
         }
         return Promise.reject(error)

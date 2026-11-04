@@ -15,6 +15,10 @@ const isPlayerClassroomRoute = computed(
   () => route.path === '/classroom' || route.path === '/classroom/join',
 )
 
+const isThreatIndexRoute = computed(
+  () => route.path === '/threat-index' || route.path.startsWith('/threat-index/'),
+)
+
 const isEducatorClassroomRoute = computed(() => {
   if (!authStore.isEducator) return false
   const name = route.name
@@ -290,7 +294,8 @@ const formatRole = (role) => {
         <router-link
           v-if="authStore.isPlayer"
           to="/threat-index"
-          class="nav-item"
+          :class="['nav-item', { 'router-link-active': isThreatIndexRoute }]"
+          :aria-current="isThreatIndexRoute ? 'page' : undefined"
           @click="closeMobileMenu"
         >
           <AppIcon name="shield" :size="18" class="nav-icon" />

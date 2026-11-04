@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
@@ -25,57 +25,176 @@ const recentLogs = ref([])
 const activityLoading = ref(true)
 const activityError = ref(false)
 
+let currentSessionEpoch = 0
+let latestStatsRequestId = 0
+let latestApprovalsRequestId = 0
+let latestActivityRequestId = 0
+
+const resetDashboardState = () => {
+  totalUsers.value = null
+  sessionsReceived.value = null
+  threatsDetected.value = null
+  statsLoading.value = false
+  statsError.value = false
+
+  pendingApprovals.value = null
+  approvalsLoading.value = false
+  approvalsError.value = false
+
+  recentLogs.value = []
+  activityLoading.value = false
+  activityError.value = false
+}
+
 const loadStats = async () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
+  const reqId = ++latestStatsRequestId
+  const reqSession = currentSessionEpoch
   statsLoading.value = true
   statsError.value = false
   try {
     const data = await fetchAdminStats()
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestStatsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     totalUsers.value = typeof data?.total_users === 'number' ? data.total_users : null
     sessionsReceived.value = typeof data?.sessions_last_24h === 'number' ? data.sessions_last_24h : null
     threatsDetected.value = typeof data?.threats_detected === 'number' ? data.threats_detected : null
   } catch {
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestStatsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     statsError.value = true
     totalUsers.value = null
     sessionsReceived.value = null
     threatsDetected.value = null
   } finally {
-    statsLoading.value = false
+    if (reqSession === currentSessionEpoch && reqId === latestStatsRequestId) {
+      statsLoading.value = false
+    }
   }
 }
 
 const loadApprovals = async () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
+  const reqId = ++latestApprovalsRequestId
+  const reqSession = currentSessionEpoch
   approvalsLoading.value = true
   approvalsError.value = false
   try {
     const data = await fetchAdminApprovals({ status: 'pending', page_size: 1 })
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestApprovalsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     pendingApprovals.value = typeof data?.total_count === 'number' ? data.total_count : null
   } catch {
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestApprovalsRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     approvalsError.value = true
     pendingApprovals.value = null
   } finally {
-    approvalsLoading.value = false
+    if (reqSession === currentSessionEpoch && reqId === latestApprovalsRequestId) {
+      approvalsLoading.value = false
+    }
   }
 }
 
 const loadRecentActivity = async () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
+  const reqId = ++latestActivityRequestId
+  const reqSession = currentSessionEpoch
   activityLoading.value = true
   activityError.value = false
   try {
     const data = await fetchAdminLogs({ page: 1, page_size: 5 })
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestActivityRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     recentLogs.value = Array.isArray(data?.items) ? data.items : []
   } catch {
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestActivityRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     activityError.value = true
     recentLogs.value = []
   } finally {
-    activityLoading.value = false
+    if (reqSession === currentSessionEpoch && reqId === latestActivityRequestId) {
+      activityLoading.value = false
+    }
   }
 }
 
 onMounted(() => {
-  loadStats()
-  loadApprovals()
-  loadRecentActivity()
+  if (authStore.isAuthenticated && authStore.isAdmin) {
+    loadStats()
+    loadApprovals()
+    loadRecentActivity()
+  } else {
+    resetDashboardState()
+  }
 })
+
+onUnmounted(() => {
+  currentSessionEpoch++
+  latestStatsRequestId++
+  latestApprovalsRequestId++
+  latestActivityRequestId++
+})
+
+watch(
+  [() => authStore.isAuthenticated, () => authStore.token, () => authStore.user?.user_id],
+  ([isAuth, token, userId], [, prevToken, prevUserId]) => {
+    if (!isAuth || !authStore.isAdmin) {
+      currentSessionEpoch++
+      latestStatsRequestId++
+      latestApprovalsRequestId++
+      latestActivityRequestId++
+      resetDashboardState()
+      return
+    }
+    if (token !== prevToken || userId !== prevUserId) {
+      currentSessionEpoch++
+      latestStatsRequestId++
+      latestApprovalsRequestId++
+      latestActivityRequestId++
+      resetDashboardState()
+      loadStats()
+      loadApprovals()
+      loadRecentActivity()
+    }
+  },
+)
 
 const displayStat = (val, loading, error) => {
   if (loading) return '…'
@@ -213,7 +332,7 @@ const displayStat = (val, loading, error) => {
               <tr>
                 <th scope="col" class="th-actor">Actor</th>
                 <th scope="col" class="th-action">Action</th>
-                <th scope="col" class="th-time">Timestamp</th>
+                <th scope="col" class="th-time">Timestamp (PHT)</th>
               </tr>
             </thead>
             <tbody>
@@ -243,18 +362,9 @@ const displayStat = (val, loading, error) => {
                       <span class="time-formatted text-dim">—</span>
                       <span class="time-status text-dim">Date unavailable</span>
                     </template>
-                    <template v-else-if="formatAuditLogTimestamp(log.logged_at).isTimezoneFree">
-                      <span class="time-formatted" :title="log.logged_at">
-                        {{ formatAuditLogTimestamp(log.logged_at).formatted }}
-                      </span>
-                      <span class="time-status text-muted">Timezone unspecified</span>
-                    </template>
                     <template v-else>
                       <span class="time-formatted" :title="log.logged_at">
                         {{ formatAuditLogTimestamp(log.logged_at).formatted }}
-                      </span>
-                      <span class="time-status text-muted">
-                        Local ({{ formatAuditLogTimestamp(log.logged_at).statusText }})
                       </span>
                     </template>
                   </div>

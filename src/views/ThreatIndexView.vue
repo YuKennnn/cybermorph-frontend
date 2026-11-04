@@ -221,6 +221,16 @@ watch(
             <span v-else class="unlock-meta locked-meta">
               Not unlocked
             </span>
+
+            <router-link
+              v-if="entry.is_unlocked"
+              :to="`/threat-index/${entry.slug}`"
+              class="btn-lesson"
+              :aria-label="`View lesson for ${entry.threat_name}`"
+            >
+              <span>View lesson</span>
+              <AppIcon name="arrow-right" :size="13" />
+            </router-link>
           </div>
         </li>
       </ul>
@@ -529,6 +539,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   font-size: 0.8rem;
 }
 
@@ -542,6 +554,30 @@ watch(
 
 .locked-meta {
   color: var(--color-text-muted);
+}
+
+.btn-lesson {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+}
+
+.btn-lesson:hover {
+  background-color: #6d28d9;
+}
+
+.btn-lesson:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .state-card {

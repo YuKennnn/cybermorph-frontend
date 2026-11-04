@@ -9,11 +9,23 @@ import { fetchSessionHistory } from '../api/session'
 import {
   CANONICAL_SESSION_MAPS,
   resolveCurrentMapName,
+  isMapUnlocked,
   normalizeSessionHistoryResponse,
   filterSessionsByMap,
   buildChartSeries,
 } from '../utils/playerSessions'
 import AppIcon from '../components/common/AppIcon.vue'
+import homeMapImg from '../assets/maps/home.png'
+import officeMapImg from '../assets/maps/office.png'
+import cafeMapImg from '../assets/maps/internet-cafe.png'
+import parkMapImg from '../assets/maps/public-park.png'
+
+const MAP_PROGRESSION_METADATA = Object.freeze([
+  { id: 'home', name: 'Home', index: 0, image: homeMapImg },
+  { id: 'office', name: 'Office', index: 1, image: officeMapImg },
+  { id: 'internet-cafe', name: 'Internet Cafe', index: 2, image: cafeMapImg },
+  { id: 'public-park', name: 'Public Park', index: 3, image: parkMapImg },
+])
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -24,6 +36,7 @@ const stats = ref({
   games_played: null, // null = unknown/unavailable; number = confirmed count
   best_score: null,
   current_map: null,
+  map_progress: null, // null = unknown/unavailable; 0..3 = confirmed progression
 })
 
 const sessionItems = ref([])
@@ -42,6 +55,23 @@ const isRetryingProfile = ref(false)
 const generalError = ref('')
 
 const threatFailed = computed(() => threatIndexStore.isUnavailable)
+
+const mapProgressionList = computed(() => {
+  const progress = stats.value.map_progress
+  if (
+    progress === null ||
+    typeof progress !== 'number' ||
+    !Number.isInteger(progress) ||
+    progress < 0 ||
+    progress > 3
+  ) {
+    return []
+  }
+  return MAP_PROGRESSION_METADATA.map((map) => ({
+    ...map,
+    isUnlocked: isMapUnlocked(map.index, progress),
+  }))
+})
 
 // Chart is restricted to the latest 10 sessions before applying the map filter
 const chartSourceSessions = computed(() => sessionItems.value.slice(0, 10))
@@ -73,6 +103,7 @@ const resetLocalStats = () => {
     games_played: null,
     best_score: null,
     current_map: null,
+    map_progress: null,
   }
   sessionItems.value = []
   hasNoSessions.value = false
@@ -143,14 +174,24 @@ const loadDashboardData = async ({ forceThreatRefresh = false } = {}) => {
       if (p.profile_id !== undefined && p.profile_id !== null) {
         resolvedProfileId = String(p.profile_id)
       }
-      const mapName = resolveCurrentMapName(p.map_progress)
-      if (mapName) {
-        stats.value.current_map = mapName
+      const rawProgress = p.map_progress
+      const isValidProgress =
+        typeof rawProgress === 'number' &&
+        Number.isInteger(rawProgress) &&
+        rawProgress >= 0 &&
+        rawProgress <= 3
+
+      if (isValidProgress) {
+        stats.value.map_progress = rawProgress
+        stats.value.current_map = resolveCurrentMapName(rawProgress)
+        profileFailed.value = false
       } else {
+        stats.value.map_progress = null
         stats.value.current_map = null
         profileFailed.value = true
       }
     } else {
+      stats.value.map_progress = null
       stats.value.current_map = null
       profileFailed.value = true
     }
@@ -241,17 +282,26 @@ const retryProfile = async () => {
     const p = await fetchPlayerProfile()
     if (reqId !== profileRequestId || getActiveAccountScope() !== scopeAtStart) return
 
-    const mapName = p ? resolveCurrentMapName(p.map_progress) : null
-    if (mapName) {
-      stats.value.current_map = mapName
+    const rawProgress = p ? p.map_progress : null
+    const isValidProgress =
+      typeof rawProgress === 'number' &&
+      Number.isInteger(rawProgress) &&
+      rawProgress >= 0 &&
+      rawProgress <= 3
+
+    if (isValidProgress) {
+      stats.value.map_progress = rawProgress
+      stats.value.current_map = resolveCurrentMapName(rawProgress)
       profileFailed.value = false
       generalError.value = ''
     } else {
+      stats.value.map_progress = null
       stats.value.current_map = null
       profileFailed.value = true
     }
   } catch {
     if (reqId !== profileRequestId || getActiveAccountScope() !== scopeAtStart) return
+    stats.value.map_progress = null
     stats.value.current_map = null
     profileFailed.value = true
   } finally {
@@ -304,47 +354,92 @@ onUnmounted(() => {
 <template>
   <div class="role-dashboard">
     <div class="welcome-banner">
-      <div class="banner-text">
-        <h2 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}</h2>
-        <p class="subtitle">Your gameplay progress and threat training status</p>
-        <div class="current-map-detail">
-          <span class="map-detail-label">Highest unlocked map:</span>
-          <template v-if="profileFailed">
-            <span class="map-detail-unavailable">{{
-              isRetryingProfile ? 'Retrying...' : 'Unavailable'
-            }}</span>
-            <button
-              type="button"
-              class="btn-inline-retry"
-              :disabled="isRetryingProfile"
-              @click="retryProfile"
-            >
-              {{ isRetryingProfile ? 'Retrying...' : 'Retry' }}
-            </button>
-          </template>
-          <template v-else>
-            <strong class="map-detail-value">{{ stats.current_map || 'Unavailable' }}</strong>
-          </template>
+      <div class="banner-header">
+        <div class="banner-text">
+          <h2 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}</h2>
+          <p class="subtitle">Your gameplay progress and threat training status</p>
+        </div>
+        <div class="banner-classroom-actions">
+          <button type="button" class="btn-outline" @click="handleClassroomAction">
+            {{ playerClassroomStore.dashboardActionLabel }}
+          </button>
+          <button
+            v-if="playerClassroomStore.status === 'error'"
+            type="button"
+            class="btn-inline-retry"
+            :disabled="playerClassroomStore.isLoading || playerClassroomStore.isRefreshing"
+            @click="handleRetryClassroomMembership"
+          >
+            {{
+              playerClassroomStore.isLoading || playerClassroomStore.isRefreshing
+                ? 'Retrying...'
+                : 'Retry'
+            }}
+          </button>
         </div>
       </div>
-      <div class="banner-classroom-actions">
-        <button type="button" class="btn-outline" @click="handleClassroomAction">
-          {{ playerClassroomStore.dashboardActionLabel }}
-        </button>
-        <button
-          v-if="playerClassroomStore.status === 'error'"
-          type="button"
-          class="btn-inline-retry"
-          :disabled="playerClassroomStore.isLoading || playerClassroomStore.isRefreshing"
-          @click="handleRetryClassroomMembership"
+
+      <!-- Map Progression Section -->
+      <section class="map-progression-section" aria-label="Map progression">
+        <div class="map-progression-header">
+          <span class="map-progression-label">Map progression</span>
+        </div>
+
+        <!-- Loading State: never displays fabricated progression -->
+        <div v-if="isLoading" class="map-progression-status" aria-live="polite">
+          <div class="spinner spinner-xs" aria-hidden="true"></div>
+          <span class="map-status-note">Loading map progression...</span>
+        </div>
+
+        <!-- Explicit Failure / Missing Progression State: never defaults to 0 or all locked -->
+        <div
+          v-else-if="profileFailed || stats.map_progress === null"
+          class="map-progression-status map-progression-failed"
+          role="status"
         >
-          {{
-            playerClassroomStore.isLoading || playerClassroomStore.isRefreshing
-              ? 'Retrying...'
-              : 'Retry'
-          }}
-        </button>
-      </div>
+          <span class="map-status-note">
+            {{ isRetryingProfile ? 'Retrying map progression...' : 'Map progression unavailable' }}
+          </span>
+          <button
+            type="button"
+            class="btn-inline-retry"
+            :disabled="isRetryingProfile"
+            @click="retryProfile"
+          >
+            {{ isRetryingProfile ? 'Retrying...' : 'Retry' }}
+          </button>
+        </div>
+
+        <!-- Canonical 4-Map Progression Grid -->
+        <div v-else class="map-progression-grid" role="list">
+          <div
+            v-for="map in mapProgressionList"
+            :key="map.id"
+            class="map-progression-card"
+            :class="map.isUnlocked ? 'is-unlocked' : 'is-locked'"
+            role="listitem"
+          >
+            <div class="map-card-thumb-wrap">
+              <img
+                :src="map.image"
+                alt=""
+                class="map-card-thumb"
+                loading="lazy"
+              />
+            </div>
+            <div class="map-card-info">
+              <span class="map-card-name">{{ map.name }}</span>
+              <span
+                class="map-status-badge"
+                :class="map.isUnlocked ? 'badge-unlocked' : 'badge-locked'"
+              >
+                <AppIcon :name="map.isUnlocked ? 'check' : 'lock'" :size="12" />
+                <span class="map-status-text">{{ map.isUnlocked ? 'Unlocked' : 'Locked' }}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Main Loading State -->
@@ -643,6 +738,12 @@ onUnmounted(() => {
 
 .welcome-banner {
   display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.banner-header {
+  display: flex;
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
@@ -674,33 +775,163 @@ onUnmounted(() => {
   font-size: 0.92rem;
 }
 
-.current-map-detail {
-  display: inline-flex;
+.map-progression-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.map-progression-header {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  justify-content: space-between;
+}
+
+.map-progression-label {
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.map-progression-status {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
   font-size: 0.88rem;
   color: var(--color-text-muted);
 }
 
-.map-detail-label {
+.map-progression-failed {
+  color: var(--color-text-muted);
+}
+
+.map-status-note {
   font-weight: 500;
 }
 
-.map-detail-value {
-  color: var(--color-primary);
-  background-color: var(--color-purple-light);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  padding: 0.12rem 0.65rem;
-  font-weight: 700;
-  font-size: 0.82rem;
+.spinner-xs {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-width: 2px;
+  flex-shrink: 0;
 }
 
-.map-detail-unavailable {
-  color: var(--color-text-dim);
+.map-progression-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.map-progression-card {
+  background-color: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+}
+
+.map-progression-card.is-unlocked {
+  border-color: var(--color-secondary);
+}
+
+.map-progression-card.is-locked {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-border);
+  opacity: 0.88;
+}
+
+.map-card-thumb-wrap {
+  width: 100%;
+  height: 60px;
+  background-color: var(--color-bg-muted);
+  overflow: hidden;
+}
+
+.map-card-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.map-progression-card.is-locked .map-card-thumb {
+  filter: grayscale(75%) opacity(0.7);
+}
+
+.map-card-info {
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.map-card-name {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--color-text-main);
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.map-progression-card.is-locked .map-card-name {
+  color: var(--color-text-muted);
+}
+
+.map-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  width: fit-content;
+  line-height: 1.3;
+}
+
+.map-status-badge.badge-unlocked {
+  background-color: var(--color-purple-light);
+  border: 1px solid var(--color-secondary);
+  color: var(--color-primary);
+}
+
+.map-status-badge.badge-locked {
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-dim);
+}
+
+.map-status-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .map-progression-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .map-progression-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dashboard-content {

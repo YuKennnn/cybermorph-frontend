@@ -4,7 +4,6 @@ import assert from 'node:assert'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import http from 'node:http'
 import { Buffer } from 'node:buffer'
 
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'
@@ -202,6 +201,9 @@ async function run() {
         const select = document.querySelector('#action-filter');
         const thActor = document.querySelector('.th-actor');
 
+        const thTime = document.querySelector('.th-time');
+        const firstTimeFormatted = document.querySelector('.logs-table tbody tr .time-formatted')?.textContent?.trim();
+
         // Check timestamp cells in table
         const timeSubtexts = Array.from(document.querySelectorAll('.time-status-subtext')).map(el => el.textContent.trim());
 
@@ -217,6 +219,8 @@ async function run() {
           hasActiveFilterBanner: Boolean(activeFilterBanner),
           hasAppliedIndicator: Boolean(appliedIndicator),
           timeSubtexts,
+          thTimeText: thTime ? thTime.textContent.trim() : '',
+          firstTimeFormatted,
           thActorText: thActor ? thActor.textContent.trim() : '',
           applyDisabled: applyBtn ? applyBtn.disabled : false,
           applyGradient: window.getComputedStyle(applyBtn).backgroundImage,
@@ -231,8 +235,10 @@ async function run() {
     assert.equal(initialCheck.hasTzNotice, false, 'Large timezone explanation banner must be removed')
     assert.equal(initialCheck.hasActiveFilterBanner, false, 'Active filter banner must be removed')
     assert.equal(initialCheck.hasAppliedIndicator, false, 'Applied indicator must be hidden when no filter is active')
-    assert(initialCheck.timeSubtexts.some(t => t === 'Timezone unspecified'), 'Row timestamps must retain concise "Timezone unspecified" subtext')
-    assert(initialCheck.timeSubtexts.some(t => t.startsWith('Local (')), 'Row timestamps must retain concise "Local (GMT+X)" subtext')
+    assert.equal(initialCheck.thTimeText, 'Timestamp (PHT)', 'Table column header must be "Timestamp (PHT)"')
+    assert.equal(initialCheck.timeSubtexts.some(t => t.includes('Timezone') || t.includes('Local')), false, 'Valid rows must not display repeated timezone subtexts')
+    assert.deepEqual(initialCheck.timeSubtexts, ['Date unavailable'], 'Only the malformed log row displays Date unavailable subtext')
+    assert.ok(initialCheck.firstTimeFormatted, 'First row must render formatted PHT timestamp')
     assert.equal(initialCheck.thActorText, 'Performed by')
     assert.equal(initialCheck.applyDisabled, true, 'Apply button must be disabled when no pending selection')
     assert.equal(initialCheck.aligned, true, 'Controls must have matching baseline alignment')
@@ -661,6 +667,14 @@ async function run() {
       })()
     `)
     await sleep(600)
+    // Expand first row with description for visual review
+    await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        if (toggleBtn) toggleBtn.click();
+      })()
+    `)
+    await sleep(400)
     const desktopScreenshotPath = path.join(ARTIFACT_DIR, 'admin_logs_desktop_1440.png')
     await pageCdp.screenshot(desktopScreenshotPath)
     console.log('✔ Desktop screenshot saved to', desktopScreenshotPath)
@@ -1104,6 +1118,244 @@ async function run() {
     assert.equal(urlRestorationCheck.inputValue, 'prof.delacruz@dnsc.edu.ph', 'Resolved account label must be restored')
     assert(urlRestorationCheck.rowsCount > 0, 'Rows must be loaded for restored filter')
     assert.equal(urlRestorationCheck.allMatch, true, 'All rows must match restored actor')
+
+    console.log('[11/11] Testing Expandable Row Details, Plain Text Safety & Expansion State Lifecycles...')
+    // Navigate to /admin/logs without filters
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/admin/logs` })
+    await sleep(1500)
+
+    // 1. Column header check: exactly 4 columns, no Description column
+    const headersCheck = await pageCdp.evaluate(`
+      (() => {
+        const ths = Array.from(document.querySelectorAll('.logs-table thead th')).map(th => th.textContent.trim());
+        const hasThDesc = Boolean(document.querySelector('.th-desc'));
+        const hasTdDesc = document.querySelectorAll('.td-desc').length;
+        return { ths, hasThDesc, hasTdDesc };
+      })()
+    `)
+    console.log('Table Headers Check:', headersCheck)
+    assert.deepEqual(headersCheck.ths, ['Timestamp (PHT)', 'Performed by', 'Action', 'Affected resource'])
+    assert.equal(headersCheck.hasThDesc, false, 'Description table header must be removed')
+    assert.equal(headersCheck.hasTdDesc, 0, 'No td-desc elements should exist')
+
+    // 2. Check toggle presence on rows with description and absence on null description
+    const togglePresenceCheck = await pageCdp.evaluate(`
+      (() => {
+        const rows = Array.from(document.querySelectorAll('.logs-table tbody tr.log-row'));
+        const toggles = document.querySelectorAll('.btn-details-toggle');
+        const descMissing = document.querySelectorAll('.desc-missing');
+        return {
+          totalRows: rows.length,
+          togglesCount: toggles.length,
+          descMissingCount: descMissing.length,
+        };
+      })()
+    `)
+    console.log('Toggle Presence Check:', togglePresenceCheck)
+    assert(togglePresenceCheck.togglesCount > 0, 'Rows with description must render details toggle')
+    assert.equal(togglePresenceCheck.descMissingCount, 0, 'No missing-description sentences should be rendered')
+
+    // 3. Expand and collapse without additional requests
+    const callsBeforeExpand = await pageCdp.evaluate(`window.__cybermorphAdminLogsCalls || 0`)
+
+    // Expand first row
+    const initialToggleState = await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        if (!toggleBtn) return null;
+        toggleBtn.focus();
+        const initialText = toggleBtn.textContent.trim();
+        const initialAria = toggleBtn.getAttribute('aria-expanded');
+        const ariaControls = toggleBtn.getAttribute('aria-controls');
+        toggleBtn.click();
+        return { initialText, initialAria, ariaControls };
+      })()
+    `)
+    await sleep(250) // allow Vue reactivity to patch DOM
+
+    const expandResult = await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        const afterClickText = toggleBtn ? toggleBtn.textContent.trim() : null;
+        const afterClickAria = toggleBtn ? toggleBtn.getAttribute('aria-expanded') : null;
+        const isFocused = document.activeElement === toggleBtn;
+
+        const detailRow = document.querySelector('.log-detail-row');
+        const detailCell = detailRow ? detailRow.querySelector('.td-details') : null;
+        const detailId = detailCell ? detailCell.getAttribute('id') : null;
+        const colspan = detailCell ? detailCell.getAttribute('colspan') : null;
+        const detailLabel = detailCell ? detailCell.querySelector('.detail-label')?.textContent?.trim() : null;
+        const detailText = detailCell ? detailCell.querySelector('.detail-text')?.textContent?.trim() : null;
+
+        return {
+          afterClickText,
+          afterClickAria,
+          isFocused,
+          hasDetailRow: Boolean(detailRow),
+          detailId,
+          colspan,
+          detailLabel,
+          hasDetailText: Boolean(detailText),
+        };
+      })()
+    `)
+    console.log('Expand Result:', { ...initialToggleState, ...expandResult })
+    assert.equal(initialToggleState.initialText, 'View details')
+    assert.equal(initialToggleState.initialAria, 'false')
+    assert.equal(expandResult.afterClickText, 'Hide details')
+    assert.equal(expandResult.afterClickAria, 'true')
+    assert.equal(expandResult.isFocused, true, 'Focus must remain on the toggle button')
+    assert.equal(expandResult.hasDetailRow, true, 'Detail row must appear when expanded')
+    assert.equal(expandResult.colspan, '4', 'Detail cell must span all 4 columns')
+    assert.equal(initialToggleState.ariaControls, expandResult.detailId, 'aria-controls must point to detail cell ID')
+    assert.equal(expandResult.detailLabel, 'Description')
+    assert.equal(expandResult.hasDetailText, true)
+
+    // Check no additional API request was made
+    const callsAfterExpand = await pageCdp.evaluate(`window.__cybermorphAdminLogsCalls || 0`)
+    assert.equal(callsAfterExpand, callsBeforeExpand, 'Expanding row details must NOT trigger an API request')
+
+    // 4. Collapse row
+    await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        toggleBtn.focus();
+        toggleBtn.click();
+      })()
+    `)
+    await sleep(250)
+
+    const collapseResult = await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        const text = toggleBtn ? toggleBtn.textContent.trim() : null;
+        const aria = toggleBtn ? toggleBtn.getAttribute('aria-expanded') : null;
+        const isFocused = document.activeElement === toggleBtn;
+        const detailRow = document.querySelector('.log-detail-row');
+        return { text, aria, isFocused, hasDetailRow: Boolean(detailRow) };
+      })()
+    `)
+    console.log('Collapse Result:', collapseResult)
+    assert.equal(collapseResult.text, 'View details')
+    assert.equal(collapseResult.aria, 'false')
+    assert.equal(collapseResult.isFocused, true, 'Focus must remain on toggle button after collapse')
+    assert.equal(collapseResult.hasDetailRow, false, 'Detail row must be removed upon collapse')
+
+    // 5. Keyboard accessibility: activate via keyboard events
+    await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        toggleBtn.focus();
+        toggleBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+        toggleBtn.click();
+      })()
+    `)
+    await sleep(250)
+
+    const keyExpandResult = await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        return {
+          expandedAfterKey: Boolean(document.querySelector('.log-detail-row')),
+          textAfterKey: toggleBtn ? toggleBtn.textContent.trim() : null,
+        };
+      })()
+    `)
+    console.log('Keyboard Operation (Expand) Result:', keyExpandResult)
+    assert.equal(keyExpandResult.expandedAfterKey, true, 'Toggle must expand with keyboard activation')
+    assert.equal(keyExpandResult.textAfterKey, 'Hide details')
+
+    // Collapse via keyboard
+    await pageCdp.evaluate(`
+      (() => {
+        const toggleBtn = document.querySelector('.btn-details-toggle');
+        toggleBtn.focus();
+        toggleBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+        toggleBtn.click();
+      })()
+    `)
+    await sleep(250)
+
+    const keyCollapseResult = await pageCdp.evaluate(`!document.querySelector('.log-detail-row')`)
+    assert.equal(keyCollapseResult, true, 'Toggle must collapse with keyboard activation')
+
+    // 6. Parent row identity, count, and pagination unaffected
+    const parentRowsBefore = await pageCdp.evaluate(`document.querySelectorAll('.logs-table tbody tr.log-row').length`)
+    const paginationTextBefore = await pageCdp.evaluate(`document.querySelector('.pagination-info')?.textContent?.trim()`)
+
+    // Expand two rows independently
+    await pageCdp.evaluate(`
+      (() => {
+        const toggles = document.querySelectorAll('.btn-details-toggle');
+        if (toggles[0]) toggles[0].click();
+        if (toggles[1]) toggles[1].click();
+      })()
+    `)
+    await sleep(300)
+
+    const multiExpandCheck = await pageCdp.evaluate(`
+      (() => {
+        const parentRows = document.querySelectorAll('.logs-table tbody tr.log-row').length;
+        const detailRows = document.querySelectorAll('.log-detail-row').length;
+        const paginationText = document.querySelector('.pagination-info')?.textContent?.trim();
+        return { parentRows, detailRows, paginationText };
+      })()
+    `)
+    console.log('Multi-Expand Check:', multiExpandCheck)
+    assert.equal(multiExpandCheck.detailRows, 2, 'Two rows must expand independently')
+    assert.equal(multiExpandCheck.parentRows, parentRowsBefore, 'Parent row count must be unaffected by detail rows')
+    assert.equal(multiExpandCheck.paginationText, paginationTextBefore, 'Pagination info must remain identical')
+
+    // 7. Expansion cleared on page change
+    await pageCdp.evaluate(`
+      (() => {
+        const nextBtn = document.querySelector('.page-btn[aria-label="Next page"]');
+        if (nextBtn) nextBtn.click();
+      })()
+    `)
+    await sleep(800)
+
+    const page2ExpansionCheck = await pageCdp.evaluate(`document.querySelectorAll('.log-detail-row').length`)
+    assert.equal(page2ExpansionCheck, 0, 'Page change must clear expansion state on page 2')
+
+    // Return to page 1: expansion must also be clean
+    await pageCdp.evaluate(`
+      (() => {
+        const prevBtn = document.querySelector('.page-btn[aria-label="Previous page"]');
+        if (prevBtn) prevBtn.click();
+      })()
+    `)
+    await sleep(800)
+
+    const page1ReturnedExpansionCheck = await pageCdp.evaluate(`document.querySelectorAll('.log-detail-row').length`)
+    assert.equal(page1ReturnedExpansionCheck, 0, 'Expansion state on previous page must not linger')
+
+    // 8. Expansion cleared on filter change
+    await pageCdp.evaluate(`
+      (() => {
+        const toggle = document.querySelector('.btn-details-toggle');
+        if (toggle) toggle.click();
+      })()
+    `)
+    await sleep(300)
+    assert.equal(await pageCdp.evaluate(`document.querySelectorAll('.log-detail-row').length`), 1)
+
+    // Apply action filter
+    await pageCdp.evaluate(`
+      (() => {
+        const select = document.querySelector('#action-filter');
+        select.value = 'approve_educator';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      })()
+    `)
+    await sleep(800)
+
+    const filterChangeExpansionCheck = await pageCdp.evaluate(`document.querySelectorAll('.log-detail-row').length`)
+    assert.equal(filterChangeExpansionCheck, 0, 'Filter change must clear expansion state')
+
+    // Clear filter
+    await pageCdp.evaluate(`document.querySelector('.btn-clear-filters')?.click()`)
+    await sleep(600)
 
     console.log('\nALL ADMIN AUDIT LOGS FILTER USABILITY TESTS PASSED SUCCESSFULLY!')
   } finally {

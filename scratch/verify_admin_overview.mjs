@@ -12,7 +12,7 @@ const TEST_PORT = 5199
 const CDP_PORT = 9249
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-admin-overview-cdp-${Date.now()}`)
-const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/e915d42a-bc70-4315-86d7-18b50753d36f'
+const ARTIFACT_DIR = process.env.ARTIFACT_DIR || 'C:/Users/licok/.gemini/antigravity/brain/bf7d1fc1-9e66-4899-ae20-f96344a21757'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -80,19 +80,12 @@ async function waitForServer(url, timeoutMs = 15000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
-      const statusCode = await new Promise((resolve, reject) => {
-        const req = http.get(url, (res) => {
-          res.resume()
-          resolve(res.statusCode)
-        })
-        req.on('error', reject)
-        req.setTimeout(1000, () => req.destroy())
-      })
-      if (statusCode >= 200 && statusCode < 400) {
+      const res = await fetch(url)
+      if (res.ok || res.status < 400) {
         return true
       }
-    } catch {
-      // waiting
+    } catch (e) {
+      if (Date.now() - start > 14000) console.log('fetch err:', e.message)
     }
     await sleep(250)
   }
@@ -120,9 +113,14 @@ async function run() {
           ...process.env,
           VITE_USE_MOCK: 'true',
         },
-        stdio: 'pipe',
+        stdio: ['ignore', 'pipe', 'pipe'],
       },
     )
+
+    viteProc.stdout.on('data', (d) => {
+      console.log('Vite:', d.toString().trim())
+    })
+    viteProc.stderr.on('data', (d) => console.error('Vite err:', d.toString().trim()))
 
     const serverReady = await waitForServer(`${BASE_URL}/`)
     if (!serverReady) {
@@ -345,18 +343,23 @@ async function run() {
 
     const twoLogsState = await pageCdp.evaluate(`
       (() => {
+        const thTime = document.querySelector('.activity-table th.th-time')?.textContent?.trim();
         const rows = Array.from(document.querySelectorAll('.activity-row')).map(r => ({
           email: r.querySelector('.actor-email')?.textContent?.trim(),
           action: r.querySelector('.action-badge')?.textContent?.trim(),
-          timeStatus: r.querySelector('.time-status')?.textContent?.trim()
+          timeText: r.querySelector('.time-value')?.textContent?.trim(),
+          timeStatus: r.querySelector('.time-status')?.textContent?.trim() || null
         }));
-        return rows;
+        return { thTime, rows };
       })()
     `)
     console.log('Two Logs State (with TZ variants):', twoLogsState)
-    assert.equal(twoLogsState.length, 2)
-    assert.equal(twoLogsState[0].timeStatus, 'Timezone unspecified')
-    assert.match(twoLogsState[1].timeStatus, /Local \(/)
+    assert.equal(twoLogsState.thTime, 'Timestamp (PHT)')
+    assert.equal(twoLogsState.rows.length, 2)
+    assert.equal(twoLogsState.rows[0].timeText, 'Oct 29, 2026, 6:00 PM')
+    assert.equal(twoLogsState.rows[0].timeStatus, null)
+    assert.equal(twoLogsState.rows[1].timeText, 'Oct 29, 2026, 10:00 AM')
+    assert.equal(twoLogsState.rows[1].timeStatus, null)
 
     // Reset overrides
     await pageCdp.evaluate(`

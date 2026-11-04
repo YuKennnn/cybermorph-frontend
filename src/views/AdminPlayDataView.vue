@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { fetchAdminPlayData, fetchAdminPlayDataDetail } from '../api/admin'
 import { extractErrorMessage } from '../api/client'
-import { formatAuditLogTimestamp } from '../utils/datetime'
+import { formatPlayDataUploadTimestamp } from '../utils/datetime'
 import {
   isDecompressionSupported,
   decodePlayDataPayload,
@@ -399,7 +399,7 @@ onUnmounted(() => {
                 <th scope="col" class="th-user">Player</th>
                 <th scope="col" class="th-code">Participant code</th>
                 <th scope="col" class="th-rows">Rows</th>
-                <th scope="col" class="th-time">Uploaded</th>
+                <th scope="col" class="th-time">Uploaded (PHT)</th>
                 <th scope="col" class="th-action text-right">Action</th>
               </tr>
             </thead>
@@ -428,26 +428,17 @@ onUnmounted(() => {
                 <!-- Uploaded timestamp -->
                 <td class="td-time">
                   <div class="time-container">
-                    <template v-if="formatAuditLogTimestamp(item.uploaded_at).isNull">
+                    <template v-if="formatPlayDataUploadTimestamp(item.uploaded_at).isNull">
                       <span class="time-formatted text-dim">—</span>
                       <span class="time-subtext text-dim">Not recorded</span>
                     </template>
-                    <template v-else-if="formatAuditLogTimestamp(item.uploaded_at).isInvalid">
+                    <template v-else-if="formatPlayDataUploadTimestamp(item.uploaded_at).isInvalid">
                       <span class="time-formatted text-dim">—</span>
                       <span class="time-subtext text-dim">Date unavailable</span>
                     </template>
-                    <template v-else-if="formatAuditLogTimestamp(item.uploaded_at).isTimezoneFree">
-                      <span class="time-formatted" :title="item.uploaded_at">
-                        {{ formatAuditLogTimestamp(item.uploaded_at).formatted }}
-                      </span>
-                      <span class="time-subtext text-muted">Timezone unspecified</span>
-                    </template>
                     <template v-else>
                       <span class="time-formatted" :title="item.uploaded_at">
-                        {{ formatAuditLogTimestamp(item.uploaded_at).formatted }}
-                      </span>
-                      <span class="time-subtext text-muted">
-                        Local ({{ formatAuditLogTimestamp(item.uploaded_at).statusText }})
+                        {{ formatPlayDataUploadTimestamp(item.uploaded_at).formatted }}
                       </span>
                     </template>
                   </div>

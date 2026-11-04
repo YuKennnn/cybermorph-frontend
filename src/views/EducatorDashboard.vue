@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useClassroomStore } from '../stores/classroomStore'
@@ -28,7 +28,22 @@ const selectedSnapshotCodeId = ref('')
 const snapshotAnalytics = ref(null)
 const isSnapshotLoading = ref(false)
 const snapshotError = ref('')
+
+let currentSessionEpoch = 0
+let latestDashboardRequestId = 0
 let snapshotRequestId = 0
+
+const resetDashboardState = () => {
+  classrooms.value = []
+  totalStudents.value = 0
+  isLoading.value = false
+  errorMessage.value = ''
+  successMessage.value = ''
+  selectedSnapshotCodeId.value = ''
+  snapshotAnalytics.value = null
+  isSnapshotLoading.value = false
+  snapshotError.value = ''
+}
 
 const activeClassroomCount = computed(() => {
   return classrooms.value.filter((c) => c.is_active === true).length
@@ -53,7 +68,7 @@ const resolveSnapshotSelection = (list) => {
 }
 
 const loadSnapshotData = async (codeId) => {
-  if (!codeId) {
+  if (!codeId || !authStore.isAuthenticated || !authStore.isEducator) {
     snapshotAnalytics.value = null
     isSnapshotLoading.value = false
     snapshotError.value = ''
@@ -61,22 +76,37 @@ const loadSnapshotData = async (codeId) => {
   }
 
   const reqId = ++snapshotRequestId
+  const reqSession = currentSessionEpoch
   isSnapshotLoading.value = true
   snapshotError.value = ''
   snapshotAnalytics.value = null // Prevent older classroom data from displaying while loading
 
   try {
     const data = await fetchClassroomAnalytics(codeId)
-    if (reqId !== snapshotRequestId) return
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== snapshotRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isEducator
+    ) {
+      return
+    }
     snapshotAnalytics.value = data
   } catch (err) {
-    if (reqId !== snapshotRequestId) return
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== snapshotRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isEducator
+    ) {
+      return
+    }
     snapshotError.value = extractErrorMessage(
       err,
       'Failed to load classroom performance snapshot. Please try again.',
     )
   } finally {
-    if (reqId === snapshotRequestId) {
+    if (reqSession === currentSessionEpoch && reqId === snapshotRequestId) {
       isSnapshotLoading.value = false
     }
   }
@@ -129,11 +159,23 @@ const formatScoreLabel = (mapName) => {
 }
 
 const loadDashboardData = async () => {
+  if (!authStore.isAuthenticated || !authStore.isEducator) return
+  const reqId = ++latestDashboardRequestId
+  const reqSession = currentSessionEpoch
   isLoading.value = true
   errorMessage.value = ''
 
   try {
     const data = await fetchMyClassrooms()
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestDashboardRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isEducator
+    ) {
+      return
+    }
+
     const list = Array.isArray(data) ? data : []
     classrooms.value = list
     totalStudents.value = list.reduce((sum, c) => sum + (c.student_count || 0), 0)
@@ -152,12 +194,22 @@ const loadDashboardData = async () => {
       isSnapshotLoading.value = false
     }
   } catch (error) {
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestDashboardRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isEducator
+    ) {
+      return
+    }
     errorMessage.value = extractErrorMessage(
       error,
       'Failed to load classroom overview. Please verify your connection or try again.',
     )
   } finally {
-    isLoading.value = false
+    if (reqSession === currentSessionEpoch && reqId === latestDashboardRequestId) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -187,12 +239,43 @@ const handleManageClassrooms = () => {
 }
 
 onMounted(() => {
-  authStore.ensureWebProfileLoaded().catch(() => {})
-  loadDashboardData()
+  if (authStore.isAuthenticated && authStore.isEducator) {
+    authStore.ensureWebProfileLoaded().catch(() => {})
+    loadDashboardData()
+  } else {
+    resetDashboardState()
+  }
   if (classroomStore.consumeReopenCreateModal('/dashboard')) {
     isCreateModalOpen.value = true
   }
 })
+
+onUnmounted(() => {
+  currentSessionEpoch++
+  latestDashboardRequestId++
+  snapshotRequestId++
+})
+
+watch(
+  [() => authStore.isAuthenticated, () => authStore.token, () => authStore.user?.user_id],
+  ([isAuth, token, userId], [, prevToken, prevUserId]) => {
+    if (!isAuth || !authStore.isEducator) {
+      currentSessionEpoch++
+      latestDashboardRequestId++
+      snapshotRequestId++
+      resetDashboardState()
+      return
+    }
+    if (token !== prevToken || userId !== prevUserId) {
+      currentSessionEpoch++
+      latestDashboardRequestId++
+      snapshotRequestId++
+      resetDashboardState()
+      authStore.ensureWebProfileLoaded().catch(() => {})
+      loadDashboardData()
+    }
+  },
+)
 </script>
 
 <template>

@@ -229,7 +229,12 @@ const formatTargetId = (targetId) => {
   return `${targetId.slice(0, 8)}…${targetId.slice(-4)}`
 }
 
+const hasDescription = (log) => {
+  return typeof log?.description === 'string' && log.description.trim().length > 0
+}
+
 const toggleDescriptionExpand = (logId) => {
+  if (!logId) return
   const updated = new Set(expandedDescriptions.value)
   if (updated.has(logId)) {
     updated.delete(logId)
@@ -240,7 +245,13 @@ const toggleDescriptionExpand = (logId) => {
 }
 
 const isDescriptionExpanded = (logId) => {
-  return expandedDescriptions.value.has(logId)
+  return Boolean(logId && expandedDescriptions.value.has(logId))
+}
+
+const clearExpansion = () => {
+  if (expandedDescriptions.value.size > 0) {
+    expandedDescriptions.value = new Set()
+  }
 }
 
 const loadLogs = async () => {
@@ -253,6 +264,7 @@ const loadLogs = async () => {
 
   const reqId = ++latestLogsRequestId
   const reqSession = currentSessionEpoch
+  clearExpansion()
   isLoading.value = true
   errorMessage.value = ''
 
@@ -606,6 +618,7 @@ const quickFilterByActor = (userId, userEmail) => {
 
 const resetActorFilterState = () => {
   invalidateLookup()
+  clearExpansion()
   selectedUserId.value = ''
   appliedAccount.value = null
   pendingAccount.value = null
@@ -659,6 +672,7 @@ onUnmounted(() => {
   currentSessionEpoch++
   latestLogsRequestId++
   latestLookupRequestId++
+  clearExpansion()
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
@@ -977,125 +991,123 @@ watch(
           <table class="logs-table">
             <thead>
               <tr>
-                <th scope="col" class="th-time">Timestamp</th>
+                <th scope="col" class="th-time">Timestamp (PHT)</th>
                 <th scope="col" class="th-actor">Performed by</th>
                 <th scope="col" class="th-action">Action</th>
                 <th scope="col" class="th-target">Affected resource</th>
-                <th scope="col" class="th-desc">Description</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="log in logs" :key="log.log_id" class="log-row">
-                <!-- Timestamp -->
-                <td class="td-time">
-                  <div class="time-container">
-                    <template v-if="formatAuditLogTimestamp(log.logged_at).isNull">
-                      <span class="time-formatted text-dim">—</span>
-                      <span class="time-status-subtext text-dim">Not recorded</span>
-                    </template>
-                    <template v-else-if="formatAuditLogTimestamp(log.logged_at).isInvalid">
-                      <span class="time-formatted text-dim">—</span>
-                      <span class="time-status-subtext text-dim">Date unavailable</span>
-                    </template>
-                    <template v-else-if="formatAuditLogTimestamp(log.logged_at).isTimezoneFree">
-                      <span class="time-formatted" :title="log.logged_at">
-                        {{ formatAuditLogTimestamp(log.logged_at).formatted }}
-                      </span>
-                      <span class="time-status-subtext text-muted">Timezone unspecified</span>
-                    </template>
-                    <template v-else>
-                      <span class="time-formatted" :title="log.logged_at">
-                        {{ formatAuditLogTimestamp(log.logged_at).formatted }}
-                      </span>
-                      <span class="time-status-subtext text-muted">
-                        Local ({{ formatAuditLogTimestamp(log.logged_at).statusText }})
-                      </span>
-                    </template>
-                  </div>
-                </td>
-
-                <!-- Performed by (Actor Email & Row Filter) -->
-                <td class="td-actor">
-                  <div class="actor-container">
-                    <span class="actor-email" :title="log.user_email">
-                      {{ log.user_email || 'Not recorded' }}
-                    </span>
-                    <button
-                      v-if="log.user_id"
-                      type="button"
-                      class="btn-actor-filter"
-                      :title="`Show this user’s activity (${log.user_email || log.user_id})`"
-                      :aria-label="`Show this user’s activity: ${log.user_email || log.user_id}`"
-                      @click="quickFilterByActor(log.user_id, log.user_email)"
-                    >
-                      Show this user’s activity
-                    </button>
-                  </div>
-                </td>
-
-                <!-- Action Type -->
-                <td class="td-action">
-                  <span
-                    class="action-badge"
-                    :class="getActionBadgeClass(log.action_type)"
-                  >
-                    {{ getActionLabel(log.action_type) }}
-                  </span>
-                </td>
-
-                <!-- Affected Resource / Target -->
-                <td class="td-target">
-                  <div class="target-container">
-                    <!-- Case 1: Both table and ID present -->
-                    <template v-if="log.target_table && log.target_id">
-                      <span class="target-table">{{ log.target_table }}</span>
-                      <code class="target-id" :title="log.target_id">
-                        {{ formatTargetId(log.target_id) }}
-                      </code>
-                    </template>
-                    <!-- Case 2: Only target table present -->
-                    <template v-else-if="log.target_table">
-                      <span class="target-table">{{ log.target_table }}</span>
-                      <span class="resource-partial text-dim">(No ID recorded)</span>
-                    </template>
-                    <!-- Case 3: Only target ID present -->
-                    <template v-else-if="log.target_id">
-                      <span class="resource-partial text-dim">(No table recorded)</span>
-                      <code class="target-id" :title="log.target_id">
-                        {{ formatTargetId(log.target_id) }}
-                      </code>
-                    </template>
-                    <!-- Case 4: Neither present (valid for login, etc.) -->
-                    <template v-else>
-                      <span class="resource-missing text-dim">Not recorded</span>
-                    </template>
-                  </div>
-                </td>
-
-                <!-- Description -->
-                <td class="td-desc">
-                  <div v-if="log.description && log.description.trim()" class="desc-container">
-                    <div
-                      class="desc-text"
-                      :class="{ 'desc-expanded': isDescriptionExpanded(log.log_id) }"
-                    >
-                      {{ log.description }}
+              <template v-for="log in logs" :key="log.log_id">
+                <tr class="log-row">
+                  <!-- Timestamp -->
+                  <td class="td-time">
+                    <div class="time-container">
+                      <template v-if="formatAuditLogTimestamp(log.logged_at).isNull">
+                        <span class="time-formatted text-dim">—</span>
+                        <span class="time-status-subtext text-dim">Not recorded</span>
+                      </template>
+                      <template v-else-if="formatAuditLogTimestamp(log.logged_at).isInvalid">
+                        <span class="time-formatted text-dim">—</span>
+                        <span class="time-status-subtext text-dim">Date unavailable</span>
+                      </template>
+                      <template v-else>
+                        <span class="time-formatted" :title="log.logged_at">
+                          {{ formatAuditLogTimestamp(log.logged_at).formatted }}
+                        </span>
+                      </template>
                     </div>
-                    <button
-                      v-if="log.description.length > 85"
-                      type="button"
-                      class="btn-desc-toggle"
-                      :aria-expanded="isDescriptionExpanded(log.log_id)"
-                      @click="toggleDescriptionExpand(log.log_id)"
-                    >
-                      {{ isDescriptionExpanded(log.log_id) ? 'Show less' : 'Show full description' }}
-                    </button>
-                  </div>
-                  <span v-else class="desc-missing text-dim">
-                    No additional details recorded
-                  </span>
-                </td>
-              </tr>
+                  </td>
+
+                  <!-- Performed by (Actor Email & Row Filter) -->
+                  <td class="td-actor">
+                    <div class="actor-container">
+                      <span class="actor-email" :title="log.user_email">
+                        {{ log.user_email || 'Not recorded' }}
+                      </span>
+                      <button
+                        v-if="log.user_id"
+                        type="button"
+                        class="btn-actor-filter"
+                        :title="`Show this user’s activity (${log.user_email || log.user_id})`"
+                        :aria-label="`Show this user’s activity: ${log.user_email || log.user_id}`"
+                        @click="quickFilterByActor(log.user_id, log.user_email)"
+                      >
+                        Show this user’s activity
+                      </button>
+                    </div>
+                  </td>
+
+                  <!-- Action Type & Row Details Toggle -->
+                  <td class="td-action">
+                    <div class="action-container">
+                      <span
+                        class="action-badge"
+                        :class="getActionBadgeClass(log.action_type)"
+                      >
+                        {{ getActionLabel(log.action_type) }}
+                      </span>
+                      <button
+                        v-if="hasDescription(log)"
+                        type="button"
+                        class="btn-details-toggle"
+                        :aria-expanded="isDescriptionExpanded(log.log_id)"
+                        :aria-controls="`log-details-${log.log_id}`"
+                        @click="toggleDescriptionExpand(log.log_id)"
+                      >
+                        {{ isDescriptionExpanded(log.log_id) ? 'Hide details' : 'View details' }}
+                      </button>
+                    </div>
+                  </td>
+
+                  <!-- Affected Resource / Target -->
+                  <td class="td-target">
+                    <div class="target-container">
+                      <!-- Case 1: Both table and ID present -->
+                      <template v-if="log.target_table && log.target_id">
+                        <span class="target-table">{{ log.target_table }}</span>
+                        <code class="target-id" :title="log.target_id">
+                          {{ formatTargetId(log.target_id) }}
+                        </code>
+                      </template>
+                      <!-- Case 2: Only target table present -->
+                      <template v-else-if="log.target_table">
+                        <span class="target-table">{{ log.target_table }}</span>
+                        <span class="resource-partial text-dim">(No ID recorded)</span>
+                      </template>
+                      <!-- Case 3: Only target ID present -->
+                      <template v-else-if="log.target_id">
+                        <span class="resource-partial text-dim">(No table recorded)</span>
+                        <code class="target-id" :title="log.target_id">
+                          {{ formatTargetId(log.target_id) }}
+                        </code>
+                      </template>
+                      <!-- Case 4: Neither present (valid for login, etc.) -->
+                      <template v-else>
+                        <span class="resource-missing text-dim">Not recorded</span>
+                      </template>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Expandable Full-Width Description Detail Row -->
+                <tr
+                  v-if="isDescriptionExpanded(log.log_id) && hasDescription(log)"
+                  :key="`${log.log_id}-details`"
+                  class="log-detail-row"
+                >
+                  <td
+                    :id="`log-details-${log.log_id}`"
+                    colspan="4"
+                    class="td-details"
+                  >
+                    <div class="log-detail-content">
+                      <span class="detail-label">Description</span>
+                      <p class="detail-text">{{ log.description }}</p>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -1648,11 +1660,7 @@ td {
 }
 
 .th-target {
-  width: 190px;
-}
-
-.th-desc {
-  min-width: 280px;
+  width: 220px;
 }
 
 /* Column Renderers */
@@ -1770,50 +1778,85 @@ td {
 }
 
 .resource-missing,
-.resource-partial,
-.desc-missing {
+.resource-partial {
   font-size: 0.82rem;
   font-style: italic;
 }
 
-.desc-container {
+.action-container {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 0.35rem;
 }
 
-.desc-text {
+.btn-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.btn-details-toggle:hover {
+  background-color: var(--color-card);
+  border-color: var(--color-primary);
+}
+
+.btn-details-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.log-detail-row {
+  background-color: var(--color-bg-subtle);
+}
+
+.log-detail-row:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.td-details {
+  padding: 0.75rem 1.25rem 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.log-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.detail-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.detail-text {
+  margin: 0;
   font-size: 0.88rem;
   color: var(--color-text-main);
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: normal;
-  max-width: 440px;
-}
-
-.desc-text:not(.desc-expanded) {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.btn-desc-toggle {
-  align-self: flex-start;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.btn-desc-toggle:hover {
-  color: var(--color-primary-hover);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .text-dim {

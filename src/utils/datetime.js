@@ -152,20 +152,25 @@ export const formatThreatUnlockedCount = (count, lastSyncedAt) => {
   return `${count} of 8 unlocked`
 }
 
-const MONTH_NAMES = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-]
+/**
+ * Formats a Date object in Philippine time (Asia/Manila, PHT, UTC+8).
+ * Format: 'MMM D, YYYY, h:mm A' (e.g. 'Nov 3, 2026, 12:43 PM').
+ *
+ * @param {Date} date
+ * @returns {string} Formatted Philippine date and time
+ */
+export const formatPhilippineDateTime = (date) =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(date)
+    .replace(/\u202F/g, ' ')
 
 /**
  * Resolves short timezone display name of browser environment.
@@ -183,17 +188,17 @@ export const getLocalTimeZoneName = () => {
 }
 
 /**
- * Formats an activity log's `logged_at` timestamp according to timezone semantics:
- * - If `loggedAt === null` or undefined or empty:
- *     returns `{ formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false, isTimezoneFree: false }`
- * - If malformed:
- *     returns `{ formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }`
- * - If explicit offset or 'Z' is present:
- *     parsed and converted to browser-local date/time,
- *     returns `{ formatted: `${datePart}, ${timePart}`, statusText: tzName, isNull: false, isInvalid: false, isTimezoneFree: false }`
- * - If timezone-free ISO string:
- *     formatted exact recorded date/time without conversion,
- *     returns `{ formatted: `${monthStr} ${day}, ${year}, ${hourStr}:${minStr}`, statusText: 'Timezone unspecified', isNull: false, isInvalid: false, isTimezoneFree: true }`
+ * Formats an activity log's `logged_at` timestamp in Asia/Manila (PHT, UTC+8).
+ *
+ * Rules:
+ * - Timezone-free ISO strings (from backend database naive UTC) are interpreted as UTC.
+ * - Explicit 'Z' or timezone offsets preserve the exact instant.
+ * - Formatted in Asia/Manila regardless of browser/host timezone.
+ * - Format: 'MMM D, YYYY, h:mm A' (e.g. 'Nov 3, 2026, 12:43 PM').
+ * - Preserves distinct null and invalid states without substituting current time:
+ *   - Null, undefined, or empty: { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
+ *   - Malformed or impossible dates: { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
+ *   - Valid timestamp: { formatted: 'Nov 3, 2026, 12:43 PM', statusText: '', isNull: false, isInvalid: false }
  *
  * @param {string | null | undefined} loggedAt
  * @returns {{
@@ -201,98 +206,75 @@ export const getLocalTimeZoneName = () => {
  *   statusText: string,
  *   isNull: boolean,
  *   isInvalid: boolean,
- *   isTimezoneFree: boolean
  * }}
  */
 export const formatAuditLogTimestamp = (loggedAt) => {
   if (loggedAt === null || loggedAt === undefined) {
-    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false, isTimezoneFree: false }
+    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
   }
   if (typeof loggedAt !== 'string') {
-    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }
+    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
   }
   const trimmed = loggedAt.trim()
   if (!trimmed) {
-    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false, isTimezoneFree: false }
+    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
   }
 
-  const match = ISO_DATETIME_REGEX.exec(trimmed)
-  if (!match) {
-    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }
+  const parsedDate = parseBackendUtcTimestamp(trimmed)
+  if (!parsedDate) {
+    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
   }
-
-  const year = parseInt(match[1], 10)
-  const month = parseInt(match[2], 10)
-  const day = parseInt(match[3], 10)
-  const hour = parseInt(match[4], 10)
-  const minute = parseInt(match[5], 10)
-  const second = parseInt(match[6], 10)
-  const hasZ = Boolean(match[8])
-  const hasOffset = Boolean(match[9])
-
-  // Validate bounds
-  if (year < 1 || year > 9999 || month < 1 || month > 12) {
-    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }
-  }
-  const maxDays = month === 2 && isLeapYear(year) ? 29 : DAYS_IN_MONTH[month]
-  if (
-    day < 1 ||
-    day > maxDays ||
-    hour < 0 ||
-    hour > 23 ||
-    minute < 0 ||
-    minute > 59 ||
-    second < 0 ||
-    second > 59
-  ) {
-    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }
-  }
-
-  if (hasZ || hasOffset) {
-    const parsedDate = parseBackendUtcTimestamp(trimmed)
-    if (!parsedDate) {
-      return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true, isTimezoneFree: false }
-    }
-    const datePart = parsedDate.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-    const timePart = parsedDate.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-
-    let tzName = ''
-    try {
-      const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(parsedDate)
-      const tzPart = parts.find((p) => p.type === 'timeZoneName')
-      if (tzPart?.value) tzName = tzPart.value
-    } catch {
-      tzName = 'Local'
-    }
-
-    return {
-      formatted: `${datePart}, ${timePart}`,
-      statusText: tzName || 'Local',
-      isNull: false,
-      isInvalid: false,
-      isTimezoneFree: false,
-    }
-  }
-
-  // Timezone-free: preserve exact recorded date/time without conversion
-  const monthStr = MONTH_NAMES[month - 1]
-  const hourStr = String(hour).padStart(2, '0')
-  const minStr = String(minute).padStart(2, '0')
-  const formatted = `${monthStr} ${day}, ${year}, ${hourStr}:${minStr}`
 
   return {
-    formatted,
-    statusText: 'Timezone unspecified',
+    formatted: formatPhilippineDateTime(parsedDate),
+    statusText: '',
     isNull: false,
     isInvalid: false,
-    isTimezoneFree: true,
+  }
+}
+
+/**
+ * Formats a Play data `uploaded_at` timestamp in Asia/Manila (PHT, UTC+8).
+ *
+ * Rules:
+ * - Timezone-free ISO strings (from backend utc_now_naive()) are interpreted as UTC.
+ * - Explicit 'Z' or timezone offsets preserve the exact instant.
+ * - Formatted in Asia/Manila regardless of host/browser timezone.
+ * - Format: 'MMM D, YYYY, h:mm A' (e.g. 'Nov 3, 2026, 12:43 PM').
+ * - Preserves distinct null and invalid states without substituting current time:
+ *   - Null, undefined, or empty: { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
+ *   - Malformed or impossible dates: { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
+ *   - Valid timestamp: { formatted: 'Nov 3, 2026, 12:43 PM', statusText: '', isNull: false, isInvalid: false }
+ *
+ * @param {string | null | undefined} uploadedAt
+ * @returns {{
+ *   formatted: string,
+ *   statusText: string,
+ *   isNull: boolean,
+ *   isInvalid: boolean,
+ * }}
+ */
+export const formatPlayDataUploadTimestamp = (uploadedAt) => {
+  if (uploadedAt === null || uploadedAt === undefined) {
+    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
+  }
+  if (typeof uploadedAt !== 'string') {
+    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
+  }
+  const trimmed = uploadedAt.trim()
+  if (!trimmed) {
+    return { formatted: '—', statusText: 'Not recorded', isNull: true, isInvalid: false }
+  }
+
+  const parsedDate = parseBackendUtcTimestamp(trimmed)
+  if (!parsedDate) {
+    return { formatted: '—', statusText: 'Date unavailable', isNull: false, isInvalid: true }
+  }
+
+  return {
+    formatted: formatPhilippineDateTime(parsedDate),
+    statusText: '',
+    isNull: false,
+    isInvalid: false,
   }
 }

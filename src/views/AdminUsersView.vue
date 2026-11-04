@@ -1,8 +1,11 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { fetchAdminUsers } from '../api/admin'
+import { useAuthStore } from '../stores/authStore'
 import AdminSubNav from '../components/admin/AdminSubNav.vue'
 import AppIcon from '../components/common/AppIcon.vue'
+
+const authStore = useAuthStore()
 
 const users = ref([])
 const totalCount = ref(0)
@@ -13,8 +16,10 @@ const searchQuery = ref('')
 const isLoading = ref(true)
 const errorMessage = ref('')
 
+let currentSessionEpoch = 0
 let latestRequestId = 0
 let debounceTimer = null
+let isResettingState = false
 
 const totalPages = computed(() => {
   if (totalCount.value <= 0) return 1
@@ -57,7 +62,32 @@ const formatDate = (isoString) => {
       })
 }
 
+const resetUsersState = () => {
+  isResettingState = true
+  latestRequestId++
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+    debounceTimer = null
+  }
+  users.value = []
+  totalCount.value = 0
+  page.value = 1
+  selectedRole.value = ''
+  searchQuery.value = ''
+  isLoading.value = false
+  errorMessage.value = ''
+  Promise.resolve().then(() => {
+    isResettingState = false
+  })
+}
+
 const loadUsers = async () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) {
+    isLoading.value = false
+    return
+  }
+
+  const reqSession = currentSessionEpoch
   const reqId = ++latestRequestId
   isLoading.value = true
   errorMessage.value = ''
@@ -76,18 +106,32 @@ const loadUsers = async () => {
 
     const data = await fetchAdminUsers(params)
 
-    // Discard stale responses if a newer request was dispatched
-    if (reqId !== latestRequestId) return
+    // Discard stale responses if session epoch, auth state, or newer request superseded
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
 
     users.value = data?.items || []
     totalCount.value = data?.total_count ?? users.value.length
     if (data?.page) page.value = data.page
     if (data?.page_size) pageSize.value = data.page_size
   } catch {
-    if (reqId !== latestRequestId) return
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestRequestId ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
     errorMessage.value = 'Failed to load user accounts. Please check your connection and try again.'
   } finally {
-    if (reqId === latestRequestId) {
+    if (reqSession === currentSessionEpoch && reqId === latestRequestId) {
       isLoading.value = false
     }
   }
@@ -95,12 +139,18 @@ const loadUsers = async () => {
 
 // Watchers for filtering with debounce and pagination reset
 watch(selectedRole, () => {
+  if (isResettingState) return
+  latestRequestId++
   page.value = 1
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
   loadUsers()
 })
 
 watch(searchQuery, () => {
+  if (isResettingState) return
+  latestRequestId++
   if (debounceTimer) clearTimeout(debounceTimer)
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
   debounceTimer = setTimeout(() => {
     page.value = 1
     loadUsers()
@@ -122,17 +172,37 @@ const handleNextPage = () => {
 }
 
 onMounted(() => {
-  loadUsers()
+  if (authStore.isAuthenticated && authStore.isAdmin) {
+    loadUsers()
+  } else {
+    resetUsersState()
+  }
 })
 
 onUnmounted(() => {
-  // Invalidate any pending in-flight requests and clear debounce timer
+  currentSessionEpoch++
   latestRequestId++
   if (debounceTimer) {
     clearTimeout(debounceTimer)
     debounceTimer = null
   }
 })
+
+watch(
+  [() => authStore.isAuthenticated, () => authStore.token, () => authStore.user?.user_id],
+  ([isAuth, token, userId], [, prevToken, prevUserId]) => {
+    if (!isAuth || !authStore.isAdmin) {
+      currentSessionEpoch++
+      resetUsersState()
+      return
+    }
+    if (token !== prevToken || userId !== prevUserId) {
+      currentSessionEpoch++
+      resetUsersState()
+      loadUsers()
+    }
+  },
+)
 </script>
 
 <template>

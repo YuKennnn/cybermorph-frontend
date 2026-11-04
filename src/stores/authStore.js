@@ -8,6 +8,7 @@ import {
   updateWebUserProfile,
   fetchPlayerProfile,
 } from '../api/auth.js'
+import { setUnauthorizedSessionHandler } from '../api/client.js'
 import { useClassroomStore } from './classroomStore.js'
 import { useThreatIndexStore } from './threatIndexStore.js'
 import { usePlayerClassroomStore } from './playerClassroomStore.js'
@@ -418,6 +419,11 @@ export const useAuthStore = defineStore('auth', () => {
       // In case store is not yet active
     }
   }
+
+  // Hook up client 401 session expiry handler to the store's logout action
+  setUnauthorizedSessionHandler(() => {
+    logout()
+  })
 
   return {
     // State

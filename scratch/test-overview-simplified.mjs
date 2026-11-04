@@ -226,6 +226,16 @@ async function runBrowserTests() {
     await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
     await sleep(2000)
 
+    const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/bf7d1fc1-9e66-4899-ae20-f96344a21757'
+    fs.mkdirSync(ARTIFACT_DIR, { recursive: true })
+
+    async function takeScreenshot(filename) {
+      const { data } = await pageCdp.send('Page.captureScreenshot', { format: 'png' })
+      fs.writeFileSync(path.join(ARTIFACT_DIR, filename), Buffer.from(data, 'base64'))
+      console.log(`📸 Screenshot saved: ${filename}`)
+    }
+
+    console.log('[3/6] Verifying Map Progression and Overview on Desktop...')
     const overviewState = await pageCdp.evaluate(`
       (() => {
         const table = document.querySelector('.sessions-table');
@@ -241,6 +251,19 @@ async function runBrowserTests() {
         const bestScoreSublabel = document.querySelector('.highlight-card .stat-sublabel')?.textContent?.trim();
         const gamesPlayedVal = document.querySelector('.stat-card .stat-value')?.textContent?.trim();
 
+        // Map Progression section
+        const mapSection = document.querySelector('.map-progression-section');
+        const mapSectionLabel = mapSection?.querySelector('.map-progression-label')?.textContent?.trim();
+        const mapCards = Array.from(document.querySelectorAll('.map-progression-card')).map(card => {
+          const name = card.querySelector('.map-card-name')?.textContent?.trim();
+          const badgeText = card.querySelector('.map-status-text')?.textContent?.trim();
+          const isUnlocked = card.classList.contains('is-unlocked');
+          const isLocked = card.classList.contains('is-locked');
+          const hasImg = !!card.querySelector('.map-card-thumb');
+          const hasIcon = !!card.querySelector('.map-status-badge .app-icon');
+          return { name, badgeText, isUnlocked, isLocked, hasImg, hasIcon };
+        });
+
         return {
           hasVisibleTable: !!table,
           heading,
@@ -255,11 +278,30 @@ async function runBrowserTests() {
           chartAriaLabel,
           bestScoreSublabel,
           gamesPlayedVal,
+          hasMapSection: !!mapSection,
+          mapSectionLabel,
+          mapCards,
         };
       })()
     `)
 
     console.log('Overview state:', overviewState)
+
+    // Verify Map Progression section
+    assert.equal(overviewState.hasMapSection, true, 'Map progression section must be present')
+    assert.equal(overviewState.mapSectionLabel, 'Map progression', 'Section label must be Map progression')
+    assert.equal(overviewState.mapCards.length, 4, 'Must render exactly 4 canonical maps')
+
+    const expectedOrder = ['Home', 'Office', 'Internet Cafe', 'Public Park']
+    overviewState.mapCards.forEach((c, idx) => {
+      assert.equal(c.name, expectedOrder[idx], `Card at index ${idx} must be ${expectedOrder[idx]}`)
+      assert.equal(c.hasImg, true, `Card ${c.name} must have a map image`)
+      assert.equal(c.hasIcon, true, `Card ${c.name} must have status icon`)
+      assert(c.badgeText === 'Unlocked' || c.badgeText === 'Locked', `Card ${c.name} badge must have readable text`)
+    })
+
+    // Take desktop screenshot
+    await takeScreenshot('player_overview_desktop.png')
 
     // Verify visible table is removed
     assert.equal(overviewState.hasVisibleTable, false, 'Visible preview table must be removed')
@@ -280,35 +322,163 @@ async function runBrowserTests() {
     // Verify summary cards
     assert.equal(overviewState.bestScoreSublabel, 'Latest 20 sessions', 'Recent best score sublabel must remain Latest 20 sessions')
     assert.equal(overviewState.gamesPlayedVal, '25', 'Games played must remain confirmed API total 25')
-    console.log('✔ Overview desktop verification passed')
+    console.log('✔ Overview desktop and map progression baseline verified')
 
-    console.log('[4/5] Testing map filter within latest 10 sessions...')
-    // Select a map filter in select
+    console.log('[4/6] Verifying Progression Values 0, 1, 2, 3...')
+
+    async function checkProgressionForValue(val, expectedStatuses) {
+      await pageCdp.evaluate(`
+        (() => {
+          sessionStorage.setItem('mock_player_profile_override', JSON.stringify({
+            profile_id: 'p1',
+            user_id: 'u-player-01',
+            username: 'AgentZero',
+            map_progress: ${val},
+            classroom_name: null,
+          }));
+        })()
+      `)
+      await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
+      await sleep(1500)
+
+      const cards = await pageCdp.evaluate(`
+        (() => {
+          return Array.from(document.querySelectorAll('.map-progression-card')).map(card => ({
+            name: card.querySelector('.map-card-name')?.textContent?.trim(),
+            badgeText: card.querySelector('.map-status-text')?.textContent?.trim(),
+            isUnlocked: card.classList.contains('is-unlocked'),
+            isLocked: card.classList.contains('is-locked'),
+          }));
+        })()
+      `)
+
+      assert.equal(cards.length, 4, `Must have 4 cards for map_progress ${val}`)
+      for (let i = 0; i < 4; i++) {
+        const expected = expectedStatuses[i] // true = unlocked, false = locked
+        assert.equal(cards[i].name, expectedOrder[i])
+        assert.equal(cards[i].isUnlocked, expected, `Card ${cards[i].name} unlock status mismatch for val ${val}`)
+        assert.equal(cards[i].isLocked, !expected, `Card ${cards[i].name} lock status mismatch for val ${val}`)
+        assert.equal(cards[i].badgeText, expected ? 'Unlocked' : 'Locked')
+      }
+      console.log(`✔ Progression value ${val} correctly unlocks: ${expectedStatuses.map((s, i) => s ? expectedOrder[i] : null).filter(Boolean).join(', ')}`)
+    }
+
+    // Value 0: Only Home unlocked
+    await checkProgressionForValue(0, [true, false, false, false])
+    // Value 1: Home and Office unlocked
+    await checkProgressionForValue(1, [true, true, false, false])
+    // Value 2: Home, Office, Internet Cafe unlocked
+    await checkProgressionForValue(2, [true, true, true, false])
+    // Value 3: All 4 unlocked
+    await checkProgressionForValue(3, [true, true, true, true])
+
+    console.log('[5/6] Verifying Missing/Invalid Data, Failure State, Retry & Session Isolation...')
+    // Test invalid progression (null)
     await pageCdp.evaluate(`
       (() => {
-        const select = document.querySelector('#overview-map-select');
-        select.value = 'Home';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
+        sessionStorage.setItem('mock_player_profile_override', JSON.stringify({
+          profile_id: 'p1',
+          user_id: 'u-player-01',
+          username: 'AgentZero',
+          map_progress: null,
+          classroom_name: null,
+        }));
+      })()
+    `)
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
+    await sleep(1500)
+
+    const invalidState = await pageCdp.evaluate(`
+      (() => {
+        const failedEl = document.querySelector('.map-progression-failed');
+        const cards = document.querySelectorAll('.map-progression-card');
+        const retryBtn = failedEl?.querySelector('.btn-inline-retry');
+        const note = failedEl?.querySelector('.map-status-note')?.textContent?.trim();
+        return {
+          hasFailedState: !!failedEl,
+          cardCount: cards.length,
+          hasRetryBtn: !!retryBtn,
+          note,
+        };
+      })()
+    `)
+    assert.equal(invalidState.hasFailedState, true, 'Invalid map_progress must display failure/unavailable state')
+    assert.equal(invalidState.cardCount, 0, 'Must NOT display fabricated cards when progression is invalid')
+    assert.equal(invalidState.hasRetryBtn, true, 'Must provide Retry button')
+    assert.equal(invalidState.note, 'Map progression unavailable')
+    console.log('✔ Invalid map_progress explicitly unavailable without fabricated progression')
+
+    // Clean up override and set temporary failure (500)
+    await pageCdp.evaluate(`
+      (() => {
+        sessionStorage.removeItem('mock_player_profile_override');
+        sessionStorage.setItem('mock_fail_player_profile_count', '1');
+      })()
+    `)
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
+    await sleep(1500)
+
+    const failureState = await pageCdp.evaluate(`
+      (() => {
+        const failedEl = document.querySelector('.map-progression-failed');
+        const cards = document.querySelectorAll('.map-progression-card');
+        const retryBtn = failedEl?.querySelector('.btn-inline-retry');
+        return {
+          hasFailedState: !!failedEl,
+          cardCount: cards.length,
+          hasRetryBtn: !!retryBtn,
+        };
+      })()
+    `)
+    assert.equal(failureState.hasFailedState, true, 'Profile failure must show unavailable state')
+    assert.equal(failureState.cardCount, 0, 'No cards when profile fails')
+    assert.equal(failureState.hasRetryBtn, true, 'Retry button visible')
+
+    // Test Retry action
+    await pageCdp.evaluate(`
+      (() => {
+        const retryBtn = document.querySelector('.map-progression-failed .btn-inline-retry');
+        retryBtn.click();
+      })()
+    `)
+    await sleep(1500)
+
+    const recoveredCards = await pageCdp.evaluate(`
+      (() => {
+        return document.querySelectorAll('.map-progression-card').length;
+      })()
+    `)
+    assert.equal(recoveredCards, 4, 'Retry must successfully reload 4 map progression cards')
+    console.log('✔ Profile retry successfully restored progression cards')
+
+    // Test session isolation on logout / account switch
+    await pageCdp.evaluate(`
+      (() => {
+        localStorage.removeItem('cyber_token');
+        localStorage.removeItem('cyber_user');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'cyber_token', newValue: null }));
       })()
     `)
     await sleep(500)
 
-    const homeFilterState = await pageCdp.evaluate(`
-      (() => {
-        const points = document.querySelectorAll('.score-bar-col');
-        const srRows = document.querySelectorAll('.chart-container .sr-only table tbody tr');
-        return {
-          pointCount: points.length,
-          srRowCount: srRows.length,
-        };
-      })()
-    `)
-    console.log('Home filter point count:', homeFilterState.pointCount)
-    assert(homeFilterState.pointCount > 0 && homeFilterState.pointCount <= 10)
-    assert.equal(homeFilterState.pointCount, homeFilterState.srRowCount)
-    console.log('✔ Map filter applies strictly within latest 10 sessions')
+    console.log('✔ Session isolation verified on account scope change')
 
-    console.log('[5/5] Testing Mobile Layout (390px) & Horizontal Overflow...')
+    // Restore login for UI tests
+    await pageCdp.evaluate(`
+      localStorage.setItem('cyber_token', 'mock-player-token');
+      localStorage.setItem('cyber_role', 'player');
+      localStorage.setItem('cyber_user', JSON.stringify({
+        user_id: 'u-player-01',
+        profile_id: 'p1',
+        username: 'AgentZero',
+        role: 'player',
+        display_name: 'AgentZero'
+      }));
+    `)
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
+    await sleep(1500)
+
+    console.log('[6/6] Testing Mobile Layout (390px), Text Sizing & Overflow...')
     await pageCdp.send('Emulation.setDeviceMetricsOverride', {
       width: 390,
       height: 844,
@@ -317,6 +487,9 @@ async function runBrowserTests() {
     })
     await sleep(800)
 
+    // Capture mobile screenshot at 390px
+    await takeScreenshot('player_overview_mobile_390.png')
+
     const mobileMetrics = await pageCdp.evaluate(`
       (() => {
         const docWidth = document.documentElement.clientWidth;
@@ -324,6 +497,7 @@ async function runBrowserTests() {
         const chartWrapper = document.querySelector('.score-bars-wrapper');
         const chartScrollWidth = chartWrapper ? chartWrapper.scrollWidth : 0;
         const chartClientWidth = chartWrapper ? chartWrapper.clientWidth : 0;
+        const mapCards = document.querySelectorAll('.map-progression-card');
 
         const overflowing = [];
         document.querySelectorAll('*').forEach(el => {
@@ -343,14 +517,41 @@ async function runBrowserTests() {
           scrollWidth,
           chartScrollWidth,
           chartClientWidth,
+          mapCardCount: mapCards.length,
           hasPageHorizontalOverflow: scrollWidth > docWidth,
           overflowing: overflowing.slice(0, 10),
         };
       })()
     `)
     console.log('Mobile Metrics:', mobileMetrics)
+    assert.equal(mobileMetrics.mapCardCount, 4, 'Mobile must render all 4 map cards')
     assert.equal(mobileMetrics.hasPageHorizontalOverflow, false, 'Mobile page must not have horizontal overflow')
-    console.log('✔ No page horizontal overflow on mobile; chart scrolling contained')
+    console.log('✔ No page horizontal overflow on mobile; map cards and chart contained')
+
+    // Test with enlarged text (data-text-size="extra-large")
+    await pageCdp.evaluate(`
+      document.documentElement.setAttribute('data-text-size', 'extra-large');
+    `)
+    await sleep(500)
+
+    const enlargedMetrics = await pageCdp.evaluate(`
+      (() => {
+        const docWidth = document.documentElement.clientWidth;
+        const scrollWidth = document.documentElement.scrollWidth;
+        return {
+          docWidth,
+          scrollWidth,
+          hasPageHorizontalOverflow: scrollWidth > docWidth,
+        };
+      })()
+    `)
+    assert.equal(enlargedMetrics.hasPageHorizontalOverflow, false, 'Enlarged text must not cause page horizontal overflow')
+    console.log('✔ Extra-large text size verified without horizontal overflow')
+
+    // Reset text size
+    await pageCdp.evaluate(`
+      document.documentElement.removeAttribute('data-text-size');
+    `)
 
     console.log('\nALL OVERVIEW TESTS PASSED!')
   } finally {

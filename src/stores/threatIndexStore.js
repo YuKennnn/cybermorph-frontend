@@ -15,6 +15,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '01',
     threat_name: 'Phishing',
     name: 'Phishing',
+    slug: 'phishing',
     summary:
       'Deceptive email messages and fraudulent login pages designed to trick people into surrendering usernames and passwords.',
   }),
@@ -22,6 +23,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '02',
     threat_name: 'Smishing',
     name: 'Smishing',
+    slug: 'smishing',
     summary:
       'SMS-based text message scams using fake package delivery notices or urgent account suspensions to induce clicks.',
   }),
@@ -29,6 +31,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '03',
     threat_name: 'Vishing',
     name: 'Vishing',
+    slug: 'vishing',
     summary:
       'Voice calls where attackers impersonate bank agents, technical support personnel, or government agencies.',
   }),
@@ -36,6 +39,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '04',
     threat_name: 'Social Engineering',
     name: 'Social Engineering',
+    slug: 'social-engineering',
     summary:
       'Psychological manipulation techniques that exploit urgency, trust, or authority to bypass security procedures.',
   }),
@@ -43,6 +47,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '05',
     threat_name: 'Credential Theft',
     name: 'Credential Theft',
+    slug: 'credential-theft',
     summary:
       'Attacks targeting login credentials, including password reuse, keylogging, and weak password choices.',
   }),
@@ -50,6 +55,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '06',
     threat_name: 'Public Wi-Fi Attack',
     name: 'Public Wi-Fi Attack',
+    slug: 'public-wi-fi-attack',
     summary:
       'Rogue access points, "evil twin" networks, and packet interception on unencrypted public Wi-Fi connections.',
   }),
@@ -57,6 +63,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '07',
     threat_name: 'Malware Infection',
     name: 'Malware Infection',
+    slug: 'malware-infection',
     summary:
       'Dangerous email attachments, malicious installers, and compromised download links that deploy harmful software.',
   }),
@@ -64,6 +71,7 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
     number: '08',
     threat_name: 'Ransomware',
     name: 'Ransomware',
+    slug: 'ransomware',
     summary:
       'Malicious programs that lock or encrypt files, along with essential backup strategies and defensive habits.',
   }),
@@ -72,6 +80,15 @@ export const CANONICAL_THREAT_CATEGORIES = Object.freeze([
 const CANONICAL_BY_NAME = new Map(
   CANONICAL_THREAT_CATEGORIES.map((category) => [category.threat_name, category]),
 )
+
+const CANONICAL_BY_SLUG = new Map(
+  CANONICAL_THREAT_CATEGORIES.map((category) => [category.slug, category]),
+)
+
+export const getCanonicalBySlug = (slug) => {
+  if (typeof slug !== 'string') return null
+  return CANONICAL_BY_SLUG.get(slug.toLowerCase().trim()) || null
+}
 
 /**
  * Formats a threat unlock timestamp (`unlocked_at`) for display.
@@ -211,6 +228,7 @@ export const validateThreatIndexResponse = (rawData) => {
     return {
       number: meta.number,
       threat_name: meta.threat_name,
+      slug: meta.slug,
       summary: meta.summary,
       is_unlocked: record.is_unlocked,
       unlocked_at: record.unlocked_at,

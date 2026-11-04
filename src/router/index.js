@@ -107,6 +107,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['player'] },
   },
   {
+    path: '/threat-index/:slug',
+    name: 'threat-lesson',
+    component: () => import('../views/ThreatLessonView.vue'),
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
+  {
     path: '/session-history',
     name: 'session-history',
     component: () => import('../views/SessionHistoryView.vue'),

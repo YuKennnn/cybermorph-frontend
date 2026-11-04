@@ -2,7 +2,12 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert'
 import { spawnSync } from 'node:child_process'
-import { parseBackendUtcTimestamp, formatLastSyncedDate } from '../src/utils/datetime.js'
+import {
+  parseBackendUtcTimestamp,
+  formatLastSyncedDate,
+  formatPlayDataUploadTimestamp,
+  formatAuditLogTimestamp,
+} from '../src/utils/datetime.js'
 import { formatThreatUnlockDate, validateThreatIndexResponse } from '../src/stores/threatIndexStore.js'
 import { formatSessionDate } from '../src/utils/playerSessions.js'
 
@@ -247,5 +252,80 @@ describe('Backend UTC Timestamp Parser & Formatter Suite', () => {
     const invalidRes = validateThreatIndexResponse(impossibleDateThreats)
     assert.strictEqual(invalidRes.status, 'malformed')
     assert.strictEqual(invalidRes.error, 'Threat index response contains invalid unlock dates.')
+  })
+
+  test('11. Play data uploaded_at formatter (PHT, Asia/Manila)', () => {
+    // 2026-11-03T04:43:00 (timezone-free naive UTC) displays Nov 3, 2026, 12:43 PM
+    const naiveRes = formatPlayDataUploadTimestamp('2026-11-03T04:43:00')
+    assert.strictEqual(naiveRes.formatted, 'Nov 3, 2026, 12:43 PM')
+    assert.strictEqual(naiveRes.isNull, false)
+    assert.strictEqual(naiveRes.isInvalid, false)
+
+    // Equivalent Z and explicit-offset timestamps display identical instant
+    const withZ = formatPlayDataUploadTimestamp('2026-11-03T04:43:00Z')
+    const withOffsetManila = formatPlayDataUploadTimestamp('2026-11-03T12:43:00+08:00')
+    const withOffsetLA = formatPlayDataUploadTimestamp('2026-11-02T21:43:00-07:00')
+    assert.strictEqual(withZ.formatted, 'Nov 3, 2026, 12:43 PM')
+    assert.strictEqual(withOffsetManila.formatted, 'Nov 3, 2026, 12:43 PM')
+    assert.strictEqual(withOffsetLA.formatted, 'Nov 3, 2026, 12:43 PM')
+
+    // 2026-11-03T18:00:00Z displays Nov 4, 2026, 2:00 AM
+    const midnightRollover = formatPlayDataUploadTimestamp('2026-11-03T18:00:00Z')
+    assert.strictEqual(midnightRollover.formatted, 'Nov 4, 2026, 2:00 AM')
+
+    // Null and malformed values remain distinguishable
+    const nullRes = formatPlayDataUploadTimestamp(null)
+    assert.strictEqual(nullRes.formatted, '—')
+    assert.strictEqual(nullRes.statusText, 'Not recorded')
+    assert.strictEqual(nullRes.isNull, true)
+    assert.strictEqual(nullRes.isInvalid, false)
+
+    const undefRes = formatPlayDataUploadTimestamp(undefined)
+    assert.strictEqual(undefRes.formatted, '—')
+    assert.strictEqual(undefRes.statusText, 'Not recorded')
+    assert.strictEqual(undefRes.isNull, true)
+
+    const blankRes = formatPlayDataUploadTimestamp('   ')
+    assert.strictEqual(blankRes.formatted, '—')
+    assert.strictEqual(blankRes.statusText, 'Not recorded')
+    assert.strictEqual(blankRes.isNull, true)
+
+    const malformedRes = formatPlayDataUploadTimestamp('not-a-datetime')
+    assert.strictEqual(malformedRes.formatted, '—')
+    assert.strictEqual(malformedRes.statusText, 'Date unavailable')
+    assert.strictEqual(malformedRes.isNull, false)
+    assert.strictEqual(malformedRes.isInvalid, true)
+
+    const leapInvalid = formatPlayDataUploadTimestamp('2026-02-29T10:00:00')
+    assert.strictEqual(leapInvalid.formatted, '—')
+    assert.strictEqual(leapInvalid.statusText, 'Date unavailable')
+    assert.strictEqual(leapInvalid.isInvalid, true)
+  })
+
+  test('12. Audit logs logged_at formatter (PHT, Asia/Manila) for Audit Logs & Admin Overview', () => {
+    // Audit logs formatting uses Asia/Manila (PHT)
+    const auditNaive = formatAuditLogTimestamp('2026-11-03T04:43:00')
+    assert.strictEqual(auditNaive.formatted, 'Nov 3, 2026, 12:43 PM')
+    assert.strictEqual(auditNaive.statusText, '')
+    assert.strictEqual(auditNaive.isNull, false)
+    assert.strictEqual(auditNaive.isInvalid, false)
+
+    const auditWithZ = formatAuditLogTimestamp('2026-11-03T04:43:00Z')
+    const auditWithOffset = formatAuditLogTimestamp('2026-11-03T12:43:00+08:00')
+    assert.strictEqual(auditWithZ.formatted, 'Nov 3, 2026, 12:43 PM')
+    assert.strictEqual(auditWithOffset.formatted, 'Nov 3, 2026, 12:43 PM')
+
+    const auditMidnight = formatAuditLogTimestamp('2026-11-03T18:00:00Z')
+    assert.strictEqual(auditMidnight.formatted, 'Nov 4, 2026, 2:00 AM')
+
+    const auditNull = formatAuditLogTimestamp(null)
+    assert.strictEqual(auditNull.formatted, '—')
+    assert.strictEqual(auditNull.statusText, 'Not recorded')
+    assert.strictEqual(auditNull.isNull, true)
+
+    const auditMalformed = formatAuditLogTimestamp('malformed')
+    assert.strictEqual(auditMalformed.formatted, '—')
+    assert.strictEqual(auditMalformed.statusText, 'Date unavailable')
+    assert.strictEqual(auditMalformed.isInvalid, true)
   })
 })

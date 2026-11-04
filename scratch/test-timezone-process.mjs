@@ -1,6 +1,10 @@
 /* global process */
 import assert from 'node:assert'
-import { formatLastSyncedDate } from '../src/utils/datetime.js'
+import {
+  formatLastSyncedDate,
+  formatPlayDataUploadTimestamp,
+  formatAuditLogTimestamp,
+} from '../src/utils/datetime.js'
 import { formatThreatUnlockDate } from '../src/stores/threatIndexStore.js'
 import { formatSessionDate } from '../src/utils/playerSessions.js'
 
@@ -32,6 +36,38 @@ const sessionBefore = formatSessionDate(beforeMidnightUtc)
 const sessionAfter = formatSessionDate(afterMidnightUtc)
 const syncBefore = formatLastSyncedDate(beforeMidnightUtc)
 const syncAfter = formatLastSyncedDate(afterMidnightUtc)
+
+// 3. Play Data Formatter: MUST remain strictly Asia/Manila (PHT) regardless of process TZ
+const playDataNaive = formatPlayDataUploadTimestamp('2026-11-03T04:43:00')
+const playDataMidnight = formatPlayDataUploadTimestamp('2026-11-03T18:00:00Z')
+
+assert.strictEqual(
+  playDataNaive.formatted,
+  'Nov 3, 2026, 12:43 PM',
+  `Play data naive UTC must format to Asia/Manila 12:43 PM in TZ=${tz}`
+)
+assert.strictEqual(
+  playDataMidnight.formatted,
+  'Nov 4, 2026, 2:00 AM',
+  `Play data 18:00 UTC must format to Asia/Manila Nov 4 2:00 AM in TZ=${tz}`
+)
+console.log(`  ✓ Play data strictly Asia/Manila in ${tz}: "${playDataNaive.formatted}", "${playDataMidnight.formatted}"`)
+
+// 4. Audit Log Formatter: MUST remain strictly Asia/Manila (PHT) regardless of process TZ
+const auditNaive = formatAuditLogTimestamp('2026-11-03T04:43:00')
+const auditMidnight = formatAuditLogTimestamp('2026-11-03T18:00:00Z')
+
+assert.strictEqual(
+  auditNaive.formatted,
+  'Nov 3, 2026, 12:43 PM',
+  `Audit log naive UTC must format to Asia/Manila 12:43 PM in TZ=${tz}`
+)
+assert.strictEqual(
+  auditMidnight.formatted,
+  'Nov 4, 2026, 2:00 AM',
+  `Audit log 18:00 UTC must format to Asia/Manila Nov 4 2:00 AM in TZ=${tz}`
+)
+console.log(`  ✓ Audit logs strictly Asia/Manila in ${tz}: "${auditNaive.formatted}", "${auditMidnight.formatted}"`)
 
 if (tz === 'UTC') {
   // Before midnight is Oct 28; after midnight is Oct 29

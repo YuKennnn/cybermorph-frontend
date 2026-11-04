@@ -4,6 +4,7 @@ import assert from 'node:assert'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import http from 'node:http'
 import { Buffer } from 'node:buffer'
 
 const isWindows = process.platform === 'win32'
@@ -12,7 +13,7 @@ const TEST_PORT = 5195
 const CDP_PORT = 9258
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`
 const USER_DATA_DIR = path.join(os.tmpdir(), `cybermorph-playdata-cdp-${Date.now()}`)
-const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/447d3d32-ed31-4448-8437-946bd7456ffd'
+const ARTIFACT_DIR = 'C:/Users/licok/.gemini/antigravity/brain/bf7d1fc1-9e66-4899-ae20-f96344a21757'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -142,8 +143,15 @@ async function run() {
       throw new Error(`Vite process error: ${viteError.message}`)
     }
     try {
-      const res = await fetch(`http://127.0.0.1:${TEST_PORT}/`)
-      if (res.ok) {
+      const statusCode = await new Promise((resolve, reject) => {
+        const req = http.get(`http://127.0.0.1:${TEST_PORT}/`, (res) => {
+          res.resume()
+          resolve(res.statusCode)
+        })
+        req.on('error', reject)
+        req.setTimeout(1000, () => req.destroy())
+      })
+      if (statusCode >= 200 && statusCode < 400) {
         serverReady = true
         break
       }
@@ -181,7 +189,8 @@ async function run() {
 
   let client = null
   try {
-    for (let i = 0; i < 20; i++) {
+    await sleep(1500)
+    for (let i = 0; i < 30; i++) {
       try {
         const browserWs = await getCDPWebSocketUrl(CDP_PORT)
         const browserCdp = new CDPClient(browserWs)
@@ -259,11 +268,13 @@ async function run() {
       const title = document.querySelector('.page-header .title')?.textContent?.trim();
       const subtitle = document.querySelector('.page-header .subtitle')?.textContent?.trim();
       const bulkBtn = document.querySelector('.btn-bulk-download');
+      const timeHeader = document.querySelector('.th-time')?.textContent?.trim();
       const rows = Array.from(document.querySelectorAll('.play-data-table tbody tr')).map(tr => ({
         user: tr.querySelector('.td-user')?.textContent?.trim(),
         code: tr.querySelector('.td-code')?.textContent?.trim(),
         rows: tr.querySelector('.td-rows')?.textContent?.trim(),
         time: tr.querySelector('.td-time .time-formatted')?.textContent?.trim(),
+        hasSubtext: Boolean(tr.querySelector('.td-time .time-subtext')),
         downloadBtn: tr.querySelector('.btn-download')?.textContent?.trim(),
         btnMinHeight: window.getComputedStyle(tr.querySelector('.btn-download')).minHeight,
       }));
@@ -275,11 +286,13 @@ async function run() {
       return {
         title,
         subtitle,
+        timeHeader,
         bulkBtnText: bulkBtn?.textContent?.trim(),
         bulkBtnDisabled: bulkBtn?.disabled,
         bulkBtnMinHeight: bulkBtn ? window.getComputedStyle(bulkBtn).minHeight : null,
         rowCount: rows.length,
         firstRow: rows[0],
+        hasAnySubtext: rows.some(r => r.hasSubtext),
         paginationInfo,
         pageIndicator,
         prevDisabled,
@@ -289,6 +302,9 @@ async function run() {
 
     console.log('Table Page 1 info:', tableInfo)
     assert.strictEqual(tableInfo.title, 'Play data', 'Page title is Play data')
+    assert.strictEqual(tableInfo.timeHeader, 'Uploaded (PHT)', 'Header labeled Uploaded (PHT)')
+    assert.strictEqual(tableInfo.firstRow.time, 'Oct 31, 2026, 5:15 PM', 'First row time formatted in PHT')
+    assert.strictEqual(tableInfo.hasAnySubtext, false, 'No repeated timezone subtitle on valid rows')
     assert.strictEqual(tableInfo.bulkBtnText, 'Download all', 'Bulk export button says Download all')
     assert.strictEqual(tableInfo.bulkBtnDisabled, false, 'Download all enabled when items exist')
     assert.strictEqual(tableInfo.bulkBtnMinHeight, '44px', 'Bulk button meets 44px min-height')
@@ -329,6 +345,11 @@ async function run() {
     const mobileScreenshotPath = path.join(ARTIFACT_DIR, 'admin_play_data_mobile_390.png')
     await client.screenshot(mobileScreenshotPath)
     console.log('✓ Captured mobile screenshot:', mobileScreenshotPath)
+
+    if (process.argv.includes('--layout-only')) {
+      console.log('✓ Layout-only verification complete (skipping export suites as requested)')
+      return
+    }
 
     // Reset to desktop for further interaction
     await client.setViewport(1440, 900)

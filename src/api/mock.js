@@ -186,8 +186,10 @@ export const mockControl = {
     mockControl.playerProfileOverride = undefined
   },
   failAdminStatsCount: 0,
+  delayAdminStatsMs: 0,
   adminStatsOverride: undefined,
   failAdminApprovalsCount: 0,
+  delayAdminApprovalsMs: 0,
   adminApprovalsOverride: undefined,
   failAdminLogsCount: 0,
   adminLogsOverride: undefined,
@@ -196,6 +198,7 @@ export const mockControl = {
   },
   resetAdminStats() {
     mockControl.failAdminStatsCount = 0
+    mockControl.delayAdminStatsMs = 0
     mockControl.adminStatsOverride = undefined
   },
   setAdminApprovalsOverride(payload) {
@@ -203,6 +206,7 @@ export const mockControl = {
   },
   resetAdminApprovals() {
     mockControl.failAdminApprovalsCount = 0
+    mockControl.delayAdminApprovalsMs = 0
     mockControl.adminApprovalsOverride = undefined
   },
   setAdminLogsOverride(payload) {
@@ -943,12 +947,36 @@ mock.onGet('/players/me').reply(async (config) => {
   if (mockControl.delayPlayerProfileMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, mockControl.delayPlayerProfileMs))
   }
-  if (mockControl.failPlayerProfileCount > 0) {
-    mockControl.failPlayerProfileCount--
+  const persistedFailCount =
+    typeof sessionStorage !== 'undefined'
+      ? parseInt(sessionStorage.getItem('mock_fail_player_profile_count') || '0', 10)
+      : 0
+  if (mockControl.failPlayerProfileCount > 0 || persistedFailCount > 0) {
+    if (mockControl.failPlayerProfileCount > 0) {
+      mockControl.failPlayerProfileCount--
+    }
+    if (persistedFailCount > 0 && typeof sessionStorage !== 'undefined') {
+      const remaining = persistedFailCount - 1
+      if (remaining <= 0) {
+        sessionStorage.removeItem('mock_fail_player_profile_count')
+      } else {
+        sessionStorage.setItem('mock_fail_player_profile_count', String(remaining))
+      }
+    }
     return [500, { detail: 'Temporary player profile failure' }]
   }
   if (mockControl.playerProfileOverride !== undefined) {
     return [200, mockControl.playerProfileOverride]
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    const rawOverride = sessionStorage.getItem('mock_player_profile_override')
+    if (rawOverride) {
+      try {
+        return [200, JSON.parse(rawOverride)]
+      } catch {
+        // Ignore JSON parse error in mock mode
+      }
+    }
   }
   const { player, enrolledClassroom } = resolveMockPlayerFromConfig(config)
   return [
@@ -2305,11 +2333,22 @@ let mockAdminApprovals = [
   },
 ]
 
-mock.onGet('/admin/stats').reply((config) => {
+mock.onGet('/admin/stats').reply(async (config) => {
   const authHeader = config.headers?.Authorization || config.headers?.authorization
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  let delay = 0
+  if (typeof sessionStorage !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_ADMIN_STATS__') || '0', 10) || 0
+  }
+  if (mockControl.delayAdminStatsMs > 0) {
+    delay = Math.max(delay, mockControl.delayAdminStatsMs)
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
 
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_STATS__') || '0', 10) : 0
   if (mockControl.failAdminStatsCount > 0 || sessionFail > 0) {
@@ -2399,11 +2438,22 @@ mock.onGet('/admin/users').reply(async (config) => {
   ]
 })
 
-mock.onGet('/admin/approvals').reply((config) => {
+mock.onGet('/admin/approvals').reply(async (config) => {
   const authHeader = config.headers?.Authorization || config.headers?.authorization
   if (!authHeader) return [401, { detail: 'Missing authorization token' }]
   const role = localStorage.getItem('cyber_role')
   if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+
+  let delay = 0
+  if (typeof sessionStorage !== 'undefined') {
+    delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_ADMIN_APPROVALS__') || '0', 10) || 0
+  }
+  if (mockControl.delayAdminApprovalsMs > 0) {
+    delay = Math.max(delay, mockControl.delayAdminApprovalsMs)
+  }
+  if (delay > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
 
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_ADMIN_APPROVALS__') || '0', 10) : 0
   if (mockControl.failAdminApprovalsCount > 0 || sessionFail > 0) {
