@@ -19,7 +19,7 @@ const btnRefInstall = ref(null)
 const DOWNLOAD_SECTIONS = {
   requirements: {
     title: 'System Requirements',
-    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Awaiting confirmation. Architecture: ARM64. Memory: Awaiting confirmation. Free Storage: Awaiting confirmation. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
+    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Android 9 or later. Architecture: 64-bit ARM (arm64-v8a) required. Memory: 4 GB RAM recommended. Free Storage: 200 MB free space recommended. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
   },
   install: {
     title: 'Beta Installation Guide',
@@ -248,25 +248,19 @@ onMounted(() => {
                   </tr>
                   <tr>
                     <th scope="row">Android Version</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
+                    <td>Android 9 or later</td>
                   </tr>
                   <tr>
                     <th scope="row">Architecture</th>
-                    <td>ARM64</td>
+                    <td>64-bit ARM (arm64-v8a) required</td>
                   </tr>
                   <tr>
                     <th scope="row">Memory (RAM)</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
+                    <td>4 GB RAM recommended</td>
                   </tr>
                   <tr>
                     <th scope="row">Free Storage</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
+                    <td>200 MB free space recommended</td>
                   </tr>
                   <tr>
                     <th scope="row">Network</th>
@@ -378,10 +372,11 @@ onMounted(() => {
                     target="_blank"
                     rel="noopener noreferrer"
                     class="btn-primary"
-                    aria-label="Get Android APK (opens in a new tab)"
+                    aria-label="Get Android APK, 36.6 MB (opens in a new tab)"
                   >
                     <AppIcon name="download" :size="16" />
                     <span>Get Android APK</span>
+                    <span class="apk-size-badge">(36.6 MB)</span>
                     <span class="sr-only">(opens in a new tab)</span>
                   </a>
                   <p v-if="isGoogleDrive" class="destination-note">
@@ -928,6 +923,12 @@ onMounted(() => {
   outline-offset: 2px;
 }
 
+.apk-size-badge {
+  font-size: 0.82rem;
+  font-weight: 500;
+  opacity: 0.92;
+}
+
 .btn-disabled {
   display: inline-flex;
   align-items: center;
@@ -1030,11 +1031,6 @@ onMounted(() => {
 .requirements-table td {
   color: var(--color-text-muted);
   line-height: 1.55;
-}
-
-.text-pending {
-  font-style: italic;
-  color: var(--color-warning);
 }
 
 .header-with-action {
