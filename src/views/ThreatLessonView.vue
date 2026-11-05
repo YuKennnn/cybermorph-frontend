@@ -223,7 +223,6 @@ watch(
       <!-- Section 1: In-Game Encounter & Warning Signs -->
       <section class="lesson-section" aria-labelledby="heading-encounter">
         <div class="section-header">
-          <span class="section-tag">Scenario</span>
           <h2 id="heading-encounter" class="section-title">
             Game encounter: {{ lesson.gameScenario.setting }}
           </h2>
@@ -237,7 +236,7 @@ watch(
         <div class="callout-box warning-box">
           <div class="callout-title">
             <AppIcon name="alert" :size="16" class="callout-icon" />
-            <span>Warning signs to look for</span>
+            <span>Warning signs</span>
           </div>
           <ul class="callout-list">
             <li v-for="(sign, index) in lesson.gameScenario.warningSigns" :key="index">
@@ -254,7 +253,7 @@ watch(
         >
           <div class="sample-label">
             <AppIcon name="info" :size="14" />
-            <span>Sample indicator (inert text for analysis):</span>
+            <span>Example message:</span>
           </div>
           <div class="sample-content">
             <div
@@ -269,14 +268,7 @@ watch(
       </section>
 
       <!-- Section 2: Visual Scene & Accessible Caption -->
-      <section class="lesson-section visual-section" aria-labelledby="heading-visual">
-        <div class="section-header">
-          <span class="section-tag">Visual Reference</span>
-          <h2 id="heading-visual" class="section-title">
-            Encounter environment in {{ lesson.mapName }}
-          </h2>
-        </div>
-
+      <section class="lesson-section visual-section" aria-label="Scene image">
         <figure class="lesson-figure">
           <img
             :src="lesson.screenshot.image"
@@ -294,7 +286,6 @@ watch(
       <!-- Section 3: Recommended Action & Reasoning -->
       <section class="lesson-section" aria-labelledby="heading-action">
         <div class="section-header">
-          <span class="section-tag">Response</span>
           <h2 id="heading-action" class="section-title">
             What you should do and why
           </h2>
@@ -326,9 +317,8 @@ watch(
       <!-- Section 4: Prevention Tips & Key Takeaway -->
       <section class="lesson-section" aria-labelledby="heading-prevention">
         <div class="section-header">
-          <span class="section-tag">Prevention</span>
           <h2 id="heading-prevention" class="section-title">
-            Practical defense habits
+            Prevention tips
           </h2>
         </div>
 
@@ -343,7 +333,7 @@ watch(
         <div class="takeaway-card" role="note" aria-label="Key takeaway">
           <div class="takeaway-badge">
             <AppIcon name="check" :size="14" />
-            <span>Key Takeaway</span>
+            <span>Key takeaway</span>
           </div>
           <p class="takeaway-text">
             {{ lesson.keyTakeaway }}

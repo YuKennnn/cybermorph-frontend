@@ -144,7 +144,6 @@ onUnmounted(() => {
   <div class="roster-page">
     <ClassroomWorkspaceHeader
       page-title="Classroom students"
-      page-description="Review enrolled students, map progress, and their latest sync activity."
       :code-id="codeId"
       :student-count="hasConfirmedRoster ? totalCount : null"
       :is-count-loading="isRosterLoading"

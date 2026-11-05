@@ -190,9 +190,6 @@ onUnmounted(() => {
               : 'My classroom'
           }}
         </h1>
-        <p class="page-subtitle">
-          View your classroom details, educator, and enrolled classmates.
-        </p>
       </div>
 
       <div class="header-actions">
@@ -362,19 +359,11 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <div class="optional-note">
-        <AppIcon name="info" :size="16" class="note-icon" />
-        <span>
-          For players: Classroom membership is optional. Your gameplay sessions and Threat index progress remain saved to your account whether or not you stay in a classroom.
-        </span>
-      </div>
-
       <section class="members-section" aria-labelledby="members-heading">
         <div class="members-header">
           <h2 id="members-heading" class="members-title">
             Classroom members ({{ playerClassroomStore.membership.member_count }})
           </h2>
-          <span class="members-caption">Sorted alphabetically by username</span>
         </div>
 
         <ul
@@ -452,7 +441,7 @@ onUnmounted(() => {
           <p id="leave-classroom-desc" class="modal-desc">
             Are you sure you want to leave
             <strong>"{{ playerClassroomStore.membership?.name || 'this classroom' }}"</strong>?
-            You will be removed from the educator's student list, while your own gameplay sessions and Threat index progress remain on your account. You can join a classroom again later.
+            You will be removed from the educator's student list. Your gameplay progress stays saved.
           </p>
 
           <div class="modal-actions">

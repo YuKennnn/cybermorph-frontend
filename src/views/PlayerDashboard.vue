@@ -6,6 +6,8 @@ import { useThreatIndexStore } from '../stores/threatIndexStore'
 import { usePlayerClassroomStore } from '../stores/playerClassroomStore'
 import { fetchPlayerProfile } from '../api/player'
 import { fetchSessionHistory } from '../api/session'
+import { classifyApiError } from '../api/client'
+import { usePageRecovery } from '../composables/usePageRecovery'
 import {
   CANONICAL_SESSION_MAPS,
   resolveCurrentMapName,
@@ -44,13 +46,23 @@ const hasNoSessions = ref(false)
 const bestScoreUnavailable = ref(false)
 const selectedMapFilter = ref('All')
 
-const isLoading = ref(true)
+// Independent loading, refreshing, and failure states
+const isProfileLoading = ref(true)
+const isProfileRefreshing = ref(false)
+const hasLoadedProfileOnce = ref(false)
 const profileFailed = ref(false)
+
+const isSessionLoading = ref(true)
+const isSessionRefreshing = ref(false)
+const hasLoadedSessionsOnce = ref(false)
 const sessionFailed = ref(false)
 
 const isRetryingSessions = ref(false)
 const isRetryingThreats = ref(false)
 const isRetryingProfile = ref(false)
+
+const slowLoadingNotice = ref(false)
+let slowTimer = null
 
 const generalError = ref('')
 
@@ -98,6 +110,22 @@ const getActiveAccountScope = () => {
   return `${authStore.token}::${id}`
 }
 
+let activeAbortController = null
+
+const resetSlowTimer = () => {
+  if (slowTimer) clearTimeout(slowTimer)
+  slowLoadingNotice.value = false
+  slowTimer = setTimeout(() => {
+    if (
+      (!hasLoadedProfileOnce.value && isProfileLoading.value) ||
+      (!hasLoadedSessionsOnce.value && isSessionLoading.value) ||
+      (!threatIndexStore.isReady && threatIndexStore.isLoading)
+    ) {
+      slowLoadingNotice.value = true
+    }
+  }, 7000)
+}
+
 const resetLocalStats = () => {
   stats.value = {
     games_played: null,
@@ -111,7 +139,18 @@ const resetLocalStats = () => {
   selectedMapFilter.value = 'All'
   profileFailed.value = false
   sessionFailed.value = false
+  hasLoadedProfileOnce.value = false
+  hasLoadedSessionsOnce.value = false
+  isProfileLoading.value = false
+  isProfileRefreshing.value = false
+  isSessionLoading.value = false
+  isSessionRefreshing.value = false
   generalError.value = ''
+  slowLoadingNotice.value = false
+  if (slowTimer) {
+    clearTimeout(slowTimer)
+    slowTimer = null
+  }
 }
 
 const applySessionHistoryPayload = (rawPayload, expectedProfileId) => {
@@ -137,149 +176,16 @@ const applySessionHistoryPayload = (rawPayload, expectedProfileId) => {
 
 let dashboardRequestId = 0
 let sessionRequestId = 0
-let threatRequestId = 0
 let profileRequestId = 0
 
-const loadDashboardData = async ({ forceThreatRefresh = false } = {}) => {
-  const reqId = ++dashboardRequestId
-  const scopeAtStart = getActiveAccountScope()
-  if (!scopeAtStart) {
-    resetLocalStats()
-    isLoading.value = false
-    return
-  }
-
-  isLoading.value = true
-  generalError.value = ''
-  profileFailed.value = false
-  sessionFailed.value = false
-
-  try {
-    const [profileRes, , sessionRes] = await Promise.allSettled([
-      fetchPlayerProfile(),
-      threatIndexStore.loadThreatIndex({ force: forceThreatRefresh }),
-      fetchSessionHistory({ page_size: 20 }),
-      playerClassroomStore.loadMembership({ force: forceThreatRefresh }),
-    ])
-
-    if (reqId !== dashboardRequestId || getActiveAccountScope() !== scopeAtStart) {
-      return // Discard obsolete or cross-account response
-    }
-
-    let resolvedProfileId = authStore.user?.profile_id || null
-
-    // Profile handling
-    if (profileRes.status === 'fulfilled' && profileRes.value) {
-      const p = profileRes.value
-      if (p.profile_id !== undefined && p.profile_id !== null) {
-        resolvedProfileId = String(p.profile_id)
-      }
-      const rawProgress = p.map_progress
-      const isValidProgress =
-        typeof rawProgress === 'number' &&
-        Number.isInteger(rawProgress) &&
-        rawProgress >= 0 &&
-        rawProgress <= 3
-
-      if (isValidProgress) {
-        stats.value.map_progress = rawProgress
-        stats.value.current_map = resolveCurrentMapName(rawProgress)
-        profileFailed.value = false
-      } else {
-        stats.value.map_progress = null
-        stats.value.current_map = null
-        profileFailed.value = true
-      }
-    } else {
-      stats.value.map_progress = null
-      stats.value.current_map = null
-      profileFailed.value = true
-    }
-
-    // Session History handling (single dataset reused for summary cards, chart, and list)
-    if (sessionRes.status === 'fulfilled' && sessionRes.value) {
-      applySessionHistoryPayload(sessionRes.value, resolvedProfileId)
-    } else {
-      sessionItems.value = []
-      hasNoSessions.value = false
-      bestScoreUnavailable.value = true
-      stats.value.games_played = null
-      stats.value.best_score = null
-      sessionFailed.value = true
-    }
-
-    // If all requests failed, surface a general error
-    if (profileFailed.value && threatFailed.value && sessionFailed.value) {
-      generalError.value =
-        'Failed to load player progress. Please verify your connection or try again.'
-    }
-  } catch {
-    if (reqId === dashboardRequestId && getActiveAccountScope() === scopeAtStart) {
-      generalError.value = 'An unexpected error occurred while loading dashboard data.'
-    }
-  } finally {
-    if (reqId === dashboardRequestId) {
-      isLoading.value = false
-    }
-  }
-}
-
-const retrySessions = async () => {
-  if (isRetryingSessions.value) return // Prevent duplicate submissions
-  const scopeAtStart = getActiveAccountScope()
-  if (!scopeAtStart) return
-  isRetryingSessions.value = true
-  const reqId = ++sessionRequestId
-
-  try {
-    const s = await fetchSessionHistory({ page_size: 20 })
-    if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) return
-
-    const ok = applySessionHistoryPayload(s, authStore.user?.profile_id || null)
-    if (ok) {
-      generalError.value = ''
-    }
-  } catch {
-    if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) return
-    sessionFailed.value = true
-  } finally {
-    if (reqId === sessionRequestId) {
-      isRetryingSessions.value = false
-    }
-  }
-}
-
-const retryThreats = async () => {
-  if (isRetryingThreats.value || threatIndexStore.isLoading || threatIndexStore.isRefreshing) return
-  const scopeAtStart = getActiveAccountScope()
-  if (!scopeAtStart) return
-  isRetryingThreats.value = true
-  const reqId = ++threatRequestId
-
-  try {
-    await threatIndexStore.loadThreatIndex({ force: true })
-    if (reqId !== threatRequestId || getActiveAccountScope() !== scopeAtStart) return
-    if (!threatIndexStore.isUnavailable) {
-      generalError.value = ''
-    }
-  } catch {
-    // Error status is tracked in threatIndexStore
-  } finally {
-    if (reqId === threatRequestId) {
-      isRetryingThreats.value = false
-    }
-  }
-}
-
-const retryProfile = async () => {
-  if (isRetryingProfile.value) return // Prevent duplicate submissions
-  const scopeAtStart = getActiveAccountScope()
-  if (!scopeAtStart) return
-  isRetryingProfile.value = true
+const loadProfile = async (scopeAtStart, signal) => {
   const reqId = ++profileRequestId
+  isProfileLoading.value = !hasLoadedProfileOnce.value
+  isProfileRefreshing.value = hasLoadedProfileOnce.value
+  profileFailed.value = false
 
   try {
-    const p = await fetchPlayerProfile()
+    const p = await fetchPlayerProfile({ signal })
     if (reqId !== profileRequestId || getActiveAccountScope() !== scopeAtStart) return
 
     const rawProgress = p ? p.map_progress : null
@@ -293,21 +199,152 @@ const retryProfile = async () => {
       stats.value.map_progress = rawProgress
       stats.value.current_map = resolveCurrentMapName(rawProgress)
       profileFailed.value = false
+      hasLoadedProfileOnce.value = true
       generalError.value = ''
     } else {
       stats.value.map_progress = null
       stats.value.current_map = null
       profileFailed.value = true
     }
-  } catch {
+  } catch (err) {
+    if (classifyApiError(err) === 'canceled') return
     if (reqId !== profileRequestId || getActiveAccountScope() !== scopeAtStart) return
-    stats.value.map_progress = null
-    stats.value.current_map = null
+    if (!hasLoadedProfileOnce.value) {
+      stats.value.map_progress = null
+      stats.value.current_map = null
+    }
     profileFailed.value = true
   } finally {
     if (reqId === profileRequestId) {
-      isRetryingProfile.value = false
+      isProfileLoading.value = false
+      isProfileRefreshing.value = false
     }
+  }
+}
+
+const loadSessions = async (scopeAtStart, signal) => {
+  const reqId = ++sessionRequestId
+  isSessionLoading.value = !hasLoadedSessionsOnce.value
+  isSessionRefreshing.value = hasLoadedSessionsOnce.value
+  sessionFailed.value = false
+
+  try {
+    const s = await fetchSessionHistory({ page_size: 20 }, { signal })
+    if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) return
+
+    let resolvedProfileId = authStore.user?.profile_id || null
+    const ok = applySessionHistoryPayload(s, resolvedProfileId)
+    if (ok) {
+      hasLoadedSessionsOnce.value = true
+      sessionFailed.value = false
+      generalError.value = ''
+    }
+  } catch (err) {
+    if (classifyApiError(err) === 'canceled') return
+    if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) return
+    if (!hasLoadedSessionsOnce.value) {
+      sessionItems.value = []
+      hasNoSessions.value = false
+      bestScoreUnavailable.value = true
+      stats.value.games_played = null
+      stats.value.best_score = null
+    }
+    sessionFailed.value = true
+  } finally {
+    if (reqId === sessionRequestId) {
+      isSessionLoading.value = false
+      isSessionRefreshing.value = false
+    }
+  }
+}
+
+const loadDashboardData = async ({ forceThreatRefresh = false } = {}) => {
+  const reqId = ++dashboardRequestId
+  const scopeAtStart = getActiveAccountScope()
+  if (!scopeAtStart) {
+    resetLocalStats()
+    return
+  }
+
+  // Abort any obsolete in-flight requests from earlier calls
+  activeAbortController?.abort()
+  activeAbortController = new AbortController()
+  const signal = activeAbortController.signal
+
+  resetSlowTimer()
+  generalError.value = ''
+
+  // Dispatch all datasets in parallel; each updates immediately as it arrives
+  const profileP = loadProfile(scopeAtStart, signal)
+  const sessionP = loadSessions(scopeAtStart, signal)
+  const threatP = threatIndexStore
+    .loadThreatIndex({ force: forceThreatRefresh })
+    .catch(() => {})
+  const classroomP = playerClassroomStore
+    .loadMembership({ force: forceThreatRefresh })
+    .catch(() => {})
+
+  await Promise.allSettled([profileP, sessionP, threatP, classroomP])
+
+  if (reqId !== dashboardRequestId || getActiveAccountScope() !== scopeAtStart) {
+    return
+  }
+
+  // Only surface general error if all core player data failed and nothing was previously loaded
+  if (
+    profileFailed.value &&
+    sessionFailed.value &&
+    threatFailed.value &&
+    !hasLoadedProfileOnce.value &&
+    !hasLoadedSessionsOnce.value
+  ) {
+    generalError.value =
+      'Failed to load player progress. Please verify your connection or try again.'
+  }
+}
+
+const retrySessions = async () => {
+  if (isRetryingSessions.value || isSessionLoading.value) return
+  const scopeAtStart = getActiveAccountScope()
+  if (!scopeAtStart) return
+  isRetryingSessions.value = true
+  try {
+    await loadSessions(scopeAtStart, activeAbortController?.signal)
+  } finally {
+    isRetryingSessions.value = false
+  }
+}
+
+const retryThreats = async () => {
+  if (
+    isRetryingThreats.value ||
+    threatIndexStore.isLoading ||
+    threatIndexStore.isRefreshing
+  ) {
+    return
+  }
+  const scopeAtStart = getActiveAccountScope()
+  if (!scopeAtStart) return
+  isRetryingThreats.value = true
+  try {
+    await threatIndexStore.loadThreatIndex({ force: true })
+    if (!threatIndexStore.isUnavailable) {
+      generalError.value = ''
+    }
+  } finally {
+    isRetryingThreats.value = false
+  }
+}
+
+const retryProfile = async () => {
+  if (isRetryingProfile.value || isProfileLoading.value) return
+  const scopeAtStart = getActiveAccountScope()
+  if (!scopeAtStart) return
+  isRetryingProfile.value = true
+  try {
+    await loadProfile(scopeAtStart, activeAbortController?.signal)
+  } finally {
+    isRetryingProfile.value = false
   }
 }
 
@@ -320,19 +357,37 @@ const handleRetryClassroomMembership = () => {
   playerClassroomStore.loadMembership({ force: true }).catch(() => {})
 }
 
+// Register coordinated recovery hook for tab-switching, sleep/hibernation wake-up, or online events
+usePageRecovery(async () => {
+  if (!authStore.isAuthenticated || !authStore.isPlayer) return
+  if (
+    isProfileLoading.value ||
+    isProfileRefreshing.value ||
+    isSessionLoading.value ||
+    isSessionRefreshing.value ||
+    isRetryingProfile.value ||
+    isRetryingSessions.value ||
+    isRetryingThreats.value ||
+    threatIndexStore.isLoading ||
+    threatIndexStore.isRefreshing
+  ) {
+    return
+  }
+  await loadDashboardData({ forceThreatRefresh: true })
+})
+
 watch(
   () => getActiveAccountScope(),
   (newScope, oldScope) => {
     if (newScope === oldScope) return
+    activeAbortController?.abort()
     dashboardRequestId++
     sessionRequestId++
-    threatRequestId++
     profileRequestId++
     resetLocalStats()
     if (!newScope) {
       threatIndexStore.reset()
       playerClassroomStore.reset()
-      isLoading.value = false
       return
     }
     loadDashboardData({ forceThreatRefresh: true })
@@ -344,10 +399,14 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  activeAbortController?.abort()
   dashboardRequestId++
   sessionRequestId++
-  threatRequestId++
   profileRequestId++
+  if (slowTimer) {
+    clearTimeout(slowTimer)
+    slowTimer = null
+  }
 })
 </script>
 
@@ -357,7 +416,6 @@ onUnmounted(() => {
       <div class="banner-header">
         <div class="banner-text">
           <h2 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}</h2>
-          <p class="subtitle">Your gameplay progress and threat training status</p>
         </div>
         <div class="banner-classroom-actions">
           <button type="button" class="btn-outline" @click="handleClassroomAction">
@@ -386,14 +444,19 @@ onUnmounted(() => {
         </div>
 
         <!-- Loading State: never displays fabricated progression -->
-        <div v-if="isLoading" class="map-progression-status" aria-live="polite">
+        <div
+          v-if="isProfileLoading && !hasLoadedProfileOnce"
+          class="map-progression-status"
+          aria-live="polite"
+        >
           <div class="spinner spinner-xs" aria-hidden="true"></div>
           <span class="map-status-note">Loading map progression...</span>
+          <span v-if="slowLoadingNotice" class="slow-hint">Taking longer than expected...</span>
         </div>
 
-        <!-- Explicit Failure / Missing Progression State: never defaults to 0 or all locked -->
+        <!-- Explicit Failure / Missing Progression State: never defaults to 0 or all locked (initial load only) -->
         <div
-          v-else-if="profileFailed || stats.map_progress === null"
+          v-else-if="!hasLoadedProfileOnce && (profileFailed || stats.map_progress === null)"
           class="map-progression-status map-progression-failed"
           role="status"
         >
@@ -410,58 +473,79 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Canonical 4-Map Progression Grid -->
-        <div v-else class="map-progression-grid" role="list">
-          <div
-            v-for="map in mapProgressionList"
-            :key="map.id"
-            class="map-progression-card"
-            :class="map.isUnlocked ? 'is-unlocked' : 'is-locked'"
-            role="listitem"
-          >
-            <div class="map-card-thumb-wrap">
-              <img
-                :src="map.image"
-                alt=""
-                class="map-card-thumb"
-                loading="lazy"
-              />
-            </div>
-            <div class="map-card-info">
-              <span class="map-card-name">{{ map.name }}</span>
-              <span
-                class="map-status-badge"
-                :class="map.isUnlocked ? 'badge-unlocked' : 'badge-locked'"
-              >
-                <AppIcon :name="map.isUnlocked ? 'check' : 'lock'" :size="12" />
-                <span class="map-status-text">{{ map.isUnlocked ? 'Unlocked' : 'Locked' }}</span>
-              </span>
+        <!-- Canonical 4-Map Progression Grid (when loaded once) -->
+        <template v-else-if="hasLoadedProfileOnce && stats.map_progress !== null">
+          <!-- Refresh Warning Banner if background refresh failed -->
+          <div v-if="profileFailed" class="map-refresh-warning" role="alert">
+            <span class="map-status-note">Map progression could not be refreshed.</span>
+            <button
+              type="button"
+              class="btn-inline-retry"
+              :disabled="isRetryingProfile || isProfileRefreshing"
+              @click="retryProfile"
+            >
+              {{ isRetryingProfile || isProfileRefreshing ? 'Retrying...' : 'Retry' }}
+            </button>
+          </div>
+
+          <div class="map-progression-grid" role="list">
+            <div
+              v-for="map in mapProgressionList"
+              :key="map.id"
+              class="map-progression-card"
+              :class="map.isUnlocked ? 'is-unlocked' : 'is-locked'"
+              role="listitem"
+            >
+              <div class="map-card-thumb-wrap">
+                <img
+                  :src="map.image"
+                  alt=""
+                  class="map-card-thumb"
+                  loading="lazy"
+                />
+              </div>
+              <div class="map-card-info">
+                <span class="map-card-name">{{ map.name }}</span>
+                <span
+                  class="map-status-badge"
+                  :class="map.isUnlocked ? 'badge-unlocked' : 'badge-locked'"
+                >
+                  <AppIcon :name="map.isUnlocked ? 'check' : 'lock'" :size="12" />
+                  <span class="map-status-text">{{ map.isUnlocked ? 'Unlocked' : 'Locked' }}</span>
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </section>
     </div>
 
-    <!-- Main Loading State -->
-    <div v-if="isLoading" class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading your progress...</p>
-    </div>
-
-    <!-- Complete Failure State -->
-    <div v-else-if="generalError" class="error-banner" role="alert">
+    <!-- Complete Failure State (only if all primary datasets failed with no prior data) -->
+    <div v-if="generalError" class="error-banner" role="alert">
       <span>{{ generalError }}</span>
-      <button type="button" class="btn-retry" :disabled="isLoading" @click="loadDashboardData">
+      <button
+        type="button"
+        class="btn-retry"
+        :disabled="isProfileLoading || isSessionLoading"
+        @click="loadDashboardData"
+      >
         Try again
       </button>
     </div>
 
     <!-- Dashboard Content with Partial Failure Resilience -->
-    <div v-else class="dashboard-content">
+    <div class="dashboard-content">
       <div class="stats-grid">
         <!-- Games Played Card -->
         <div class="stat-card">
-          <template v-if="sessionFailed">
+          <template v-if="isSessionLoading && !hasLoadedSessionsOnce">
+            <div class="stat-loading" aria-live="polite">
+              <div class="spinner spinner-xs" aria-hidden="true"></div>
+              <span>Loading...</span>
+            </div>
+            <div class="stat-label">Games played</div>
+          </template>
+          <template v-else-if="!hasLoadedSessionsOnce && sessionFailed">
             <div class="stat-unavailable">
               {{ isRetryingSessions ? 'Retrying...' : 'Unavailable' }}
             </div>
@@ -487,7 +571,15 @@ onUnmounted(() => {
 
         <!-- Recent Best Score Card -->
         <div class="stat-card highlight-card">
-          <template v-if="sessionFailed">
+          <template v-if="isSessionLoading && !hasLoadedSessionsOnce">
+            <div class="stat-loading" aria-live="polite">
+              <div class="spinner spinner-xs" aria-hidden="true"></div>
+              <span>Loading...</span>
+            </div>
+            <div class="stat-label">Recent best score</div>
+            <div class="stat-sublabel">Latest 20 sessions</div>
+          </template>
+          <template v-else-if="!hasLoadedSessionsOnce && sessionFailed">
             <div class="stat-unavailable">
               {{ isRetryingSessions ? 'Retrying...' : 'Unavailable' }}
             </div>
@@ -523,7 +615,19 @@ onUnmounted(() => {
 
         <!-- Threat Index Card -->
         <div class="stat-card">
-          <template v-if="threatFailed">
+          <template v-if="threatIndexStore.isLoading && !threatIndexStore.isReady">
+            <div class="stat-loading" aria-live="polite">
+              <div class="spinner spinner-xs" aria-hidden="true"></div>
+              <span>Loading...</span>
+            </div>
+            <div class="stat-label">Threat index progress</div>
+            <div class="stat-card-actions">
+              <router-link to="/threat-index" class="stat-link">
+                View threat index
+              </router-link>
+            </div>
+          </template>
+          <template v-else-if="!threatIndexStore.hasLoadedOnce && threatFailed">
             <div class="stat-unavailable">
               {{
                 isRetryingThreats || threatIndexStore.isRefreshing
@@ -579,10 +683,13 @@ onUnmounted(() => {
               <h3 id="recent-performance-heading" class="panel-title">Recent performance</h3>
               <span class="scope-badge">Latest 10 sessions</span>
             </div>
-            <p class="panel-subtitle">
-              Session score is earned credits minus lost credits and false-positive penalties
-              (25 per false positive, minimum 0). Each map features different scenarios.
-            </p>
+            <details class="scoring-disclosure">
+              <summary class="scoring-disclosure-summary">How scoring works</summary>
+              <p class="scoring-disclosure-text">
+                Session score is earned credits minus lost credits and false-positive penalties
+                (25 per false positive, minimum 0). Each map features different scenarios.
+              </p>
+            </details>
           </div>
 
           <router-link to="/session-history" class="btn-history-link">
@@ -592,7 +699,10 @@ onUnmounted(() => {
         </div>
 
         <!-- Filter Row -->
-        <div v-if="!sessionFailed && !hasNoSessions" class="panel-filter-row">
+        <div
+          v-if="hasLoadedSessionsOnce && !hasNoSessions"
+          class="panel-filter-row"
+        >
           <div class="map-filter-control">
             <label for="overview-map-select" class="map-filter-label">Filter by map</label>
             <div class="map-filter-input-group">
@@ -600,22 +710,46 @@ onUnmounted(() => {
                 id="overview-map-select"
                 v-model="selectedMapFilter"
                 class="map-select"
-                aria-describedby="overview-map-filter-note"
               >
                 <option value="All">All maps (latest 10)</option>
                 <option v-for="mapName in CANONICAL_SESSION_MAPS" :key="mapName" :value="mapName">
                   {{ mapName }}
                 </option>
               </select>
-              <span id="overview-map-filter-note" class="map-filter-note">
-                Filters within your latest 10 sessions
-              </span>
             </div>
           </div>
         </div>
 
-        <!-- Session History Failed State -->
-        <div v-if="sessionFailed" class="panel-error-state" role="alert">
+        <!-- Session History Refresh Warning (when previously loaded) -->
+        <div
+          v-if="hasLoadedSessionsOnce && sessionFailed"
+          class="panel-refresh-warning"
+          role="alert"
+        >
+          <span>Recent session history could not be refreshed.</span>
+          <button
+            type="button"
+            class="btn-inline-retry"
+            :disabled="isRetryingSessions || isSessionRefreshing"
+            @click="retrySessions"
+          >
+            {{ isRetryingSessions || isSessionRefreshing ? 'Retrying...' : 'Retry' }}
+          </button>
+        </div>
+
+        <!-- Session Loading State -->
+        <div
+          v-if="isSessionLoading && !hasLoadedSessionsOnce"
+          class="panel-loading-state"
+          aria-live="polite"
+        >
+          <div class="spinner"></div>
+          <p>Loading recent session history...</p>
+          <span v-if="slowLoadingNotice" class="slow-hint">Taking longer than expected...</span>
+        </div>
+
+        <!-- Session History Failed State (initial load only) -->
+        <div v-else-if="!hasLoadedSessionsOnce && sessionFailed" class="panel-error-state" role="alert">
           <p class="panel-state-title">Recent session history is currently unavailable.</p>
           <p class="panel-state-desc">
             Your progress could not be loaded right now. Try refreshing your session history.
@@ -739,21 +873,28 @@ onUnmounted(() => {
 .welcome-banner {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 1.25rem;
 }
 
 .banner-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .banner-text {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .banner-classroom-actions {
@@ -761,12 +902,21 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.banner-classroom-actions .btn-outline {
+  max-width: 100%;
 }
 
 .title {
   margin: 0;
   color: var(--color-text-main);
-  font-size: 1.5rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .subtitle {
@@ -854,7 +1004,7 @@ onUnmounted(() => {
 
 .map-card-thumb-wrap {
   width: 100%;
-  height: 60px;
+  aspect-ratio: 16 / 9;
   background-color: var(--color-bg-muted);
   overflow: hidden;
 }
@@ -863,6 +1013,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   image-rendering: pixelated;
   display: block;
 }
@@ -872,11 +1023,14 @@ onUnmounted(() => {
 }
 
 .map-card-info {
-  padding: 0.55rem 0.65rem;
+  padding: 0.65rem 0.75rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
   min-width: 0;
+  flex: 1;
 }
 
 .map-card-name {
@@ -885,6 +1039,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--color-text-main);
   line-height: 1.25;
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
@@ -896,12 +1051,14 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.12rem 0.5rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 600;
   width: fit-content;
   line-height: 1.3;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .map-status-badge.badge-unlocked {
@@ -922,6 +1079,15 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .banner-header {
+    padding: 1rem 1.15rem;
+    gap: 0.85rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
   .map-progression-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.6rem;
@@ -1081,6 +1247,45 @@ onUnmounted(() => {
   font-size: 0.85rem;
   color: var(--color-text-muted);
   line-height: 1.45;
+}
+
+.scoring-disclosure {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.scoring-disclosure-summary {
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--color-primary);
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  padding: 0.15rem 0.35rem;
+  margin-left: -0.35rem;
+  border-radius: 4px;
+}
+
+.scoring-disclosure-summary:hover {
+  text-decoration: underline;
+  color: #6d28d9;
+}
+
+.scoring-disclosure-summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.35);
+}
+
+.scoring-disclosure-text {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
 }
 
 .panel-filter-row {
@@ -1256,24 +1461,8 @@ onUnmounted(() => {
 .bar-fill {
   width: 100%;
   border-radius: 4px;
-  background: var(--btn-gradient);
-  transition: height 0.2s ease;
-}
-
-.bar-fill[data-map='Home'] {
   background: var(--color-primary);
-}
-
-.bar-fill[data-map='Office'] {
-  background: var(--color-secondary);
-}
-
-.bar-fill[data-map='Internet Cafe'] {
-  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-}
-
-.bar-fill[data-map='Public Park'] {
-  background: var(--color-success);
+  transition: height 0.2s ease;
 }
 
 .bar-map-tag {
@@ -1327,6 +1516,43 @@ onUnmounted(() => {
 .loading-state {
   text-align: center;
   padding: 3.5rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.panel-loading-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.map-refresh-warning,
+.panel-refresh-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 0.75rem;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 6px;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+.stat-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  min-height: 2.2rem;
+}
+
+.slow-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 

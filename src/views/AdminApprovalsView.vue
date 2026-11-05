@@ -247,8 +247,7 @@ onUnmounted(() => {
     <header class="view-header">
       <div class="header-content">
         <div>
-          <h2 class="title">Educator Approvals</h2>
-          <p class="subtitle">Review, authorize, and manage institutional instructor registrations</p>
+          <h2 class="title">Educator approvals</h2>
         </div>
       </div>
     </header>

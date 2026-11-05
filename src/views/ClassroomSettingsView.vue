@@ -428,7 +428,6 @@ onMounted(() => {
   <div class="settings-workspace-page">
     <ClassroomWorkspaceHeader
       page-title="Classroom settings"
-      page-description="Update classroom details and control enrollment availability."
       :code-id="codeId"
       :originating-roster-page="originatingRosterPage"
       active-tab="settings"
@@ -454,9 +453,6 @@ onMounted(() => {
       <section class="settings-card" aria-labelledby="general-settings-title">
         <header class="card-header">
           <h3 id="general-settings-title" class="card-title">Classroom settings</h3>
-          <p class="card-subtitle">
-            Update classroom identification, descriptive details, and enrollment status.
-          </p>
         </header>
 
         <!-- Feedback Banners -->

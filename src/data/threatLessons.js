@@ -40,7 +40,7 @@ export const THREAT_LESSONS = Object.freeze({
         'Phishing sites look almost identical to genuine login screens. Entering your credentials sends your username and password directly to the attacker, giving them immediate unauthorized access.',
     },
     preventionTips: [
-      'Type official website addresses directly into your browser bookmark bar rather than following links in unsolicited messages.',
+      'Type official website addresses directly into your browser address bar or use a trusted bookmark rather than following links in unsolicited messages.',
       'Always inspect the sender address and domain carefully, not just the displayed friendly name.',
       'Remember that an HTTPS padlock icon indicates the connection is encrypted, but it does not guarantee that the website owner is legitimate or safe.',
       'Enable two-factor authentication on all accounts to protect your login even if a password is leaked.',

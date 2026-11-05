@@ -449,7 +449,6 @@ onUnmounted(() => {
   <div class="student-progress-view">
     <ClassroomWorkspaceHeader
       page-title="Student progress"
-      page-description="Review this student’s map progression, threat unlocks, and recent sessions."
       :code-id="codeId"
       active-tab="students"
       :return-to="rosterReturnRoute"
@@ -518,7 +517,6 @@ onUnmounted(() => {
         <section class="section-card summary-section" aria-label="Performance summary">
           <div class="section-header">
             <h3>Student progress</h3>
-            <span class="section-hint">Performance overview across completed simulations</span>
           </div>
 
           <div class="kpi-grid">

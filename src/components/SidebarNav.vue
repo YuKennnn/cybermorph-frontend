@@ -605,8 +605,7 @@ const formatRole = (role) => {
   font-family: var(--font-sans);
   font-size: 0.88rem;
   font-weight: 500;
-  border-radius: 8px;
-  border-left: 3px solid transparent;
+  border-radius: 10px;
   transition: all 0.15s ease;
 }
 
@@ -615,24 +614,39 @@ const formatRole = (role) => {
   transition: color 0.15s ease;
 }
 
-.nav-item:hover {
+.nav-item:hover:not(.router-link-active) {
   background-color: var(--color-bg);
   color: var(--color-text-main);
 }
 
-.nav-item:hover .nav-icon {
+.nav-item:hover:not(.router-link-active) .nav-icon {
   color: var(--color-primary);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .nav-item.router-link-active {
-  background-color: var(--color-violet-subtle);
-  color: var(--color-primary);
+  background-color: var(--color-secondary);
+  color: #ffffff;
   font-weight: 600;
-  border-left-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-item.router-link-active .nav-icon {
-  color: var(--color-primary);
+  color: #ffffff;
+}
+
+.nav-item.router-link-active:hover {
+  background-color: var(--color-secondary);
+  filter: brightness(0.95);
+  color: #ffffff;
+}
+
+.nav-item.router-link-active:hover .nav-icon {
+  color: #ffffff;
 }
 
 .nav-label {
@@ -669,20 +683,27 @@ const formatRole = (role) => {
   transition: color 0.15s ease;
 }
 
-.logout-btn:hover {
-  background-color: var(--color-danger-bg);
-  border-color: var(--color-danger-border);
-  color: var(--color-danger);
-}
+@media (hover: hover) {
+  .logout-btn:hover {
+    background-color: #dc2626;
+    border-color: #dc2626;
+    color: #ffffff;
+  }
 
-.logout-btn:hover .logout-icon {
-  color: var(--color-danger);
+  .logout-btn:hover .logout-icon {
+    color: #ffffff;
+  }
 }
 
 .logout-btn:active {
-  background-color: var(--color-danger-bg);
-  border-color: var(--color-danger);
+  background-color: #b91c1c;
+  border-color: #b91c1c;
+  color: #ffffff;
   transform: scale(0.99);
+}
+
+.logout-btn:active .logout-icon {
+  color: #ffffff;
 }
 
 .logout-btn:focus-visible {

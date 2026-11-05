@@ -4,7 +4,6 @@ import assert from 'node:assert'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import http from 'node:http'
 import { Buffer } from 'node:buffer'
 
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe'

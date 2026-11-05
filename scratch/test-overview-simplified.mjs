@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import http from 'node:http'
+import { Buffer } from 'node:buffer'
 import { buildChartSeries, filterSessionsByMap } from '../src/utils/playerSessions.js'
 
 console.log('=== 1. Unit Tests for buildChartSeries and 10-Session Window ===')
@@ -171,8 +172,10 @@ async function runBrowserTests() {
         stdio: 'pipe',
       },
     )
+    viteProcess.stdout.on('data', d => console.log('[vite stdout]', d.toString().trim()))
+    viteProcess.stderr.on('data', d => console.error('[vite stderr]', d.toString().trim()))
 
-    const serverReady = await waitForServer(`${BASE_URL}/`)
+    const serverReady = await waitForServer(`${BASE_URL}/`, 25000)
     if (!serverReady) {
       throw new Error(`Server failed to start at ${BASE_URL}`)
     }
@@ -244,6 +247,8 @@ async function runBrowserTests() {
         const historyLink = document.querySelector('.btn-history-link');
         const mapOptions = Array.from(document.querySelectorAll('#overview-map-select option')).map(o => o.textContent.trim());
         const filterNote = document.querySelector('#overview-map-filter-note')?.textContent?.trim();
+        const scoringSummary = document.querySelector('.scoring-disclosure summary')?.textContent?.trim();
+        const scoringText = document.querySelector('.scoring-disclosure-text')?.textContent?.trim();
         const chartPoints = document.querySelectorAll('.score-bar-col');
         const srTableRows = document.querySelectorAll('.chart-container .sr-only table tbody tr');
         const srTableCaption = document.querySelector('.chart-container .sr-only table caption')?.textContent?.trim();
@@ -259,12 +264,50 @@ async function runBrowserTests() {
           const badgeText = card.querySelector('.map-status-text')?.textContent?.trim();
           const isUnlocked = card.classList.contains('is-unlocked');
           const isLocked = card.classList.contains('is-locked');
-          const hasImg = !!card.querySelector('.map-card-thumb');
+          const thumbEl = card.querySelector('.map-card-thumb');
+          const thumbWrap = card.querySelector('.map-card-thumb-wrap');
+          const hasImg = !!thumbEl;
           const hasIcon = !!card.querySelector('.map-status-badge .app-icon');
-          return { name, badgeText, isUnlocked, isLocked, hasImg, hasIcon };
+          const imgHeight = thumbWrap ? Math.round(thumbWrap.getBoundingClientRect().height) : 0;
+          const imgWidth = thumbWrap ? Math.round(thumbWrap.getBoundingClientRect().width) : 0;
+          const nameRect = card.querySelector('.map-card-name')?.getBoundingClientRect();
+          const badgeRect = card.querySelector('.map-status-badge')?.getBoundingClientRect();
+          const nameCenterY = nameRect ? nameRect.top + nameRect.height / 2 : 0;
+          const badgeCenterY = badgeRect ? badgeRect.top + badgeRect.height / 2 : 0;
+          const isSameRow = nameRect && badgeRect ? Math.abs(nameCenterY - badgeCenterY) < 6 : false;
+          const isNameOnLeft = nameRect && badgeRect ? nameRect.left < badgeRect.left : false;
+          return {
+            name,
+            badgeText,
+            isUnlocked,
+            isLocked,
+            hasImg,
+            hasIcon,
+            imgHeight,
+            imgWidth,
+            isSameRow,
+            isNameOnLeft
+          };
         });
 
+        // Welcome banner checks
+        const bannerHeader = document.querySelector('.banner-header');
+        const bannerComputed = bannerHeader ? window.getComputedStyle(bannerHeader) : null;
+        const bannerBg = bannerComputed?.backgroundColor;
+        const bannerBorderRadius = bannerComputed?.borderRadius;
+        const titleEl = document.querySelector('.banner-text .title');
+        const titleColor = titleEl ? window.getComputedStyle(titleEl).color : null;
+        const classroomBtn = document.querySelector('.banner-classroom-actions .btn-outline');
+        const classroomBtnComputed = classroomBtn ? window.getComputedStyle(classroomBtn) : null;
+
         return {
+          bannerBg,
+          bannerBorderRadius,
+          titleColor,
+          titleText: titleEl?.textContent?.trim(),
+          classroomBtnBg: classroomBtnComputed?.backgroundColor,
+          classroomBtnColor: classroomBtnComputed?.color,
+          classroomBtnText: classroomBtn?.textContent?.trim(),
           hasVisibleTable: !!table,
           heading,
           badge,
@@ -272,6 +315,8 @@ async function runBrowserTests() {
           historyLinkHref: historyLink?.getAttribute('href'),
           mapOptions,
           filterNote,
+          scoringSummary,
+          scoringText,
           chartPointCount: chartPoints.length,
           srTableRowCount: srTableRows.length,
           srTableCaption,
@@ -293,15 +338,38 @@ async function runBrowserTests() {
     assert.equal(overviewState.mapCards.length, 4, 'Must render exactly 4 canonical maps')
 
     const expectedOrder = ['Home', 'Office', 'Internet Cafe', 'Public Park']
+    const firstImgHeight = overviewState.mapCards[0].imgHeight
+    assert(firstImgHeight >= 90, `Map image preview must be taller (actual: ${firstImgHeight}px, expected >= 90px)`)
+
     overviewState.mapCards.forEach((c, idx) => {
       assert.equal(c.name, expectedOrder[idx], `Card at index ${idx} must be ${expectedOrder[idx]}`)
       assert.equal(c.hasImg, true, `Card ${c.name} must have a map image`)
       assert.equal(c.hasIcon, true, `Card ${c.name} must have status icon`)
       assert(c.badgeText === 'Unlocked' || c.badgeText === 'Locked', `Card ${c.name} badge must have readable text`)
+      assert(
+        Math.abs(c.imgHeight - firstImgHeight) <= 2,
+        `All map image previews must have consistent height (card ${c.name}: ${c.imgHeight}px vs first: ${firstImgHeight}px)`
+      )
+      assert.equal(c.isNameOnLeft, true, `Map ${c.name} name must be on left of badge`)
+      assert.equal(c.isSameRow, true, `Map ${c.name} name and badge must be vertically centered on same row on desktop`)
     })
+    console.log('✔ Taller map previews with consistent proportions and horizontal alignment verified')
 
-    // Take desktop screenshot
+    // Verify Welcome Banner
+    assert.equal(overviewState.bannerBorderRadius, '12px', 'Banner header must have 12px rounded corners')
+    assert.match(overviewState.titleText, /^Welcome back,/)
+    assert(overviewState.classroomBtnText, 'Classroom button must be present')
+    console.log('✔ Welcome banner card treatment and classroom button verified')
+
+    // Take desktop light screenshot
     await takeScreenshot('player_overview_desktop.png')
+
+    // Test Desktop Dark theme
+    await pageCdp.evaluate(`document.documentElement.setAttribute('data-theme', 'dark');`)
+    await sleep(400)
+    await takeScreenshot('player_overview_dark_desktop.png')
+    await pageCdp.evaluate(`document.documentElement.removeAttribute('data-theme');`)
+    await sleep(300)
 
     // Verify visible table is removed
     assert.equal(overviewState.hasVisibleTable, false, 'Visible preview table must be removed')
@@ -310,9 +378,11 @@ async function runBrowserTests() {
     assert.equal(overviewState.badge, 'Latest 10 sessions')
     assert.equal(overviewState.historyLinkText, 'View session history')
     assert.equal(overviewState.historyLinkHref, '/session-history')
-    // Verify select options & note
+    // Verify select options & removed note
     assert.equal(overviewState.mapOptions[0], 'All maps (latest 10)')
-    assert.equal(overviewState.filterNote, 'Filters within your latest 10 sessions')
+    assert.equal(overviewState.filterNote, undefined, 'Redundant filter note must be removed')
+    assert.equal(overviewState.scoringSummary, 'How scoring works', 'Scoring disclosure must have summary')
+    assert.match(overviewState.scoringText, /Session score is earned credits/)
     // Verify 10 points plotted
     assert.equal(overviewState.chartPointCount, 10, 'Chart must plot exactly 10 points')
     // Verify sr-only table
@@ -463,10 +533,62 @@ async function runBrowserTests() {
 
     console.log('✔ Session isolation verified on account scope change')
 
-    // Restore login for UI tests
+    // Restore login for UI tests with long username first to verify desktop
     await pageCdp.evaluate(`
       localStorage.setItem('cyber_token', 'mock-player-token');
       localStorage.setItem('cyber_role', 'player');
+      localStorage.setItem('cyber_user', JSON.stringify({
+        user_id: 'u-player-01',
+        profile_id: 'p1',
+        username: 'WishYouWereHereSuperLongUsername123456789',
+        role: 'player',
+        display_name: 'WishYouWereHereSuperLongUsername123456789'
+      }));
+    `)
+    await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
+    await sleep(1500)
+
+    // Capture desktop long username screenshot
+    await takeScreenshot('player_overview_longname_desktop.png')
+    console.log('✔ Desktop long username rendered cleanly')
+
+    console.log('[6/6] Testing Mobile Layout (390px), Long Username, Text Sizing & Overflow...')
+    await pageCdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+    })
+    await sleep(800)
+
+    // Capture mobile long username screenshot
+    await takeScreenshot('player_overview_longname_mobile.png')
+
+    // Verify classroom action wraps below long username on mobile
+    const wrapCheck = await pageCdp.evaluate(`
+      (() => {
+        const titleRect = document.querySelector('.banner-text').getBoundingClientRect();
+        const actionRect = document.querySelector('.banner-classroom-actions').getBoundingClientRect();
+        return {
+          isWrapped: actionRect.top >= titleRect.bottom - 8,
+          titleBottom: titleRect.bottom,
+          actionTop: actionRect.top
+        };
+      })()
+    `)
+    console.log('Mobile Wrap Check:', wrapCheck)
+    assert.equal(wrapCheck.isWrapped, true, 'Classroom action must wrap below greeting on mobile with long username')
+    console.log('✔ Classroom action cleanly wrapped below greeting on mobile')
+
+    // Test mobile dark theme
+    await pageCdp.evaluate(`document.documentElement.setAttribute('data-theme', 'dark');`)
+    await sleep(400)
+    await takeScreenshot('player_overview_dark_mobile.png')
+    await pageCdp.evaluate(`document.documentElement.removeAttribute('data-theme');`)
+    await sleep(300)
+
+    // Reset standard username
+    await pageCdp.evaluate(`
       localStorage.setItem('cyber_user', JSON.stringify({
         user_id: 'u-player-01',
         profile_id: 'p1',
@@ -476,18 +598,9 @@ async function runBrowserTests() {
       }));
     `)
     await pageCdp.send('Page.navigate', { url: `${BASE_URL}/dashboard` })
-    await sleep(1500)
+    await sleep(1200)
 
-    console.log('[6/6] Testing Mobile Layout (390px), Text Sizing & Overflow...')
-    await pageCdp.send('Emulation.setDeviceMetricsOverride', {
-      width: 390,
-      height: 844,
-      deviceScaleFactor: 2,
-      mobile: true,
-    })
-    await sleep(800)
-
-    // Capture mobile screenshot at 390px
+    // Capture mobile screenshot at 390px standard
     await takeScreenshot('player_overview_mobile_390.png')
 
     const mobileMetrics = await pageCdp.evaluate(`
@@ -528,11 +641,40 @@ async function runBrowserTests() {
     assert.equal(mobileMetrics.hasPageHorizontalOverflow, false, 'Mobile page must not have horizontal overflow')
     console.log('✔ No page horizontal overflow on mobile; map cards and chart contained')
 
+    // Verify map progression card image heights and wrap on mobile
+    const mobileCardCheck = await pageCdp.evaluate(`
+      (() => {
+        const cards = Array.from(document.querySelectorAll('.map-progression-card')).map(card => {
+          const name = card.querySelector('.map-card-name')?.textContent?.trim();
+          const nameRect = card.querySelector('.map-card-name')?.getBoundingClientRect();
+          const badgeRect = card.querySelector('.map-status-badge')?.getBoundingClientRect();
+          const thumbWrap = card.querySelector('.map-card-thumb-wrap')?.getBoundingClientRect();
+          return {
+            name,
+            imgHeight: Math.round(thumbWrap?.height || 0),
+            isWrapped: badgeRect && nameRect ? badgeRect.top >= nameRect.bottom - 4 : false,
+            badgeVisible: !!badgeRect && badgeRect.width > 0,
+            nameVisible: !!nameRect && nameRect.width > 0
+          };
+        });
+        return cards;
+      })()
+    `)
+    console.log('Mobile Card Check:', mobileCardCheck)
+    const mobileFirstImgHeight = mobileCardCheck[0].imgHeight
+    mobileCardCheck.forEach(c => {
+      assert(Math.abs(c.imgHeight - mobileFirstImgHeight) <= 2, `Mobile map image heights must be consistent (${c.imgHeight} vs ${mobileFirstImgHeight})`)
+      assert.equal(c.badgeVisible, true, `Card ${c.name} badge must be visible`)
+      assert.equal(c.nameVisible, true, `Card ${c.name} name must be visible`)
+    })
+    console.log('✔ Consistent mobile map image heights and readability verified')
+
     // Test with enlarged text (data-text-size="extra-large")
     await pageCdp.evaluate(`
       document.documentElement.setAttribute('data-text-size', 'extra-large');
     `)
     await sleep(500)
+    await takeScreenshot('player_overview_enlarged_text_mobile.png')
 
     const enlargedMetrics = await pageCdp.evaluate(`
       (() => {

@@ -509,10 +509,10 @@ const webUserEmail = computed(() => {
           <div class="read-only-notice" role="note">
             <AppIcon name="copy" :size="16" class="notice-icon" />
             <span v-if="authStore.isEducator">
-              Account email, role, and approval status are read-only.
+              Email, role, and approval status are read-only.
             </span>
             <span v-else>
-              Account details are currently read-only. Profile editing is not currently supported.
+              Account details are read-only.
             </span>
           </div>
 

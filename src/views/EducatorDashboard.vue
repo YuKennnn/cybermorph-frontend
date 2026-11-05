@@ -6,6 +6,7 @@ import { useClassroomStore } from '../stores/classroomStore'
 import { fetchMyClassrooms } from '../api/classroom'
 import { fetchClassroomAnalytics } from '../api/analytics'
 import { extractErrorMessage } from '../api/client'
+import { usePageRecovery } from '../composables/usePageRecovery'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
 import ClassroomCreateModal from '../components/classroom/ClassroomCreateModal.vue'
 import AppIcon from '../components/common/AppIcon.vue'
@@ -19,6 +20,8 @@ const CANONICAL_MAPS = ['Home', 'Office', 'Internet Cafe', 'Public Park']
 const classrooms = ref([])
 const totalStudents = ref(0)
 const isLoading = ref(true)
+const isRefreshing = ref(false)
+const hasLoadedOnce = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const isCreateModalOpen = ref(false)
@@ -37,6 +40,8 @@ const resetDashboardState = () => {
   classrooms.value = []
   totalStudents.value = 0
   isLoading.value = false
+  isRefreshing.value = false
+  hasLoadedOnce.value = false
   errorMessage.value = ''
   successMessage.value = ''
   selectedSnapshotCodeId.value = ''
@@ -162,7 +167,8 @@ const loadDashboardData = async () => {
   if (!authStore.isAuthenticated || !authStore.isEducator) return
   const reqId = ++latestDashboardRequestId
   const reqSession = currentSessionEpoch
-  isLoading.value = true
+  isLoading.value = !hasLoadedOnce.value
+  isRefreshing.value = hasLoadedOnce.value
   errorMessage.value = ''
 
   try {
@@ -179,13 +185,14 @@ const loadDashboardData = async () => {
     const list = Array.isArray(data) ? data : []
     classrooms.value = list
     totalStudents.value = list.reduce((sum, c) => sum + (c.student_count || 0), 0)
+    hasLoadedOnce.value = true
 
     if (list.length > 0) {
       const nextCodeId = resolveSnapshotSelection(list)
       const isSwitching = nextCodeId !== selectedSnapshotCodeId.value
       selectedSnapshotCodeId.value = nextCodeId
       if (isSwitching || !snapshotAnalytics.value) {
-        loadSnapshotData(nextCodeId)
+        await loadSnapshotData(nextCodeId)
       }
     } else {
       selectedSnapshotCodeId.value = ''
@@ -206,9 +213,14 @@ const loadDashboardData = async () => {
       error,
       'Failed to load classroom overview. Please verify your connection or try again.',
     )
+    if (!hasLoadedOnce.value) {
+      classrooms.value = []
+      totalStudents.value = 0
+    }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestDashboardRequestId) {
       isLoading.value = false
+      isRefreshing.value = false
     }
   }
 }
@@ -237,6 +249,12 @@ const handleViewAnalytics = (codeId) => {
 const handleManageClassrooms = () => {
   router.push('/classroom/manage')
 }
+
+usePageRecovery(async () => {
+  if (!authStore.isAuthenticated || !authStore.isEducator) return
+  if (isLoading.value || isRefreshing.value || isSnapshotLoading.value) return
+  await loadDashboardData()
+})
 
 onMounted(() => {
   if (authStore.isAuthenticated && authStore.isEducator) {
@@ -285,7 +303,7 @@ watch(
       <div class="header-text">
         <h2 class="title">Educator overview</h2>
         <p class="subtitle">
-          Signed in as <strong>{{ authStore.displayName }}</strong>. Manage classroom access codes and review student progress.
+          Signed in as <strong>{{ authStore.displayName }}</strong>
         </p>
       </div>
       <div class="header-actions">
@@ -359,7 +377,7 @@ watch(
     </div>
 
     <!-- Populated / Valid State -->
-    <div v-else-if="!errorMessage" class="dashboard-body">
+    <div v-else-if="hasLoadedOnce || !errorMessage" class="dashboard-body">
       <!-- KPI Stats Grid -->
       <section class="stats-grid" aria-label="Classroom metrics">
         <div class="stat-card">
@@ -368,7 +386,6 @@ watch(
             <AppIcon name="classrooms" :size="20" class="stat-icon" />
           </div>
           <div class="stat-value">{{ activeClassroomCount }}</div>
-          <p class="stat-desc">Classrooms currently marked active</p>
         </div>
 
         <div class="stat-card">
@@ -377,7 +394,7 @@ watch(
             <AppIcon name="users" :size="20" class="stat-icon" />
           </div>
           <div class="stat-value">{{ totalStudents }}</div>
-          <p class="stat-desc">Total enrollments across classrooms; students in multiple classrooms are counted in each.</p>
+          <p class="stat-desc">Total enrollments across classrooms</p>
         </div>
 
         <div class="stat-card stat-action-card">
@@ -385,7 +402,6 @@ watch(
             <span class="stat-label">Classroom management</span>
             <AppIcon name="join" :size="20" class="stat-icon" />
           </div>
-          <p class="stat-desc full">Configure classroom names, review status, or archive inactive codes.</p>
           <button
             type="button"
             class="btn-subtle-link"
@@ -508,9 +524,6 @@ watch(
         <div class="section-header">
           <div>
             <h3 class="section-title">Your classrooms</h3>
-            <p class="section-subtitle">
-              Distribute access codes to students to connect their devices to your roster.
-            </p>
           </div>
           <router-link
             v-if="classrooms.length > 4"

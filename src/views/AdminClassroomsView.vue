@@ -563,11 +563,7 @@ onUnmounted(() => {
     <header class="view-header">
       <div class="header-content">
         <div>
-          <h2 ref="pageHeadingRef" class="title" tabindex="-1">Classroom Management</h2>
-          <p class="subtitle">
-            Inspect classrooms across educators, manage student enrollment status, or remove
-            classrooms
-          </p>
+          <h2 ref="pageHeadingRef" class="title" tabindex="-1">Classroom management</h2>
         </div>
       </div>
     </header>

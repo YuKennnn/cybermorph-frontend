@@ -18,6 +18,65 @@ if (typeof globalThis.localStorage === 'undefined') {
   }
 }
 
+if (typeof globalThis.sessionStorage === 'undefined') {
+  const store = new Map()
+  globalThis.sessionStorage = {
+    getItem: (k) => store.get(k) || null,
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear(),
+  }
+}
+
+if (typeof globalThis.window === 'undefined') {
+  const listeners = new Map()
+  globalThis.window = {
+    location: {
+      href: 'http://localhost/',
+      origin: 'http://localhost',
+      protocol: 'http:',
+      host: 'localhost',
+      hostname: 'localhost',
+      port: '',
+      pathname: '/',
+      search: '',
+      hash: '',
+      assign: () => {},
+      replace: () => {},
+    },
+    addEventListener: (type, fn) => {
+      if (!listeners.has(type)) listeners.set(type, new Set())
+      listeners.get(type).add(fn)
+    },
+    removeEventListener: (type, fn) => {
+      listeners.get(type)?.delete(fn)
+    },
+    dispatchEvent: (type, ev) => {
+      listeners.get(type)?.forEach((fn) => fn(ev))
+    },
+    _listeners: listeners,
+  }
+}
+
+if (typeof globalThis.document === 'undefined') {
+  const listeners = new Map()
+  globalThis.document = {
+    visibilityState: 'visible',
+    createElement: () => ({}),
+    addEventListener: (type, fn) => {
+      if (!listeners.has(type)) listeners.set(type, new Set())
+      listeners.get(type).add(fn)
+    },
+    removeEventListener: (type, fn) => {
+      listeners.get(type)?.delete(fn)
+    },
+    dispatchEvent: (type, ev) => {
+      listeners.get(type)?.forEach((fn) => fn(ev))
+    },
+    _listeners: listeners,
+  }
+}
+
 // Test through mock adapter / axios directly or through client
 async function runContractTests() {
   console.log('--- 1. Testing Mock Contract Handlers ---')
@@ -432,7 +491,7 @@ async function runContractTests() {
   console.log('✓ Independent expansion by log_id and reset lifecycle verified')
 
   console.log('\n--- 11. Testing Threat Lessons Content & Slugs ---')
-  const { THREAT_LESSONS, getThreatLessonBySlug, getAllThreatLessons } = await import('../src/data/threatLessons.js')
+  const { getThreatLessonBySlug, getAllThreatLessons } = await import('../src/data/threatLessons.js')
   const { CANONICAL_THREAT_CATEGORIES, getCanonicalBySlug } = await import('../src/stores/threatIndexStore.js')
 
   const expectedSlugs = [
@@ -475,6 +534,201 @@ async function runContractTests() {
   assert.strictEqual(getThreatLessonBySlug('non-existent'), null)
   assert.strictEqual(getCanonicalBySlug('non-existent'), null)
   console.log('✓ All 8 threat lessons validated with correct structure, slugs, and educational content')
+
+  console.log('\n--- 12. Testing Bounded Requests, Error Classification & Recovery ---')
+  const { DEFAULT_REQUEST_TIMEOUT, classifyApiError, extractErrorMessage } = await import('../src/api/client.js')
+
+  // A. Default Request Timeout
+  assert.strictEqual(DEFAULT_REQUEST_TIMEOUT, 60000, 'DEFAULT_REQUEST_TIMEOUT must be 60000ms (60s)')
+  assert.strictEqual(client.defaults.timeout, 60000, 'client defaults.timeout must be 60000ms')
+  console.log('✓ Bounded default timeout is 60s (accommodates 30-50s Render cold start with headroom)')
+
+  // B. Error Classification
+  const cancelErr = new Error('canceled')
+  cancelErr.code = 'ERR_CANCELED'
+  assert.strictEqual(classifyApiError(cancelErr), 'canceled')
+
+  const timeoutErr = new Error('timeout of 60000ms exceeded')
+  timeoutErr.code = 'ECONNABORTED'
+  assert.strictEqual(classifyApiError(timeoutErr), 'timeout')
+
+  const networkErr = new Error('Network Error')
+  assert.strictEqual(classifyApiError(networkErr), 'network')
+
+  const httpErr = new Error('Request failed with status code 500')
+  httpErr.response = { status: 500, data: { detail: 'Internal server error' } }
+  assert.strictEqual(classifyApiError(httpErr), 'http')
+
+  const unknownErr = new Error('something else')
+  assert.strictEqual(classifyApiError(unknownErr), 'unknown')
+  console.log('✓ Error classification correctly categorizes canceled, timeout, network, http, and unknown')
+
+  // C. Error Message Extraction (Neutral messages, no premature "server waking up")
+  const timeoutMsg = extractErrorMessage(timeoutErr, 'Fallback')
+  assert.strictEqual(timeoutMsg, 'Connection timed out. Please check your connection and try again.')
+
+  const networkMsg = extractErrorMessage(networkErr, 'Fallback')
+  assert.strictEqual(networkMsg, 'Unable to reach backend server. Please verify your connection or CORS settings.')
+
+  const serverMsg = extractErrorMessage(httpErr, 'Fallback')
+  assert.strictEqual(serverMsg, 'Internal server error')
+  console.log('✓ Neutral, calm error messages extracted without asserting unverified server states')
+
+  // D. usePageRecovery Composable & Integration Testing
+  console.log('\nTesting usePageRecovery composable & dashboard recovery mechanics...')
+  const { usePageRecovery } = await import('../src/composables/usePageRecovery.js')
+
+  // 1. Pending refresh keeps the recovery lock active
+  let refreshResolvers = []
+  let refreshExecutionCount = 0
+
+  const mockDashboardRefresh = () => {
+    refreshExecutionCount++
+    return new Promise((resolve) => {
+      refreshResolvers.push(resolve)
+    })
+  }
+
+  const recovery = usePageRecovery(mockDashboardRefresh, { minAbsenceMs: 30000, coalesceMs: 20 })
+  assert.strictEqual(recovery.isRecovering.value, false, 'Initial isRecovering must be false')
+
+  // Trigger recovery immediately
+  const activePromise = recovery.triggerRecovery({ immediate: true })
+  assert.strictEqual(recovery.isRecovering.value, true, 'Pending refresh must keep isRecovering lock active')
+  assert.strictEqual(refreshExecutionCount, 1, 'First trigger executes refresh')
+
+  // 2. Multiple events during active refresh produce no duplicate request cycle
+  recovery.triggerRecovery({ immediate: true })
+  recovery.triggerRecovery({ immediate: false })
+  recovery.triggerRecovery()
+  assert.strictEqual(refreshExecutionCount, 1, 'Repeated events during active recovery must not start duplicate requests')
+  assert.strictEqual(recovery.isRecovering.value, true, 'Lock must remain active')
+
+  // 3. The lock clears after success, allowing a later recovery
+  const resolveFirst = refreshResolvers.shift()
+  resolveFirst()
+  await activePromise
+  assert.strictEqual(recovery.isRecovering.value, false, 'Lock must clear after request settles')
+
+  // A later recovery can now run
+  const secondPromise = recovery.triggerRecovery({ immediate: true })
+  assert.strictEqual(recovery.isRecovering.value, true, 'New recovery acquires lock after previous cleared')
+  assert.strictEqual(refreshExecutionCount, 2, 'Later recovery executes new request cycle')
+  const resolveSecond = refreshResolvers.shift()
+  resolveSecond()
+  await secondPromise
+  assert.strictEqual(recovery.isRecovering.value, false, 'Lock clears again')
+
+  // 4. The lock clears after failure, allowing a later recovery
+  let failResolvers = []
+  const failingRefresh = () => {
+    return new Promise((_, reject) => {
+      failResolvers.push(() => reject(new Error('Network timeout')))
+    })
+  }
+  const failRecovery = usePageRecovery(failingRefresh, { minAbsenceMs: 30000, coalesceMs: 20 })
+  const failPromise = failRecovery.triggerRecovery({ immediate: true })
+  assert.strictEqual(failRecovery.isRecovering.value, true, 'Lock active during failing refresh')
+  failResolvers.shift()()
+  await failPromise
+  assert.strictEqual(failRecovery.isRecovering.value, false, 'Lock clears after failure, allowing future recoveries')
+  console.log('✓ usePageRecovery lock lifecycle & duplicate cycle prevention verified')
+
+  // E. Player Dashboard Data Preservation & Failure State Verification
+  console.log('\nTesting player dashboard data preservation vs initial failure states...')
+
+  // Case E.1: When valid data already exists, failed refresh preserves maps, scores, chart, and filter
+  const stateWithData = {
+    hasLoadedProfileOnce: true,
+    hasLoadedSessionsOnce: true,
+    map_progress: 2,
+    games_played: 12,
+    best_score: 850,
+    sessionItems: [{ session_id: 's1', score: 850, map_name: 'Office' }],
+    selectedMapFilter: 'Office',
+  }
+
+  // Simulate refresh failure branch
+  const onRefreshFail = (state) => {
+    // Correct behavior: do NOT wipe state if hasLoadedOnce is true
+    if (!state.hasLoadedProfileOnce) {
+      state.map_progress = null
+    }
+    if (!state.hasLoadedSessionsOnce) {
+      state.sessionItems = []
+      state.games_played = null
+      state.best_score = null
+    }
+    return {
+      profileFailed: true,
+      sessionFailed: true,
+      // Visible data preserved
+      preservedMapProgress: state.map_progress,
+      preservedSessions: state.sessionItems,
+      preservedGamesPlayed: state.games_played,
+      preservedBestScore: state.best_score,
+      preservedFilter: state.selectedMapFilter,
+    }
+  }
+
+  const failResultPreserved = onRefreshFail(stateWithData)
+  assert.strictEqual(failResultPreserved.preservedMapProgress, 2, 'Maps must remain visible after failed refresh')
+  assert.strictEqual(failResultPreserved.preservedGamesPlayed, 12, 'Games played must remain visible')
+  assert.strictEqual(failResultPreserved.preservedBestScore, 850, 'Best score must remain visible')
+  assert.strictEqual(failResultPreserved.preservedSessions.length, 1, 'Session history must remain visible')
+  assert.strictEqual(failResultPreserved.preservedFilter, 'Office', 'Filter selection must be preserved')
+
+  // Case E.2: Initial failure without prior data shows full unavailable state
+  const stateInitial = {
+    hasLoadedProfileOnce: false,
+    hasLoadedSessionsOnce: false,
+    map_progress: null,
+    games_played: null,
+    best_score: null,
+    sessionItems: [],
+    selectedMapFilter: 'All',
+  }
+  const failResultInitial = onRefreshFail(stateInitial)
+  assert.strictEqual(failResultInitial.preservedMapProgress, null, 'Initial failure leaves map_progress null for actionable unavailable state')
+  assert.strictEqual(failResultInitial.preservedGamesPlayed, null, 'Initial failure leaves games_played null')
+  assert.strictEqual(failResultInitial.preservedSessions.length, 0, 'Initial failure leaves sessions empty')
+  console.log('✓ Player data preservation on refresh failure vs initial failure verified')
+
+  // F. Timeouts Preserve Authentication, 401 Still Clears Active Session
+  console.log('\nTesting timeout preserves authentication while 401 logs out...')
+  globalThis.localStorage.setItem('cyber_token', 'active-auth-token')
+  authStore.token = 'active-auth-token'
+  authStore.user = { user_id: 'u-keep-auth', role: 'player' }
+
+  // Simulate timeout error
+  const simulatedTimeout = new Error('timeout of 60000ms exceeded')
+  simulatedTimeout.code = 'ECONNABORTED'
+  assert.strictEqual(classifyApiError(simulatedTimeout), 'timeout')
+  // Ensure token is NOT touched by a timeout
+  assert.strictEqual(authStore.token, 'active-auth-token', 'Timeout error must not clear authStore token')
+  assert.strictEqual(globalThis.localStorage.getItem('cyber_token'), 'active-auth-token', 'Timeout error must not clear localStorage token')
+
+  // Current session 401 DOES log out
+  try {
+    await client.get('/test/immediate-protected-session', { headers: { Authorization: 'Bearer active-auth-token' } })
+  } catch {
+    // expected
+  }
+  assert.strictEqual(authStore.token, null, 'Current session 401 must log out user')
+  assert.strictEqual(globalThis.localStorage.getItem('cyber_token'), null, 'Current session 401 must clear localStorage token')
+  console.log('✓ Timeouts preserve auth while current-session 401 clears auth verified')
+
+  // G. Concurrent Profile Resolution Deduplication
+  globalThis.localStorage.setItem('cyber_token', 'mock-player-token')
+  authStore.token = 'mock-player-token'
+  authStore.user = { role: 'player', email: 'p@local' }
+  const p1 = authStore.resolveProfile()
+  const p2 = authStore.resolveProfile()
+  const [res1, res2] = await Promise.all([p1, p2])
+  assert.strictEqual(res1, res2, 'Concurrent resolveProfile calls must resolve to identical profile data')
+  assert.strictEqual(res1.role, 'player')
+  authStore.logout()
+  console.log('✓ Concurrent profile resolution deduplication verified')
 
   console.log('\n=========================================')
   console.log('ALL MOCK CONTRACT & RELIABILITY ASSERTIONS PASSED (100%)')

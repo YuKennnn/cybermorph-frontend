@@ -397,7 +397,6 @@ onUnmounted(() => {
     <ClassroomWorkspaceHeader
       v-if="effectiveCodeId"
       page-title="Classroom analytics"
-      page-description="Review classroom performance, map scores, and student progress."
       :code-id="effectiveCodeId"
       active-tab="analytics"
       :student-count="hasConfirmedRoster && !rosterErrorMessage && !isStudentsLoading ? tableTotalCount : null"
@@ -415,9 +414,6 @@ onUnmounted(() => {
         </router-link>
       </div>
       <h2 class="title">Classroom analytics</h2>
-      <p class="subtitle">
-        Review overall classroom performance, common mistake areas, and student progress
-      </p>
     </header>
 
     <!-- Error Banner for Bare /analytics List-Loading Failure -->

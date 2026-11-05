@@ -36,7 +36,7 @@ export const submitSession = async (sessionData) => {
  * @param {number} [params.page_size=20]
  * @returns {Promise<{ items: Array<Object>, total_count: number, page: number, page_size: number }>}
  */
-export const fetchSessionHistory = async (params = {}) => {
-  const response = await apiClient.get('/sessions/history', { params })
+export const fetchSessionHistory = async (params = {}, config = {}) => {
+  const response = await apiClient.get('/sessions/history', { params, ...config })
   return response.data
 }

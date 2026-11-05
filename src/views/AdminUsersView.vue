@@ -210,8 +210,7 @@ watch(
     <header class="view-header">
       <div class="header-content">
         <div>
-          <h2 class="title">User Management</h2>
-          <p class="subtitle">Inspect registered accounts, identities, and portal roles</p>
+          <h2 class="title">User management</h2>
         </div>
       </div>
     </header>

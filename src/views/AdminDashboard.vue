@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
+import { usePageRecovery } from '../composables/usePageRecovery'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
@@ -14,16 +15,19 @@ const sessionsReceived = ref(null)
 const threatsDetected = ref(null)
 const statsLoading = ref(true)
 const statsError = ref(false)
+const hasLoadedStatsOnce = ref(false)
 
 // Pending educator approvals
 const pendingApprovals = ref(null)
 const approvalsLoading = ref(true)
 const approvalsError = ref(false)
+const hasLoadedApprovalsOnce = ref(false)
 
 // Recent activity (Preview up to 5 items)
 const recentLogs = ref([])
 const activityLoading = ref(true)
 const activityError = ref(false)
+const hasLoadedActivityOnce = ref(false)
 
 let currentSessionEpoch = 0
 let latestStatsRequestId = 0
@@ -36,21 +40,24 @@ const resetDashboardState = () => {
   threatsDetected.value = null
   statsLoading.value = false
   statsError.value = false
+  hasLoadedStatsOnce.value = false
 
   pendingApprovals.value = null
   approvalsLoading.value = false
   approvalsError.value = false
+  hasLoadedApprovalsOnce.value = false
 
   recentLogs.value = []
   activityLoading.value = false
   activityError.value = false
+  hasLoadedActivityOnce.value = false
 }
 
 const loadStats = async () => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestStatsRequestId
   const reqSession = currentSessionEpoch
-  statsLoading.value = true
+  statsLoading.value = !hasLoadedStatsOnce.value
   statsError.value = false
   try {
     const data = await fetchAdminStats()
@@ -65,6 +72,7 @@ const loadStats = async () => {
     totalUsers.value = typeof data?.total_users === 'number' ? data.total_users : null
     sessionsReceived.value = typeof data?.sessions_last_24h === 'number' ? data.sessions_last_24h : null
     threatsDetected.value = typeof data?.threats_detected === 'number' ? data.threats_detected : null
+    hasLoadedStatsOnce.value = true
   } catch {
     if (
       reqSession !== currentSessionEpoch ||
@@ -75,9 +83,11 @@ const loadStats = async () => {
       return
     }
     statsError.value = true
-    totalUsers.value = null
-    sessionsReceived.value = null
-    threatsDetected.value = null
+    if (!hasLoadedStatsOnce.value) {
+      totalUsers.value = null
+      sessionsReceived.value = null
+      threatsDetected.value = null
+    }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestStatsRequestId) {
       statsLoading.value = false
@@ -89,7 +99,7 @@ const loadApprovals = async () => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestApprovalsRequestId
   const reqSession = currentSessionEpoch
-  approvalsLoading.value = true
+  approvalsLoading.value = !hasLoadedApprovalsOnce.value
   approvalsError.value = false
   try {
     const data = await fetchAdminApprovals({ status: 'pending', page_size: 1 })
@@ -102,6 +112,7 @@ const loadApprovals = async () => {
       return
     }
     pendingApprovals.value = typeof data?.total_count === 'number' ? data.total_count : null
+    hasLoadedApprovalsOnce.value = true
   } catch {
     if (
       reqSession !== currentSessionEpoch ||
@@ -112,7 +123,9 @@ const loadApprovals = async () => {
       return
     }
     approvalsError.value = true
-    pendingApprovals.value = null
+    if (!hasLoadedApprovalsOnce.value) {
+      pendingApprovals.value = null
+    }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestApprovalsRequestId) {
       approvalsLoading.value = false
@@ -124,7 +137,7 @@ const loadRecentActivity = async () => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestActivityRequestId
   const reqSession = currentSessionEpoch
-  activityLoading.value = true
+  activityLoading.value = !hasLoadedActivityOnce.value
   activityError.value = false
   try {
     const data = await fetchAdminLogs({ page: 1, page_size: 5 })
@@ -137,6 +150,7 @@ const loadRecentActivity = async () => {
       return
     }
     recentLogs.value = Array.isArray(data?.items) ? data.items : []
+    hasLoadedActivityOnce.value = true
   } catch {
     if (
       reqSession !== currentSessionEpoch ||
@@ -147,13 +161,28 @@ const loadRecentActivity = async () => {
       return
     }
     activityError.value = true
-    recentLogs.value = []
+    if (!hasLoadedActivityOnce.value) {
+      recentLogs.value = []
+    }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestActivityRequestId) {
       activityLoading.value = false
     }
   }
 }
+
+const refreshAll = () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return Promise.resolve()
+  return Promise.allSettled([loadStats(), loadApprovals(), loadRecentActivity()])
+}
+
+usePageRecovery(async () => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
+  if (statsLoading.value || approvalsLoading.value || activityLoading.value) {
+    return
+  }
+  await refreshAll()
+})
 
 onMounted(() => {
   if (authStore.isAuthenticated && authStore.isAdmin) {
@@ -198,7 +227,9 @@ watch(
 
 const displayStat = (val, loading, error) => {
   if (loading) return '…'
-  if (error || val === null || val === undefined) return 'Unavailable'
+  if ((error && (val === null || val === undefined)) || val === null || val === undefined) {
+    return 'Unavailable'
+  }
   return typeof val === 'number' ? val.toLocaleString() : String(val)
 }
 </script>

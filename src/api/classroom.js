@@ -55,8 +55,8 @@ export const joinClassroom = async (codeOrPayload) => {
  *   members: Array<{ username: string, map_progress: number }>
  * }>}
  */
-export const fetchMyClassroom = async () => {
-  const response = await apiClient.get('/classroom/mine')
+export const fetchMyClassroom = async (config = {}) => {
+  const response = await apiClient.get('/classroom/mine', config)
   return response.data
 }
 

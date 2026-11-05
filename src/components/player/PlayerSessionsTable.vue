@@ -33,9 +33,8 @@ defineProps({
       </thead>
       <tbody>
         <tr v-for="session in sessions" :key="session.session_id">
-          <td data-label="Date" class="cell-date">
+          <td data-label="Date">
             <span class="date-primary">{{ session.played_date_label }}</span>
-            <span class="date-duration">Duration: {{ session.duration_label }}</span>
           </td>
           <td data-label="Map">
             <span class="map-badge" :data-map="session.map_name">
@@ -101,20 +100,9 @@ defineProps({
   text-align: right;
 }
 
-.cell-date {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
 .date-primary {
   font-weight: 600;
   color: var(--color-text-main);
-}
-
-.date-duration {
-  font-size: 0.75rem;
-  color: var(--color-text-dim);
 }
 
 .map-badge {
@@ -219,10 +207,6 @@ defineProps({
     color: var(--color-text-muted);
     text-align: left;
     flex-shrink: 0;
-  }
-
-  .cell-date {
-    align-items: flex-end;
   }
 }
 </style>

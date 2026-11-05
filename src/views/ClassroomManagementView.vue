@@ -135,7 +135,6 @@ onMounted(() => {
       <div class="header-content">
         <div>
           <h2 class="title">Classroom management</h2>
-          <p class="subtitle">Generate codes, manage classroom settings, and inspect student progress</p>
         </div>
         <div class="header-actions">
           <button class="btn-primary" @click="isCreateModalOpen = true">+ Create classroom</button>

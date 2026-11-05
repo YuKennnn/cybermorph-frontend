@@ -65,6 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
   let sessionEpoch = 0
   let profileMutationVersion = 0
   let activeProfilePromise = null
+  let activeProfileEpoch = 0
 
   // ==========================================
   // 2. GETTERS (Computed Properties)
@@ -104,23 +105,75 @@ export const useAuthStore = defineStore('auth', () => {
    * Checks /web-users/me first (educator/admin), then /players/me (player).
    * Guarded against logout, account switching, and overwriting newer saves.
    */
-  const resolveProfile = async (fallbackEmail = '') => {
+  const resolveProfile = (fallbackEmail = '') => {
     const epochAtStart = sessionEpoch
     const mutationAtStart = profileMutationVersion
     const expectedToken = token.value
     const expectedUserId = user.value?.user_id || null
 
     if (!expectedToken) {
-      return null
+      return Promise.resolve(null)
     }
 
-    isProfileLoading.value = true
-    try {
-      // 1. First test if token belongs to a web user (educator or admin)
-      try {
-        const webProfile = await fetchWebUserProfile()
+    // Deduplicate equivalent profile resolution requests within the same authenticated session
+    if (activeProfilePromise && activeProfileEpoch === epochAtStart) {
+      return activeProfilePromise
+    }
 
-        // Guard against logout or session/token switch while in-flight
+    const runResolve = async () => {
+      isProfileLoading.value = true
+      try {
+        // 1. First test if token belongs to a web user (educator or admin)
+        try {
+          const webProfile = await fetchWebUserProfile()
+
+          // Guard against logout or session/token switch while in-flight
+          if (
+            epochAtStart !== sessionEpoch ||
+            !token.value ||
+            token.value !== expectedToken
+          ) {
+            return null
+          }
+
+          // Guard against cross-account response contamination
+          if (
+            expectedUserId &&
+            webProfile?.user_id &&
+            String(webProfile.user_id) !== String(expectedUserId)
+          ) {
+            return null
+          }
+
+          // Guard against overwriting a newer display_name save started/completed during fetch
+          if (mutationAtStart !== profileMutationVersion) {
+            isWebProfileVerified.value = true
+            return user.value
+          }
+
+          const normalized = normalizeWebUser(webProfile)
+          user.value = normalized
+          userRole.value = webProfile.role
+          isWebProfileVerified.value = true
+          localStorage.setItem('cyber_user', JSON.stringify(user.value))
+          localStorage.setItem('cyber_role', userRole.value)
+          return user.value
+        } catch (webErr) {
+          if (
+            epochAtStart !== sessionEpoch ||
+            !token.value ||
+            token.value !== expectedToken
+          ) {
+            return null
+          }
+          const isNotWeb =
+            webErr.response?.status === 403 || webErr.response?.status === 404
+          if (!isNotWeb) throw webErr
+        }
+
+        // 2. Test if token belongs to a game player
+        const playerProfile = await fetchPlayerProfile()
+
         if (
           epochAtStart !== sessionEpoch ||
           !token.value ||
@@ -129,81 +182,46 @@ export const useAuthStore = defineStore('auth', () => {
           return null
         }
 
-        // Guard against cross-account response contamination
         if (
           expectedUserId &&
-          webProfile?.user_id &&
-          String(webProfile.user_id) !== String(expectedUserId)
+          playerProfile?.user_id &&
+          String(playerProfile.user_id) !== String(expectedUserId)
         ) {
           return null
         }
 
-        // Guard against overwriting a newer display_name save started/completed during fetch
-        if (mutationAtStart !== profileMutationVersion) {
-          isWebProfileVerified.value = true
-          return user.value
+        user.value = {
+          ...playerProfile,
+          email: fallbackEmail || user.value?.email || '',
+          role: 'player',
         }
-
-        const normalized = normalizeWebUser(webProfile)
-        user.value = normalized
-        userRole.value = webProfile.role
-        isWebProfileVerified.value = true
+        userRole.value = 'player'
         localStorage.setItem('cyber_user', JSON.stringify(user.value))
-        localStorage.setItem('cyber_role', userRole.value)
-        return user.value
-      } catch (webErr) {
-        if (
-          epochAtStart !== sessionEpoch ||
-          !token.value ||
-          token.value !== expectedToken
-        ) {
-          return null
+        localStorage.setItem('cyber_role', 'player')
+        try {
+          usePlayerClassroomStore()
+            .loadMembership({ force: true })
+            .catch(() => {})
+        } catch {
+          // Store may not be active yet
         }
-        const isNotWeb =
-          webErr.response?.status === 403 || webErr.response?.status === 404
-        if (!isNotWeb) throw webErr
-      }
-
-      // 2. Test if token belongs to a game player
-      const playerProfile = await fetchPlayerProfile()
-
-      if (
-        epochAtStart !== sessionEpoch ||
-        !token.value ||
-        token.value !== expectedToken
-      ) {
-        return null
-      }
-
-      if (
-        expectedUserId &&
-        playerProfile?.user_id &&
-        String(playerProfile.user_id) !== String(expectedUserId)
-      ) {
-        return null
-      }
-
-      user.value = {
-        ...playerProfile,
-        email: fallbackEmail || user.value?.email || '',
-        role: 'player',
-      }
-      userRole.value = 'player'
-      localStorage.setItem('cyber_user', JSON.stringify(user.value))
-      localStorage.setItem('cyber_role', 'player')
-      try {
-        usePlayerClassroomStore()
-          .loadMembership({ force: true })
-          .catch(() => {})
-      } catch {
-        // Store may not be active yet
-      }
-      return user.value
-    } finally {
-      if (epochAtStart === sessionEpoch) {
-        isProfileLoading.value = false
+        return user.value
+      } finally {
+        if (epochAtStart === sessionEpoch) {
+          isProfileLoading.value = false
+        }
       }
     }
+
+    const promise = runResolve().finally(() => {
+      if (activeProfilePromise === promise) {
+        activeProfilePromise = null
+      }
+    })
+
+    activeProfilePromise = promise
+    activeProfileEpoch = epochAtStart
+    return promise
   }
 
   /**
