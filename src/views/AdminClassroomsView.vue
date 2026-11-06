@@ -1236,7 +1236,7 @@ td.text-right {
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .btn-row-toggle,
@@ -1248,6 +1248,12 @@ td.text-right {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+@media (min-width: 769px) {
+  .btn-row-toggle {
+    min-inline-size: 11em;
+  }
 }
 
 .btn-close-enrollment {
@@ -1549,6 +1555,10 @@ td.text-right {
 
 /* Mobile Responsive Stacking without Horizontal Overflow */
 @media (max-width: 768px) {
+  .row-actions {
+    flex-wrap: wrap;
+  }
+
   .search-input-wrapper {
     min-width: 100%;
   }

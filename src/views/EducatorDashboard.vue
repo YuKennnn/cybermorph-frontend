@@ -15,6 +15,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const classroomStore = useClassroomStore()
 
+const educatorGreetingName = computed(() => authStore.user?.display_name?.trim() || 'Educator')
+
 const CANONICAL_MAPS = ['Home', 'Office', 'Internet Cafe', 'Public Park']
 
 const classrooms = ref([])
@@ -299,32 +301,13 @@ watch(
 <template>
   <div class="educator-dashboard">
     <!-- Header Section -->
-    <header class="dashboard-header">
-      <div class="header-text">
-        <h2 class="title">Educator overview</h2>
-        <p class="subtitle">
-          Signed in as <strong>{{ authStore.displayName }}</strong>
-        </p>
+    <div class="welcome-banner">
+      <div class="banner-header">
+        <div class="banner-text">
+          <h2 class="title">Welcome back, {{ educatorGreetingName }}</h2>
+        </div>
       </div>
-      <div class="header-actions">
-        <button
-          type="button"
-          class="btn-primary"
-          @click="isCreateModalOpen = true"
-        >
-          <AppIcon name="plus" :size="16" />
-          <span>Create classroom</span>
-        </button>
-        <button
-          type="button"
-          class="btn-outline"
-          @click="() => handleViewAnalytics()"
-        >
-          <AppIcon name="analytics" :size="16" />
-          <span>Classroom analytics</span>
-        </button>
-      </div>
-    </header>
+    </div>
 
     <!-- Missing Educator Display Name Notice -->
     <div
@@ -585,36 +568,43 @@ watch(
   width: 100%;
 }
 
-.dashboard-header {
+.welcome-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.banner-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 1.25rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-border);
+  gap: 1rem;
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  color: var(--color-text-main);
+}
+
+.banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .title {
-  margin: 0 0 0.25rem 0;
-  color: var(--color-text-main);
-  font-size: 1.65rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.subtitle {
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  color: var(--color-text-main);
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .banner-icon {
@@ -952,23 +942,6 @@ watch(
   outline-offset: 2px;
 }
 
-@media (max-width: 768px) {
-  .dashboard-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    width: 100%;
-  }
-
-  .header-actions .btn-primary,
-  .header-actions .btn-outline {
-    flex: 1;
-    min-width: 140px;
-  }
-}
-
 /* Classroom Snapshot Card */
 .snapshot-card {
   background-color: var(--color-card);
@@ -1208,6 +1181,15 @@ watch(
 }
 
 @media (max-width: 640px) {
+  .banner-header {
+    padding: 1rem 1.15rem;
+    gap: 0.85rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
   .snapshot-card {
     padding: 1.25rem 1rem;
   }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
@@ -9,10 +9,11 @@ import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
 
+const adminGreetingName = computed(() => authStore.user?.display_name?.trim() || 'Admin')
+
 // Metrics (System stats)
 const totalUsers = ref(null)
 const sessionsReceived = ref(null)
-const threatsDetected = ref(null)
 const statsLoading = ref(true)
 const statsError = ref(false)
 const hasLoadedStatsOnce = ref(false)
@@ -37,7 +38,6 @@ let latestActivityRequestId = 0
 const resetDashboardState = () => {
   totalUsers.value = null
   sessionsReceived.value = null
-  threatsDetected.value = null
   statsLoading.value = false
   statsError.value = false
   hasLoadedStatsOnce.value = false
@@ -71,7 +71,6 @@ const loadStats = async () => {
     }
     totalUsers.value = typeof data?.total_users === 'number' ? data.total_users : null
     sessionsReceived.value = typeof data?.sessions_last_24h === 'number' ? data.sessions_last_24h : null
-    threatsDetected.value = typeof data?.threats_detected === 'number' ? data.threats_detected : null
     hasLoadedStatsOnce.value = true
   } catch {
     if (
@@ -86,7 +85,6 @@ const loadStats = async () => {
     if (!hasLoadedStatsOnce.value) {
       totalUsers.value = null
       sessionsReceived.value = null
-      threatsDetected.value = null
     }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestStatsRequestId) {
@@ -238,11 +236,10 @@ const displayStat = (val, loading, error) => {
   <div class="role-dashboard">
     <!-- Welcome Header -->
     <div class="welcome-banner">
-      <div class="banner-text">
-        <h3 class="title">System administration</h3>
-        <p class="subtitle">
-          Signed in as administrator: <strong>{{ authStore.user?.username || authStore.user?.email || 'Admin' }}</strong>
-        </p>
+      <div class="banner-header">
+        <div class="banner-text">
+          <h2 class="title">Welcome back, {{ adminGreetingName }}</h2>
+        </div>
       </div>
     </div>
 
@@ -258,18 +255,24 @@ const displayStat = (val, loading, error) => {
     <div class="stats-grid">
       <!-- Total Users -->
       <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Total users</span>
+          <AppIcon name="users" :size="20" class="stat-icon" aria-hidden="true" />
+        </div>
         <div class="stat-value highlight-purple">
           {{ displayStat(totalUsers, statsLoading, statsError) }}
         </div>
-        <div class="stat-label">Total users</div>
       </div>
 
       <!-- Sessions Received (24h) -->
       <div class="stat-card">
+        <div class="stat-header">
+          <span class="stat-label">Sessions received (24h)</span>
+          <AppIcon name="analytics" :size="20" class="stat-icon" aria-hidden="true" />
+        </div>
         <div class="stat-value highlight-secondary">
           {{ displayStat(sessionsReceived, statsLoading, statsError) }}
         </div>
-        <div class="stat-label">Sessions received (24h)</div>
         <div class="stat-help">Offline sessions count when uploaded</div>
       </div>
 
@@ -278,6 +281,16 @@ const displayStat = (val, loading, error) => {
         class="stat-card"
         :class="{ 'has-attention': pendingApprovals !== null && pendingApprovals > 0 }"
       >
+        <div class="stat-header">
+          <span class="stat-label">Pending educator approvals</span>
+          <AppIcon
+            name="clock"
+            :size="20"
+            class="stat-icon"
+            :class="{ 'icon-amber': pendingApprovals !== null && pendingApprovals > 0 }"
+            aria-hidden="true"
+          />
+        </div>
         <div
           class="stat-value"
           :class="{
@@ -287,7 +300,6 @@ const displayStat = (val, loading, error) => {
         >
           {{ displayStat(pendingApprovals, approvalsLoading, approvalsError) }}
         </div>
-        <div class="stat-label">Pending educator approvals</div>
         <div class="stat-card-actions">
           <button
             v-if="approvalsError"
@@ -306,14 +318,6 @@ const displayStat = (val, loading, error) => {
             Review approvals
           </router-link>
         </div>
-      </div>
-
-      <!-- Threats Detected -->
-      <div class="stat-card">
-        <div class="stat-value highlight-danger">
-          {{ displayStat(threatsDetected, statsLoading, statsError) }}
-        </div>
-        <div class="stat-label">Threats detected</div>
       </div>
     </div>
 
@@ -419,48 +423,68 @@ const displayStat = (val, loading, error) => {
 
 .welcome-banner {
   display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.banner-header {
+  display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  color: var(--color-text-main);
+}
+
+.banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .title {
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   color: var(--color-text-main);
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.45rem;
   font-weight: 700;
+  line-height: 1.25;
   letter-spacing: -0.01em;
-}
-
-.subtitle {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-family: var(--font-sans);
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-
-.subtitle strong {
-  color: var(--color-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem;
+}
+
+@media (max-width: 860px) {
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
 }
 
 .stat-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 1.5rem 1.25rem;
-  text-align: center;
+  padding: 1.25rem;
+  text-align: left;
   box-shadow: var(--shadow-sm);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   min-width: 0;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-card:hover {
@@ -477,10 +501,27 @@ const displayStat = (val, loading, error) => {
   border-color: var(--color-warning);
 }
 
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.stat-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.stat-icon.icon-amber {
+  color: var(--color-warning);
+}
+
 .stat-card-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.65rem;
   margin-top: 0.5rem;
   flex-wrap: wrap;
@@ -514,6 +555,7 @@ const displayStat = (val, loading, error) => {
   font-weight: 700;
   margin-bottom: 0.35rem;
   line-height: 1.15;
+  font-feature-settings: 'tnum';
 }
 
 .stat-value.highlight-purple {
@@ -530,10 +572,6 @@ const displayStat = (val, loading, error) => {
 
 .stat-value.highlight-neutral {
   color: var(--color-text-main);
-}
-
-.stat-value.highlight-danger {
-  color: var(--color-danger);
 }
 
 .stat-label {
@@ -841,6 +879,17 @@ td {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .banner-header {
+    padding: 1rem 1.15rem;
+    gap: 0.85rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
   }
 }
 </style>

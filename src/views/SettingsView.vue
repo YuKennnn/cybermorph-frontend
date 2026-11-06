@@ -425,36 +425,46 @@ const webUserEmail = computed(() => {
             </div>
           </div>
 
-          <!-- Educator Display Name Editor (Educator Only) -->
+          <!-- Display Name Editor (Educator and Admin) -->
           <form
-            v-if="authStore.isEducator"
+            v-if="authStore.isEducator || authStore.isAdmin"
             class="display-name-form"
             novalidate
             @submit.prevent="handleSaveDisplayName"
           >
             <div class="display-name-field">
-              <label for="educator-display-name" class="display-name-label">
+              <label for="display-name-input" class="display-name-label">
                 Display name
               </label>
-              <p id="educator-display-name-hint" class="display-name-hint">
-                The name players see as their teacher.
+              <p id="display-name-hint" class="display-name-hint">
+                {{
+                  authStore.isEducator
+                    ? 'The name players see as their teacher.'
+                    : 'The name displayed on your administrator account.'
+                }}
               </p>
               <input
-                id="educator-display-name"
+                id="display-name-input"
                 v-model="displayNameDraft"
                 type="text"
                 class="display-name-input"
                 :class="{ 'input-invalid': !!displayNameError }"
                 :disabled="isSavingDisplayName"
                 :aria-invalid="displayNameError ? 'true' : 'false'"
-                :aria-describedby="displayNameError ? 'educator-display-name-hint educator-display-name-error' : 'educator-display-name-hint'"
+                :aria-describedby="
+                  displayNameError
+                    ? 'display-name-hint display-name-error'
+                    : 'display-name-hint'
+                "
                 autocomplete="name"
-                placeholder="e.g., Prof. Ada Lovelace"
+                :placeholder="
+                  authStore.isEducator ? 'e.g., Prof. Ada Lovelace' : 'e.g., Administrator'
+                "
                 @input="handleDisplayNameInput"
               />
               <p
                 v-if="displayNameError"
-                id="educator-display-name-error"
+                id="display-name-error"
                 class="display-name-error"
                 role="alert"
               >
@@ -508,7 +518,7 @@ const webUserEmail = computed(() => {
 
           <div class="read-only-notice" role="note">
             <AppIcon name="copy" :size="16" class="notice-icon" />
-            <span v-if="authStore.isEducator">
+            <span v-if="authStore.isEducator || authStore.isAdmin">
               Email, role, and approval status are read-only.
             </span>
             <span v-else>
@@ -929,11 +939,8 @@ const webUserEmail = computed(() => {
 
 <style scoped>
 .settings-page {
-  max-width: 840px;
   width: 100%;
   min-width: 0;
-  margin: 0 auto;
-  padding: 1rem 0 3rem 0;
 }
 
 .settings-header {
@@ -952,6 +959,8 @@ const webUserEmail = computed(() => {
   margin: 0;
   font-size: 0.95rem;
   color: var(--color-text-muted);
+  max-width: 65ch;
+  line-height: 1.45;
 }
 
 /* Tabs Navigation */
@@ -1028,6 +1037,8 @@ const webUserEmail = computed(() => {
   margin: 0;
   font-size: 0.9rem;
   color: var(--color-text-muted);
+  max-width: 65ch;
+  line-height: 1.45;
 }
 
 /* Educator Display Name Editor */
@@ -1246,6 +1257,7 @@ const webUserEmail = computed(() => {
   margin-bottom: 1.5rem;
   font-size: 0.88rem;
   color: var(--color-text-muted);
+  max-width: 680px;
 }
 
 .notice-icon {
@@ -1378,6 +1390,8 @@ const webUserEmail = computed(() => {
   margin: 1.25rem 0 0 0;
   font-size: 0.82rem;
   color: var(--color-text-muted);
+  max-width: 65ch;
+  line-height: 1.4;
 }
 
 /* Read Aloud Details */

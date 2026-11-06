@@ -538,6 +538,7 @@ onUnmounted(() => {
       <div class="stats-grid">
         <!-- Games Played Card -->
         <div class="stat-card">
+          <AppIcon name="game" :size="20" class="stat-icon" aria-hidden="true" />
           <template v-if="isSessionLoading && !hasLoadedSessionsOnce">
             <div class="stat-loading" aria-live="polite">
               <div class="spinner spinner-xs" aria-hidden="true"></div>
@@ -571,6 +572,7 @@ onUnmounted(() => {
 
         <!-- Recent Best Score Card -->
         <div class="stat-card highlight-card">
+          <AppIcon name="trophy" :size="20" class="stat-icon" aria-hidden="true" />
           <template v-if="isSessionLoading && !hasLoadedSessionsOnce">
             <div class="stat-loading" aria-live="polite">
               <div class="spinner spinner-xs" aria-hidden="true"></div>
@@ -615,6 +617,7 @@ onUnmounted(() => {
 
         <!-- Threat Index Card -->
         <div class="stat-card">
+          <AppIcon name="shield" :size="20" class="stat-icon" aria-hidden="true" />
           <template v-if="threatIndexStore.isLoading && !threatIndexStore.isReady">
             <div class="stat-loading" aria-live="polite">
               <div class="spinner spinner-xs" aria-hidden="true"></div>
@@ -886,7 +889,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-violet-border);
   border-radius: 12px;
   padding: 1.25rem 1.5rem;
-  box-shadow: var(--shadow-sm);
+  color: var(--color-text-main);
 }
 
 .banner-text {
@@ -907,14 +910,35 @@ onUnmounted(() => {
 
 .banner-classroom-actions .btn-outline {
   max-width: 100%;
+  background-color: var(--color-card);
+  color: var(--color-primary);
+  border: 1px solid var(--color-border-control);
+  font-weight: 600;
+}
+
+.banner-classroom-actions .btn-outline:hover {
+  background-color: var(--color-bg-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary-hover);
+}
+
+.banner-classroom-actions .btn-outline:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.banner-classroom-actions .btn-inline-retry {
+  color: var(--color-primary);
 }
 
 .title {
   margin: 0;
   color: var(--color-text-main);
+  font-family: var(--font-display);
   font-size: 1.45rem;
   font-weight: 700;
   line-height: 1.25;
+  letter-spacing: -0.01em;
   overflow-wrap: break-word;
   word-break: break-word;
 }
@@ -1113,6 +1137,7 @@ onUnmounted(() => {
 }
 
 .stat-card {
+  position: relative;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -1120,6 +1145,14 @@ onUnmounted(() => {
   text-align: center;
   box-shadow: var(--shadow-purple);
   transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-icon {
+  position: absolute;
+  top: 1.15rem;
+  right: 1.15rem;
+  color: var(--color-primary);
+  pointer-events: none;
 }
 
 .stat-card:hover {
