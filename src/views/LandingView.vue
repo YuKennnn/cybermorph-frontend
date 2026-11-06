@@ -1,18 +1,26 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
-import InteractiveHeroPreview from '../components/landing/InteractiveHeroPreview.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
-import { getStoredReadAloud } from '../utils/accessibility.js'
+import {
+  getStoredReadAloud,
+  isReducedMotionActive,
+  onMotionChange,
+} from '../utils/accessibility.js'
 import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
 import homeImg from '../assets/maps/home.png'
 import officeImg from '../assets/maps/office.png'
 import internetCafeImg from '../assets/maps/internet-cafe.png'
 import publicParkImg from '../assets/maps/public-park.png'
+
+import heroHomeImg from '../assets/hero-gameplay/home-gameplay.png'
+import heroOfficeImg from '../assets/hero-gameplay/office-gameplay.png'
+import heroInternetCafeImg from '../assets/hero-gameplay/internet-cafe-server.png'
+import heroPublicParkImg from '../assets/hero-gameplay/public-park-gameplay.png'
 
 const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
 
@@ -50,7 +58,99 @@ const handleReadSection = (ownerId, title, text, triggerEl) => {
   })
 }
 
+const heroGameplaySlides = [
+  {
+    id: 'home',
+    name: 'Home',
+    image: heroHomeImg,
+    alt: 'CyberMorph Home gameplay HUD showing Sector 01 intermediate level with progress bar, abort button, family living room, and status bar.',
+  },
+  {
+    id: 'office',
+    name: 'Office',
+    image: heroOfficeImg,
+    alt: 'CyberMorph Office gameplay HUD showing Sector 02 intermediate level with office workstations, employees, server rack, and status telemetry.',
+  },
+  {
+    id: 'internet-cafe',
+    name: 'Internet Cafe',
+    image: heroInternetCafeImg,
+    alt: 'CyberMorph Internet Cafe gameplay HUD showing Sector 03 beginner level with full server terminal grid of 20 PC stations and management controls.',
+  },
+  {
+    id: 'public-park',
+    name: 'Public Park',
+    image: heroPublicParkImg,
+    alt: 'CyberMorph Public Park gameplay HUD showing Sector 04 intermediate level with outdoor plaza, water fountain, unattended laptop, and status bar.',
+  },
+]
+
+const activeSlideIndex = ref(0)
+const isWiping = ref(false)
+const wipeKey = ref(0)
+const reducedMotion = ref(false)
+let wipeTimeoutId = null
+let unsubscribeMotion = null
+
+const activeSlide = computed(() => heroGameplaySlides[activeSlideIndex.value])
+
+const clearWipeTimer = () => {
+  if (wipeTimeoutId !== null) {
+    clearTimeout(wipeTimeoutId)
+    wipeTimeoutId = null
+  }
+}
+
+const selectSlide = (index) => {
+  if (index < 0 || index >= heroGameplaySlides.length) return
+  if (index === activeSlideIndex.value) return
+
+  activeSlideIndex.value = index
+
+  if (reducedMotion.value || isReducedMotionActive()) {
+    clearWipeTimer()
+    isWiping.value = false
+    return
+  }
+
+  clearWipeTimer()
+  wipeKey.value += 1
+  isWiping.value = true
+  wipeTimeoutId = setTimeout(() => {
+    isWiping.value = false
+    wipeTimeoutId = null
+  }, 190)
+}
+
+const prevSlide = () => {
+  const count = heroGameplaySlides.length
+  const targetIndex = (activeSlideIndex.value - 1 + count) % count
+  selectSlide(targetIndex)
+}
+
+const nextSlide = () => {
+  const count = heroGameplaySlides.length
+  const targetIndex = (activeSlideIndex.value + 1) % count
+  selectSlide(targetIndex)
+}
+
+onMounted(() => {
+  reducedMotion.value = isReducedMotionActive()
+  unsubscribeMotion = onMotionChange((active) => {
+    reducedMotion.value = active
+    if (active) {
+      clearWipeTimer()
+      isWiping.value = false
+    }
+  })
+})
+
 onUnmounted(() => {
+  clearWipeTimer()
+  if (unsubscribeMotion) {
+    unsubscribeMotion()
+    unsubscribeMotion = null
+  }
   const currentOwner = getSpeechState().activeOwnerId
   if (currentOwner && currentOwner.startsWith('landing-')) {
     stopNarration(currentOwner)
@@ -113,9 +213,62 @@ const mapPreviews = [
             </div>
           </div>
 
-          <!-- Bounded Interactive Pixel-Art Simulation Preview -->
+          <!-- Landscape Android Phone Gameplay Preview Carousel -->
           <div class="hero-visual-column">
-            <InteractiveHeroPreview />
+            <div class="hero-gameplay-preview" role="region" aria-label="Gameplay preview">
+              <!-- Preview Header -->
+              <div class="preview-header">
+                <span class="preview-title">Gameplay preview</span>
+              </div>
+
+              <!-- Landscape Galaxy-Inspired Android Phone Frame -->
+              <div class="android-phone-frame">
+                <!-- Slim Camera Detail (stays clear of gameplay) -->
+                <div class="phone-camera-hole" aria-hidden="true"></div>
+
+                <!-- 16:9 Phone Screen with Quiet Dark Fill -->
+                <div class="phone-screen">
+                  <img
+                    :src="activeSlide.image"
+                    :alt="activeSlide.alt"
+                    class="phone-screen-img"
+                  />
+                  <div
+                    v-if="isWiping && !reducedMotion"
+                    :key="wipeKey"
+                    class="pixel-wipe-overlay"
+                    aria-hidden="true"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- Below Phone: Active Map Name (left) and Navigation Controls (right) -->
+              <div class="preview-footer">
+                <div class="preview-map-info" aria-live="polite" aria-atomic="true">
+                  <span class="sr-only">Active map: </span>
+                  <span class="preview-map-name">{{ activeSlide.name }}</span>
+                </div>
+
+                <div class="preview-nav-controls" role="group" aria-label="Map navigation">
+                  <button
+                    type="button"
+                    class="nav-chevron-btn"
+                    aria-label="Previous map"
+                    @click="prevSlide"
+                  >
+                    <AppIcon name="chevron-left" :size="20" />
+                  </button>
+                  <button
+                    type="button"
+                    class="nav-chevron-btn"
+                    aria-label="Next map"
+                    @click="nextSlide"
+                  >
+                    <AppIcon name="chevron-right" :size="20" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -343,8 +496,28 @@ const mapPreviews = [
 
 /* 1. Hero Section */
 .hero-section {
+  position: relative;
+  overflow: hidden;
   padding: 3.5rem 0 4rem;
   background: linear-gradient(180deg, var(--color-violet-subtle) 0%, transparent 100%);
+  --hero-dot-color: #6d28d9;
+  --hero-glow-color: rgba(139, 92, 246, 0.16);
+}
+
+:root[data-theme="dark"] .hero-section {
+  --hero-dot-color: #ede9fe;
+  --hero-glow-color: rgba(167, 139, 250, 0.22);
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(var(--hero-dot-color) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+  opacity: 0.04;
 }
 
 @media (max-width: 640px) {
@@ -354,6 +527,8 @@ const mapPreviews = [
 }
 
 .hero-inner {
+  position: relative;
+  z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 1.5rem;
@@ -372,7 +547,7 @@ const mapPreviews = [
 
 @media (min-width: 1024px) {
   .hero-inner {
-    grid-template-columns: 1.1fr 0.9fr;
+    grid-template-columns: 1fr 1.05fr;
     gap: 2.5rem;
   }
 }
@@ -522,8 +697,236 @@ const mapPreviews = [
 
 .hero-visual-column {
   width: 100%;
-  max-width: 480px;
+  max-width: 540px;
   margin: 0 auto;
+}
+
+.hero-gameplay-preview {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.preview-title {
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  letter-spacing: -0.01em;
+}
+
+/* Landscape Android Phone Chassis (Samsung Galaxy-Inspired) */
+.android-phone-frame {
+  --phone-chassis-border: #334155;
+  --phone-chassis-dark: #0f172a;
+  --phone-screen-bg: #080c14;
+
+  position: relative;
+  background: linear-gradient(145deg, #1e293b 0%, var(--phone-chassis-dark) 100%);
+  border: 1.5px solid var(--phone-chassis-border);
+  border-radius: 20px;
+  padding: 6px 8px 6px 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 10px 25px -4px rgba(15, 23, 42, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.android-phone-frame::before {
+  content: '';
+  position: absolute;
+  inset: -28px -32px;
+  background: radial-gradient(ellipse at center, var(--hero-glow-color, rgba(139, 92, 246, 0.16)) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 72%);
+  border-radius: 44px;
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(10px);
+}
+
+.phone-camera-hole {
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #030712;
+  border: 1px solid #374151;
+  box-shadow: inset 0 0 1px rgba(167, 139, 250, 0.35);
+  pointer-events: none;
+}
+
+.phone-screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-color: var(--phone-screen-bg);
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 5px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.phone-screen-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
+  user-select: none;
+}
+
+/* Brief Stepped Pixel Wipe Inside Phone Screen */
+.pixel-wipe-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-color: var(--color-primary);
+  background-image:
+    linear-gradient(45deg, var(--phone-chassis-dark) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--phone-chassis-dark) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--phone-chassis-dark) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--phone-chassis-dark) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  animation: pixel-wipe-sweep 190ms steps(5, end) forwards;
+}
+
+@keyframes pixel-wipe-sweep {
+  0% {
+    clip-path: inset(0 0 0 0);
+    opacity: 0.9;
+  }
+  50% {
+    clip-path: inset(0 0 0 45%);
+    opacity: 0.75;
+  }
+  100% {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel-wipe-overlay {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+:root[data-reduced-motion="true"] .pixel-wipe-overlay {
+  animation: none !important;
+  display: none !important;
+}
+
+/* Below Phone: Active Map Name (left) & Navigation Chevrons (right) */
+.preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0;
+}
+
+.preview-map-info {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.preview-map-name {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+.preview-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.nav-chevron-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background-color: var(--color-card);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border-control);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.nav-chevron-btn:hover {
+  background-color: var(--color-violet-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.nav-chevron-btn:active {
+  transform: scale(0.95);
+}
+
+.nav-chevron-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-chevron-btn:active {
+    transform: none;
+  }
+}
+
+:root[data-reduced-motion="true"] .nav-chevron-btn:active {
+  transform: none;
+}
+
+@media (max-width: 560px) {
+  .android-phone-frame {
+    border-radius: 16px;
+    padding: 5px 6px 5px 12px;
+  }
+
+  .phone-screen {
+    border-radius: 11px;
+  }
 }
 
 /* 2. Content Sections */
