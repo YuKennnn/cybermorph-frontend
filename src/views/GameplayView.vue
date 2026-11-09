@@ -8,10 +8,10 @@ import InlineSpeechPlayer from '../components/common/InlineSpeechPlayer.vue'
 import { getStoredReadAloud } from '../utils/accessibility.js'
 import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
-import homeImg from '../assets/maps/home.png'
-import officeImg from '../assets/maps/office.png'
-import internetCafeImg from '../assets/maps/internet-cafe.png'
-import publicParkImg from '../assets/maps/public-park.png'
+import homeImg from '../assets/maps/home.jpg'
+import officeImg from '../assets/maps/office.jpg'
+import internetCafeImg from '../assets/maps/internet-cafe.jpg'
+import publicParkImg from '../assets/maps/public-park.jpg'
 
 const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
 
@@ -216,8 +216,10 @@ const learningTopics = [
               <div class="env-image-container">
                 <img
                   :src="env.image"
-                  :alt="`CyberMorph gameplay screenshot of ${env.name}`"
+                  alt=""
                   class="env-image"
+                  width="320"
+                  height="200"
                   loading="lazy"
                 />
                 <span class="env-setting-badge">{{ env.setting }}</span>
@@ -448,12 +450,28 @@ const learningTopics = [
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .environment-card {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .environment-card:hover {
+    border-color: var(--color-border-hover, rgba(124, 58, 237, 0.25));
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+  }
+
+  .environment-card:hover .env-image {
+    transform: scale(1.04);
+  }
 }
 
 .env-image-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   background-color: var(--color-bg-muted);
   overflow: hidden;
 }
@@ -463,19 +481,52 @@ const learningTopics = [
   height: 100%;
   object-fit: cover;
   image-rendering: pixelated;
+  display: block;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .environment-card {
+    transition: none !important;
+  }
+
+  .env-image {
+    transition: none !important;
+  }
+
+  .environment-card:hover .env-image {
+    transform: none !important;
+  }
+}
+
+:root[data-reduced-motion="true"] .environment-card {
+  transition: none !important;
+}
+
+:root[data-reduced-motion="true"] .env-image {
+  transition: none !important;
+}
+
+:root[data-reduced-motion="true"] .environment-card:hover .env-image {
+  transform: none !important;
 }
 
 .env-setting-badge {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  background-color: rgba(15, 23, 42, 0.8);
+  background-color: rgba(15, 23, 42, 0.88);
   color: #ffffff;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  backdrop-filter: blur(4px);
+  letter-spacing: 0.03em;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  line-height: 1.2;
 }
 
 .env-content {

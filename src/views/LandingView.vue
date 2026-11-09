@@ -12,10 +12,10 @@ import {
 } from '../utils/accessibility.js'
 import { startNarration, stopNarration, getSpeechState } from '../utils/speech.js'
 
-import homeImg from '../assets/maps/home.png'
-import officeImg from '../assets/maps/office.png'
-import internetCafeImg from '../assets/maps/internet-cafe.png'
-import publicParkImg from '../assets/maps/public-park.png'
+import homeImg from '../assets/maps/home.jpg'
+import officeImg from '../assets/maps/office.jpg'
+import internetCafeImg from '../assets/maps/internet-cafe.jpg'
+import publicParkImg from '../assets/maps/public-park.jpg'
 
 import heroHomeImg from '../assets/hero-gameplay/home-gameplay.webp'
 import heroOfficeImg from '../assets/hero-gameplay/office-gameplay.webp'
@@ -535,6 +535,8 @@ const mapPreviews = [
                   :src="map.image"
                   :alt="`Map preview of ${map.name}`"
                   class="preview-img"
+                  width="320"
+                  height="200"
                   loading="lazy"
                 />
               </div>
@@ -1498,21 +1500,32 @@ const mapPreviews = [
   height: 100%;
   object-fit: cover;
   image-rendering: pixelated;
-  transition: transform 0.2s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
 }
 
-.preview-map-card:hover .preview-img {
-  transform: scale(1.04);
-}
-
-@media (prefers-reduced-motion: reduce) {
+@media (hover: hover) and (pointer: fine) {
   .preview-map-card:hover .preview-img {
-    transform: none;
+    transform: scale(1.04);
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .preview-img {
+    transition: none !important;
+  }
+
+  .preview-map-card:hover .preview-img {
+    transform: none !important;
+  }
+}
+
+:root[data-reduced-motion="true"] .preview-img {
+  transition: none !important;
+}
+
 :root[data-reduced-motion="true"] .preview-map-card:hover .preview-img {
-  transform: none;
+  transform: none !important;
 }
 
 .preview-info {
