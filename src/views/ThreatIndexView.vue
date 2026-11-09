@@ -560,24 +560,49 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.65rem;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
   background-color: var(--color-primary);
   color: #ffffff;
   border-radius: 6px;
   font-size: 0.78rem;
   font-weight: 600;
   text-decoration: none;
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  transition:
+    background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
   flex-shrink: 0;
 }
 
 .btn-lesson:hover {
-  background-color: #6d28d9;
+  background-color: var(--color-primary-hover);
+}
+
+.btn-lesson:active {
+  transform: scale(0.98);
 }
 
 .btn-lesson:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-lesson {
+    transition: none !important;
+  }
+
+  .btn-lesson:active {
+    transform: none !important;
+  }
+}
+
+:global(:root[data-reduced-motion='true']) .btn-lesson {
+  transition: none !important;
+}
+
+:global(:root[data-reduced-motion='true']) .btn-lesson:active {
+  transform: none !important;
 }
 
 .state-card {

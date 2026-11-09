@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
@@ -85,68 +85,157 @@ const heroGameplaySlides = [
   },
 ]
 
+const TRANSITION_DURATION_MS = 240
+const PRESS_FEEDBACK_MS = 150
+
 const activeSlideIndex = ref(0)
-const isWiping = ref(false)
-const wipeKey = ref(0)
+const outgoingSlide = ref(null)
+const transitionDirection = ref('next')
+const isTransitioning = ref(false)
+const isIncomingReady = ref(true)
+const transitionKey = ref(0)
+const pressedControl = ref(null)
 const reducedMotion = ref(false)
-let wipeTimeoutId = null
+const activeImgRef = ref(null)
+
+const loadedSlideIds = new Set([heroGameplaySlides[0].id])
+let transitionTimeoutId = null
+let pressTimeoutId = null
 let unsubscribeMotion = null
 
 const activeSlide = computed(() => heroGameplaySlides[activeSlideIndex.value])
 
-const clearWipeTimer = () => {
-  if (wipeTimeoutId !== null) {
-    clearTimeout(wipeTimeoutId)
-    wipeTimeoutId = null
+const clearTransitionTimer = () => {
+  if (transitionTimeoutId !== null) {
+    clearTimeout(transitionTimeoutId)
+    transitionTimeoutId = null
   }
 }
 
-const selectSlide = (index) => {
+const clearPressTimer = () => {
+  if (pressTimeoutId !== null) {
+    clearTimeout(pressTimeoutId)
+    pressTimeoutId = null
+  }
+}
+
+const triggerControlFeedback = (direction) => {
+  clearPressTimer()
+  pressedControl.value = direction
+  pressTimeoutId = setTimeout(() => {
+    pressedControl.value = null
+    pressTimeoutId = null
+  }, PRESS_FEEDBACK_MS)
+}
+
+const scheduleTransitionEnd = () => {
+  clearTransitionTimer()
+  transitionTimeoutId = setTimeout(() => {
+    isTransitioning.value = false
+    outgoingSlide.value = null
+    transitionTimeoutId = null
+  }, TRANSITION_DURATION_MS)
+}
+
+const preloadSlideImages = () => {
+  if (typeof Image === 'undefined') return
+  for (const slide of heroGameplaySlides) {
+    const img = new Image()
+    img.onload = () => {
+      loadedSlideIds.add(slide.id)
+    }
+    img.src = slide.image
+    if (img.complete && img.naturalWidth > 0) {
+      loadedSlideIds.add(slide.id)
+    }
+  }
+}
+
+const handleIncomingImageLoad = (slideId) => {
+  if (slideId) {
+    loadedSlideIds.add(slideId)
+  }
+  if (activeSlide.value?.id !== slideId) return
+  if (!isIncomingReady.value) {
+    isIncomingReady.value = true
+    if (isTransitioning.value && !reducedMotion.value && !isReducedMotionActive()) {
+      transitionKey.value += 1
+      scheduleTransitionEnd()
+    } else {
+      isTransitioning.value = false
+      outgoingSlide.value = null
+    }
+  }
+}
+
+const selectSlide = (index, direction = 'next') => {
   if (index < 0 || index >= heroGameplaySlides.length) return
   if (index === activeSlideIndex.value) return
 
-  activeSlideIndex.value = index
+  const previousSlide = heroGameplaySlides[activeSlideIndex.value]
+  const nextSlideObj = heroGameplaySlides[index]
+  transitionDirection.value = direction
 
   if (reducedMotion.value || isReducedMotionActive()) {
-    clearWipeTimer()
-    isWiping.value = false
+    clearTransitionTimer()
+    isTransitioning.value = false
+    isIncomingReady.value = true
+    outgoingSlide.value = null
+    activeSlideIndex.value = index
     return
   }
 
-  clearWipeTimer()
-  wipeKey.value += 1
-  isWiping.value = true
-  wipeTimeoutId = setTimeout(() => {
-    isWiping.value = false
-    wipeTimeoutId = null
-  }, 190)
+  clearTransitionTimer()
+  outgoingSlide.value = previousSlide
+  activeSlideIndex.value = index
+  transitionKey.value += 1
+  isTransitioning.value = true
+
+  if (loadedSlideIds.has(nextSlideObj.id)) {
+    isIncomingReady.value = true
+    scheduleTransitionEnd()
+  } else {
+    isIncomingReady.value = false
+    nextTick(() => {
+      const el = activeImgRef.value
+      if (el && el.complete && el.naturalWidth > 0) {
+        handleIncomingImageLoad(nextSlideObj.id)
+      }
+    })
+  }
 }
 
 const prevSlide = () => {
   const count = heroGameplaySlides.length
   const targetIndex = (activeSlideIndex.value - 1 + count) % count
-  selectSlide(targetIndex)
+  triggerControlFeedback('prev')
+  selectSlide(targetIndex, 'prev')
 }
 
 const nextSlide = () => {
   const count = heroGameplaySlides.length
   const targetIndex = (activeSlideIndex.value + 1) % count
-  selectSlide(targetIndex)
+  triggerControlFeedback('next')
+  selectSlide(targetIndex, 'next')
 }
 
 onMounted(() => {
   reducedMotion.value = isReducedMotionActive()
+  preloadSlideImages()
   unsubscribeMotion = onMotionChange((active) => {
     reducedMotion.value = active
     if (active) {
-      clearWipeTimer()
-      isWiping.value = false
+      clearTransitionTimer()
+      isTransitioning.value = false
+      isIncomingReady.value = true
+      outgoingSlide.value = null
     }
   })
 })
 
 onUnmounted(() => {
-  clearWipeTimer()
+  clearTransitionTimer()
+  clearPressTimer()
   if (unsubscribeMotion) {
     unsubscribeMotion()
     unsubscribeMotion = null
@@ -227,33 +316,56 @@ const mapPreviews = [
                 <div class="phone-camera-hole" aria-hidden="true"></div>
 
                 <!-- 16:9 Phone Screen with Quiet Dark Fill -->
-                <div class="phone-screen">
+                <div
+                  class="phone-screen"
+                  :class="{
+                    'is-transitioning': isTransitioning && isIncomingReady && !reducedMotion,
+                    'is-waiting-image': isTransitioning && !isIncomingReady && !reducedMotion,
+                    'dir-next': transitionDirection === 'next',
+                    'dir-prev': transitionDirection === 'prev',
+                  }"
+                >
                   <img
+                    v-if="outgoingSlide && isTransitioning && !reducedMotion"
+                    :key="`out-${transitionKey}-${outgoingSlide.id}`"
+                    :src="outgoingSlide.image"
+                    alt=""
+                    aria-hidden="true"
+                    class="phone-screen-img-outgoing"
+                  />
+                  <img
+                    ref="activeImgRef"
+                    :key="`in-${transitionKey}-${activeSlide.id}`"
                     :src="activeSlide.image"
                     :alt="activeSlide.alt"
                     class="phone-screen-img"
                     :loading="activeSlideIndex === 0 ? 'eager' : 'auto'"
+                    @load="handleIncomingImageLoad(activeSlide.id)"
+                    @error="handleIncomingImageLoad(activeSlide.id)"
                   />
-                  <div
-                    v-if="isWiping && !reducedMotion"
-                    :key="wipeKey"
-                    class="pixel-wipe-overlay"
-                    aria-hidden="true"
-                  ></div>
                 </div>
               </div>
 
               <!-- Below Phone: Active Map Name (left) and Navigation Controls (right) -->
               <div class="preview-footer">
                 <div class="preview-map-info" aria-live="polite" aria-atomic="true">
+                  <span class="hud-sector-dot" aria-hidden="true"></span>
                   <span class="sr-only">Active map: </span>
-                  <span class="preview-map-name">{{ activeSlide.name }}</span>
+                  <span
+                    :key="activeSlide.id"
+                    class="preview-map-name"
+                    :class="{
+                      'map-name-next': isTransitioning && transitionDirection === 'next' && !reducedMotion,
+                      'map-name-prev': isTransitioning && transitionDirection === 'prev' && !reducedMotion,
+                    }"
+                  >{{ activeSlide.name }}</span>
                 </div>
 
                 <div class="preview-nav-controls" role="group" aria-label="Map navigation">
                   <button
                     type="button"
-                    class="nav-chevron-btn"
+                    class="nav-chevron-btn nav-chevron-prev"
+                    :class="{ 'is-pressed': pressedControl === 'prev' }"
                     aria-label="Previous map"
                     @click="prevSlide"
                   >
@@ -261,7 +373,8 @@ const mapPreviews = [
                   </button>
                   <button
                     type="button"
-                    class="nav-chevron-btn"
+                    class="nav-chevron-btn nav-chevron-next"
+                    :class="{ 'is-pressed': pressedControl === 'next' }"
                     aria-label="Next map"
                     @click="nextSlide"
                   >
@@ -571,6 +684,7 @@ const mapPreviews = [
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  animation: hero-copy-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .badge-subtle {
@@ -594,6 +708,7 @@ const mapPreviews = [
   letter-spacing: -0.025em;
   color: var(--color-text-main);
   margin-bottom: 1.25rem;
+  text-wrap: balance;
 }
 
 @media (min-width: 640px) {
@@ -614,6 +729,7 @@ const mapPreviews = [
   color: var(--color-text-muted);
   margin-bottom: 1.75rem;
   max-width: 520px;
+  text-wrap: pretty;
 }
 
 .hero-cta-group {
@@ -700,6 +816,29 @@ const mapPreviews = [
   width: 100%;
   max-width: 540px;
   margin: 0 auto;
+  animation: hero-device-enter 460ms cubic-bezier(0.16, 1, 0.3, 1) 35ms both;
+}
+
+@keyframes hero-copy-enter {
+  0% {
+    opacity: 0.92;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes hero-device-enter {
+  0% {
+    opacity: 0.92;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .hero-gameplay-preview {
@@ -787,9 +926,8 @@ const mapPreviews = [
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.phone-screen-img {
-  position: relative;
-  z-index: 1;
+.phone-screen-img,
+.phone-screen-img-outgoing {
   width: 100%;
   height: 100%;
   max-width: 100%;
@@ -800,48 +938,93 @@ const mapPreviews = [
   user-select: none;
 }
 
-/* Brief Stepped Pixel Wipe Inside Phone Screen */
-.pixel-wipe-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  background-color: var(--color-primary);
-  background-image:
-    linear-gradient(45deg, var(--phone-chassis-dark) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--phone-chassis-dark) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--phone-chassis-dark) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--phone-chassis-dark) 75%);
-  background-size: 16px 16px;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  animation: pixel-wipe-sweep 190ms steps(5, end) forwards;
+.phone-screen-img {
+  position: relative;
+  z-index: 2;
 }
 
-@keyframes pixel-wipe-sweep {
+.phone-screen-img-outgoing {
+  position: absolute;
+  inset: 5px;
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Keep outgoing image steady until incoming image is decoded */
+.phone-screen.is-waiting-image .phone-screen-img {
+  opacity: 0;
+}
+
+.phone-screen.is-waiting-image .phone-screen-img-outgoing {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Directional Slide Transition Inside Phone Screen (240ms smooth deceleration) */
+.phone-screen.is-transitioning.dir-next .phone-screen-img {
+  will-change: transform, opacity;
+  animation: screen-slide-in-right 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.phone-screen.is-transitioning.dir-next .phone-screen-img-outgoing {
+  will-change: transform, opacity;
+  animation: screen-slide-out-left 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.phone-screen.is-transitioning.dir-prev .phone-screen-img {
+  will-change: transform, opacity;
+  animation: screen-slide-in-left 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.phone-screen.is-transitioning.dir-prev .phone-screen-img-outgoing {
+  will-change: transform, opacity;
+  animation: screen-slide-out-right 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes screen-slide-in-right {
   0% {
-    clip-path: inset(0 0 0 0);
-    opacity: 0.9;
-  }
-  50% {
-    clip-path: inset(0 0 0 45%);
-    opacity: 0.75;
+    opacity: 0.92;
+    transform: translate3d(100%, 0, 0);
   }
   100% {
-    clip-path: inset(0 0 0 100%);
-    opacity: 0;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pixel-wipe-overlay {
-    animation: none !important;
-    display: none !important;
+@keyframes screen-slide-out-left {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0.25;
+    transform: translate3d(-28%, 0, 0);
   }
 }
 
-:root[data-reduced-motion="true"] .pixel-wipe-overlay {
-  animation: none !important;
-  display: none !important;
+@keyframes screen-slide-in-left {
+  0% {
+    opacity: 0.92;
+    transform: translate3d(-100%, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes screen-slide-out-right {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0.25;
+    transform: translate3d(28%, 0, 0);
+  }
 }
 
 /* Below Phone: Active Map Name (left) & Navigation Chevrons (right) */
@@ -855,9 +1038,19 @@ const mapPreviews = [
 }
 
 .preview-map-info {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  gap: 0.5rem;
   min-width: 0;
+}
+
+.hud-sector-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-violet-subtle);
+  flex-shrink: 0;
 }
 
 .preview-map-name {
@@ -867,6 +1060,37 @@ const mapPreviews = [
   color: var(--color-text-main);
   letter-spacing: -0.01em;
   overflow-wrap: break-word;
+  display: inline-block;
+}
+
+.preview-map-name.map-name-next {
+  animation: map-label-next 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.preview-map-name.map-name-prev {
+  animation: map-label-prev 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes map-label-next {
+  0% {
+    opacity: 0.75;
+    transform: translate3d(6px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes map-label-prev {
+  0% {
+    opacity: 0.75;
+    transform: translate3d(-6px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .preview-nav-controls {
@@ -887,11 +1111,20 @@ const mapPreviews = [
   padding: 0;
   background-color: var(--color-card);
   color: var(--color-text-main);
-  border: 1px solid var(--color-border-control);
+  border: 1.5px solid var(--color-border-control);
   border-radius: 8px;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-chevron-btn :deep(svg) {
+  transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav-chevron-btn:hover {
@@ -900,8 +1133,23 @@ const mapPreviews = [
   color: var(--color-primary);
 }
 
-.nav-chevron-btn:active {
-  transform: scale(0.95);
+.nav-chevron-btn:active,
+.nav-chevron-btn.is-pressed {
+  background-color: var(--color-violet-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.22);
+  transform: translateY(1px);
+}
+
+.nav-chevron-prev:active :deep(svg),
+.nav-chevron-prev.is-pressed :deep(svg) {
+  transform: translateX(-2px) scale(0.92);
+}
+
+.nav-chevron-next:active :deep(svg),
+.nav-chevron-next.is-pressed :deep(svg) {
+  transform: translateX(2px) scale(0.92);
 }
 
 .nav-chevron-btn:focus-visible {
@@ -910,13 +1158,65 @@ const mapPreviews = [
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nav-chevron-btn:active {
-    transform: none;
+  .hero-text-column,
+  .hero-visual-column,
+  .phone-screen.is-transitioning .phone-screen-img,
+  .phone-screen.is-transitioning .phone-screen-img-outgoing,
+  .preview-map-name.map-name-next,
+  .preview-map-name.map-name-prev {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .phone-screen-img-outgoing {
+    display: none !important;
+  }
+
+  .nav-chevron-btn,
+  .nav-chevron-btn :deep(svg) {
+    transition: background-color 0.01ms, border-color 0.01ms, color 0.01ms, box-shadow 0.01ms !important;
+    transform: none !important;
+  }
+
+  .nav-chevron-btn:active,
+  .nav-chevron-btn.is-pressed {
+    transform: none !important;
+    background-color: var(--color-violet-subtle);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.28);
   }
 }
 
-:root[data-reduced-motion="true"] .nav-chevron-btn:active {
-  transform: none;
+:root[data-reduced-motion="true"] .hero-text-column,
+:root[data-reduced-motion="true"] .hero-visual-column,
+:root[data-reduced-motion="true"] .phone-screen.is-transitioning .phone-screen-img,
+:root[data-reduced-motion="true"] .phone-screen.is-transitioning .phone-screen-img-outgoing,
+:root[data-reduced-motion="true"] .preview-map-name.map-name-next,
+:root[data-reduced-motion="true"] .preview-map-name.map-name-prev {
+  animation: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+:root[data-reduced-motion="true"] .phone-screen-img-outgoing {
+  display: none !important;
+}
+
+:root[data-reduced-motion="true"] .nav-chevron-btn,
+:root[data-reduced-motion="true"] .nav-chevron-btn :deep(svg) {
+  transition: none !important;
+  transform: none !important;
+}
+
+:root[data-reduced-motion="true"] .nav-chevron-btn:active,
+:root[data-reduced-motion="true"] .nav-chevron-btn.is-pressed {
+  transform: none !important;
+  background-color: var(--color-violet-subtle);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.28);
 }
 
 @media (max-width: 560px) {
@@ -1033,6 +1333,7 @@ const mapPreviews = [
   letter-spacing: -0.02em;
   color: var(--color-text);
   margin-bottom: 0.75rem;
+  text-wrap: balance;
 }
 
 @media (min-width: 640px) {
@@ -1045,6 +1346,7 @@ const mapPreviews = [
   font-size: 1.05rem;
   line-height: 1.6;
   color: var(--color-text-muted);
+  text-wrap: pretty;
 }
 
 /* Editorial Split */
@@ -1203,6 +1505,16 @@ const mapPreviews = [
   transform: scale(1.04);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .preview-map-card:hover .preview-img {
+    transform: none;
+  }
+}
+
+:root[data-reduced-motion="true"] .preview-map-card:hover .preview-img {
+  transform: none;
+}
+
 .preview-info {
   padding: 1rem;
 }
@@ -1250,6 +1562,7 @@ const mapPreviews = [
   font-weight: 800;
   color: var(--color-text);
   margin-bottom: 0.5rem;
+  text-wrap: balance;
 }
 
 .download-banner-lead {
@@ -1257,6 +1570,7 @@ const mapPreviews = [
   line-height: 1.6;
   color: var(--color-text-muted);
   margin: 0;
+  text-wrap: pretty;
 }
 
 .home-download-actions {

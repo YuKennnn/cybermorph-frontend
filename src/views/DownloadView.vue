@@ -19,7 +19,7 @@ const btnRefInstall = ref(null)
 const DOWNLOAD_SECTIONS = {
   requirements: {
     title: 'System Requirements',
-    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Awaiting confirmation. Architecture: Awaiting confirmation. Memory: Awaiting confirmation. Free Storage: Awaiting confirmation. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
+    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Android 7.0 (API level 24) or later (APK install requirement). Architecture: 64-bit ARM (arm64-v8a) (APK install requirement). Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally. RAM and free storage recommendations are not yet confirmed.',
   },
   install: {
     title: 'Android Installation Guide',
@@ -232,27 +232,11 @@ onMounted(() => {
                   </tr>
                   <tr>
                     <th scope="row">Android Version</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
+                    <td>Android 7.0 (API level 24) or later (APK install requirement)</td>
                   </tr>
                   <tr>
                     <th scope="row">Architecture</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Memory (RAM)</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">Free Storage</th>
-                    <td>
-                      <span class="text-pending">Awaiting confirmation</span>
-                    </td>
+                    <td>64-bit ARM (arm64-v8a) (APK install requirement)</td>
                   </tr>
                   <tr>
                     <th scope="row">Network</th>
@@ -263,6 +247,9 @@ onMounted(() => {
                 </tbody>
               </table>
             </div>
+            <p class="requirements-note">
+              RAM and free storage recommendations are not yet confirmed.
+            </p>
           </div>
         </div>
       </section>
@@ -987,14 +974,16 @@ onMounted(() => {
 .requirements-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.925rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .requirements-table th,
 .requirements-table td {
-  padding: 0.9rem 0.75rem;
+  padding: 0.95rem 0.75rem;
   border-bottom: 1px solid var(--color-border);
   text-align: left;
+  vertical-align: top;
 }
 
 .requirements-table tr:last-child th,
@@ -1003,7 +992,7 @@ onMounted(() => {
 }
 
 .requirements-table th {
-  width: 35%;
+  width: 32%;
   font-weight: 600;
   color: var(--color-text-main);
 }
@@ -1013,9 +1002,57 @@ onMounted(() => {
   line-height: 1.55;
 }
 
-.text-pending {
-  font-style: italic;
-  color: var(--color-warning);
+.requirements-note {
+  margin: 0.75rem 0 0;
+  padding: 0.95rem 0.75rem 0;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .requirements-card {
+    padding: 1.25rem;
+  }
+
+  .requirements-table,
+  .requirements-table tbody,
+  .requirements-table tr,
+  .requirements-table th,
+  .requirements-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .requirements-table tr {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .requirements-table tr:first-child {
+    padding-top: 0;
+  }
+
+  .requirements-table tr:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .requirements-table th,
+  .requirements-table td {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .requirements-table th {
+    margin-bottom: 0.25rem;
+    font-size: 0.85rem;
+  }
+
+  .requirements-note {
+    padding: 0.85rem 0 0;
+  }
 }
 
 .header-with-action {
