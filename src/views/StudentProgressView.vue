@@ -456,7 +456,7 @@ onUnmounted(() => {
       :originating-roster-page="originatingRosterPage"
     />
 
-    <main class="page-body">
+    <div class="page-body">
       <!-- Identity Context Header -->
       <section class="identity-card" aria-label="Student overview">
         <div class="identity-header">
@@ -758,7 +758,7 @@ onUnmounted(() => {
           </div>
         </section>
       </div>
-    </main>
+    </div>
 
     <!-- Session Telemetry Modal (Reused Component) -->
     <SessionTelemetryModal

@@ -142,7 +142,7 @@ onMounted(() => {
       </div>
     </header>
 
-    <main class="page-body">
+    <div class="page-body">
       <div
         v-if="authStore.isEducatorMissingDisplayName"
         class="display-name-notice"
@@ -251,7 +251,7 @@ onMounted(() => {
         <p>Create a classroom and generate a 6-character access code for your students.</p>
         <button class="btn-primary" @click="isCreateModalOpen = true">+ Create classroom</button>
       </div>
-    </main>
+    </div>
 
     <!-- Modals -->
     <ClassroomCreateModal

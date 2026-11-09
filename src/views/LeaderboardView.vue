@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { fetchLeaderboardData } from '../api/leaderboard'
+import PublicHeader from '../components/common/PublicHeader.vue'
+import PublicFooter from '../components/common/PublicFooter.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -19,18 +21,61 @@ const parseMapQuery = (val) => {
 }
 
 const parsePageQuery = (val) => {
-  const parsed = parseInt(val, 10)
-  return Number.isInteger(parsed) && parsed >= 1 ? parsed : 1
+  if (val === undefined || val === null || val === '') {
+    return { page: 1, needsUrlSync: false }
+  }
+  const str = String(val).trim()
+  if (!/^\d+$/.test(str)) {
+    return { page: 1, needsUrlSync: true }
+  }
+  const parsed = parseInt(str, 10)
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return { page: 1, needsUrlSync: true }
+  }
+  if (parsed > 10000) {
+    return { page: 10000, needsUrlSync: true }
+  }
+  return { page: parsed, needsUrlSync: false }
 }
 
+const queriesEqual = (q1, q2) => {
+  const o1 = q1 || {}
+  const o2 = q2 || {}
+  const keys1 = Object.keys(o1)
+  const keys2 = Object.keys(o2)
+  if (keys1.length !== keys2.length) return false
+  for (const k of keys1) {
+    if (!Object.prototype.hasOwnProperty.call(o2, k)) return false
+    if (String(o1[k]) !== String(o2[k])) return false
+  }
+  return true
+}
+
+const getCanonicalQuery = (rawQuery, targetMap, targetPage) => {
+  const query = { ...rawQuery }
+  if (targetMap && targetMap !== 'All') {
+    query.map = targetMap
+  } else {
+    delete query.map
+  }
+  if (targetPage > 1) {
+    query.page = String(targetPage)
+  } else {
+    delete query.page
+  }
+  return query
+}
+
+const initialPageInfo = parsePageQuery(route.query.page)
 const leaderboardItems = ref([])
 const totalCount = ref(0)
-const page = ref(parsePageQuery(route.query.page))
+const page = ref(initialPageInfo.page)
 const pageSize = ref(10)
 const selectedMap = ref(parseMapQuery(route.query.map))
 const isLoading = ref(false)
 const errorMessage = ref('')
 
+let lastFetchedKey = ''
 let latestRequestId = 0
 let isMounted = true
 
@@ -57,14 +102,23 @@ const isCurrentPlayer = (entry) => {
   return entry.username.toLowerCase() === authStore.user.username.toLowerCase()
 }
 
+// Keep URL query in sync when user changes filters or state recovers
+const updateQueryParams = () => {
+  const canonical = getCanonicalQuery(route.query, selectedMap.value, page.value)
+  if (!queriesEqual(route.query, canonical)) {
+    router.replace({ query: canonical })
+  }
+}
+
 const fetchLeaderboard = async () => {
   const reqId = ++latestRequestId
+  lastFetchedKey = `${selectedMap.value}:${page.value}`
   isLoading.value = true
   errorMessage.value = ''
 
   try {
     const params = {
-      page: page.value,
+      page: Math.max(1, Math.min(10000, page.value)),
       page_size: pageSize.value,
     }
 
@@ -76,8 +130,21 @@ const fetchLeaderboard = async () => {
 
     if (!isMounted || reqId !== latestRequestId) return
 
-    leaderboardItems.value = data.items || []
-    totalCount.value = data.total_count || 0
+    const total = data?.total_count || 0
+    const items = data?.items || []
+    totalCount.value = total
+
+    // Check out-of-range recovery
+    const maxPage = total > 0 ? Math.ceil(total / pageSize.value) : 1
+    if (total > 0 && items.length === 0 && page.value > maxPage) {
+      page.value = maxPage
+      leaderboardItems.value = []
+      updateQueryParams()
+      fetchLeaderboard()
+      return
+    }
+
+    leaderboardItems.value = items
   } catch {
     if (!isMounted || reqId !== latestRequestId) return
     errorMessage.value =
@@ -89,39 +156,29 @@ const fetchLeaderboard = async () => {
   }
 }
 
-// Keep URL query in sync when user changes filters
-const updateQueryParams = () => {
-  const query = { ...route.query }
-  if (selectedMap.value && selectedMap.value !== 'All') {
-    query.map = selectedMap.value
-  } else {
-    delete query.map
-  }
-  if (page.value > 1) {
-    query.page = String(page.value)
-  } else {
-    delete query.page
-  }
-  router.replace({ query })
-}
-
 // Watch for external route query changes (e.g. browser Back/Forward or direct link)
 watch(
   () => route.query,
   (newQuery) => {
-    const newMap = parseMapQuery(newQuery.map)
-    const newPg = parsePageQuery(newQuery.page)
-    let shouldFetch = false
+    const nextMap = parseMapQuery(newQuery.map)
+    const pageResult = parsePageQuery(newQuery.page)
+    const nextPage = pageResult.page
 
-    if (selectedMap.value !== newMap) {
-      selectedMap.value = newMap
-      shouldFetch = true
+    // Compare both normalized values against current state before updating either
+    const stateChanged = selectedMap.value !== nextMap || page.value !== nextPage
+
+    // Apply both before replacing the URL
+    selectedMap.value = nextMap
+    page.value = nextPage
+
+    // Preserve unrelated parameters, omit page=1
+    const canonical = getCanonicalQuery(newQuery, nextMap, nextPage)
+    if (!queriesEqual(newQuery, canonical)) {
+      router.replace({ query: canonical })
     }
-    if (page.value !== newPg) {
-      page.value = newPg
-      shouldFetch = true
-    }
-    if (shouldFetch) {
+
+    const currentKey = `${nextMap}:${nextPage}`
+    if (stateChanged || currentKey !== lastFetchedKey) {
       fetchLeaderboard()
     }
   },
@@ -137,7 +194,7 @@ const handleSelectMap = (mapName) => {
 
 const handlePrevPage = () => {
   if (page.value > 1 && !isLoading.value) {
-    page.value--
+    page.value = Math.max(1, Math.min(10000, page.value - 1))
     updateQueryParams()
     fetchLeaderboard()
   }
@@ -145,7 +202,7 @@ const handlePrevPage = () => {
 
 const handleNextPage = () => {
   if (page.value < totalPages.value && !isLoading.value) {
-    page.value++
+    page.value = Math.max(1, Math.min(10000, page.value + 1))
     updateQueryParams()
     fetchLeaderboard()
   }
@@ -161,6 +218,11 @@ const handleNavAction = () => {
 
 onMounted(() => {
   isMounted = true
+  const initialMap = parseMapQuery(route.query.map)
+  const initialPg = parsePageQuery(route.query.page).page
+  selectedMap.value = initialMap
+  page.value = initialPg
+  updateQueryParams()
   fetchLeaderboard()
 })
 
@@ -171,185 +233,236 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="leaderboard-page">
-    <header class="page-header">
-      <div class="header-content">
-        <div>
-          <h2 class="title">Leaderboard</h2>
-          <p class="subtitle">Top scores and player rankings across maps</p>
-        </div>
-        <button v-if="!authStore.token" class="btn-outline" @click="handleNavAction">
-          Sign In
-        </button>
-      </div>
-    </header>
+  <div :class="['leaderboard-page', { 'is-guest': !authStore.token }]">
+    <PublicHeader v-if="!authStore.token" />
 
-    <main class="page-body">
-      <!-- Filter Bar with Accessible Buttons -->
-      <nav class="filter-bar" aria-label="Map filter navigation">
-        <div class="map-filter-group" role="group" aria-label="Filter leaderboard by map">
-          <button
-            v-for="mapName in mapOptions"
-            :key="mapName"
-            type="button"
-            :class="['filter-btn', { active: selectedMap === mapName }]"
-            :aria-pressed="selectedMap === mapName"
-            @click="handleSelectMap(mapName)"
-          >
-            {{ mapName === 'All' ? 'All maps' : mapName }}
+    <component
+      :is="authStore.token ? 'div' : 'main'"
+      :class="['leaderboard-main', { 'guest-layout': !authStore.token }]"
+    >
+      <div v-if="!authStore.token" class="breadcrumb-bar">
+        <RouterLink to="/" class="breadcrumb-link">
+          &larr; Back to Home
+        </RouterLink>
+      </div>
+
+      <header class="page-header">
+        <div class="header-content">
+          <div>
+            <h2 class="title">Leaderboard</h2>
+            <p class="subtitle">Top scores and player rankings across maps</p>
+          </div>
+          <button v-if="!authStore.token" type="button" class="btn-outline" @click="handleNavAction">
+            Sign In
           </button>
         </div>
-      </nav>
+      </header>
 
-      <div v-if="errorMessage" class="error-banner" role="alert">
-        <span>{{ errorMessage }}</span>
-        <button type="button" class="btn-retry" :disabled="isLoading" @click="fetchLeaderboard">
-          Try again
-        </button>
-      </div>
-
-      <!-- Loading Indicator -->
-      <div v-if="isLoading" class="loading-state" role="status" aria-live="polite">
-        <div class="spinner" aria-hidden="true"></div>
-        <p>Loading leaderboard rankings...</p>
-      </div>
-
-      <!-- Populated State -->
-      <template v-else-if="leaderboardItems.length > 0">
-        <!-- Featured Top Three Cards (Page 1 Only) -->
-        <section
-          v-if="topThreeEntries.length > 0"
-          class="podium-section"
-          aria-label="Top ranked players"
-        >
-          <div class="podium-grid">
-            <article
-              v-for="entry in topThreeEntries"
-              :key="entry.score_id || `${entry.rank}-${entry.username}`"
-              :class="[
-                'podium-card',
-                `rank-card-${entry.rank}`,
-                { 'is-current-player': isCurrentPlayer(entry) },
-              ]"
+      <div class="page-body">
+        <!-- Filter Bar with Accessible Buttons -->
+        <nav class="filter-bar" aria-label="Map filter navigation">
+          <div class="map-filter-group" role="group" aria-label="Filter leaderboard by map">
+            <button
+              v-for="mapName in mapOptions"
+              :key="mapName"
+              type="button"
+              :class="['filter-btn', { active: selectedMap === mapName }]"
+              :aria-pressed="selectedMap === mapName"
+              @click="handleSelectMap(mapName)"
             >
-              <svg class="podium-trophy" viewBox="0 0 80 88" aria-hidden="true" focusable="false">
-                <path class="trophy-handles" d="M22 14H10v10c0 11 7 17 18 17M58 14h12v10c0 11-7 17-18 17" />
-                <path class="trophy-fill" d="M21 8h38v22c0 13-8 22-19 22S21 43 21 30Z" />
-                <path class="trophy-highlight" d="M25 12h10v31c-6-3-10-8-10-15Z" />
-                <path class="trophy-star" d="m40 18 4 8 9 1-6.5 6.3 1.5 9L40 38l-8 4.3 1.5-9L27 27l9-1Z" />
-                <path class="trophy-fill" d="M35 52h10v13l10 7H25l10-7Z" />
-                <rect class="trophy-base" x="21" y="72" width="38" height="9" rx="3" />
-              </svg>
-              <div class="podium-header">
-                <span :class="['podium-rank-badge', `badge-rank-${entry.rank}`]">
-                  #{{ entry.rank }}
-                </span>
-              </div>
-
-              <div class="podium-body">
-                <div class="podium-player">
-                  <span class="podium-username" :title="entry.username">{{ entry.username }}</span>
-                  <span v-if="isCurrentPlayer(entry)" class="you-badge">You</span>
-                </div>
-                <span class="podium-map-badge">{{ entry.map_name }}</span>
-                <div class="podium-score">
-                  <span class="score-number">{{
-                    (entry.total_score ?? entry.score ?? 0).toLocaleString()
-                  }}</span>
-                  <span class="score-suffix">pts</span>
-                </div>
-              </div>
-            </article>
+              {{ mapName === 'All' ? 'All maps' : mapName }}
+            </button>
           </div>
-        </section>
+        </nav>
 
-        <!-- Ranking Table Card -->
-        <div class="table-card">
-          <div class="table-scroll">
-            <table class="leaderboard-table" aria-label="Leaderboard rankings">
-              <thead>
-                <tr>
-                  <th scope="col" class="rank-col">Rank</th>
-                  <th scope="col">Player</th>
-                  <th scope="col">Map</th>
-                  <th scope="col" class="score-col">High score</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="entry in leaderboardItems"
-                  :key="entry.score_id || entry.id || `${entry.rank}-${entry.username}`"
-                  :class="{ 'current-player-row': isCurrentPlayer(entry) }"
-                >
-                  <td class="rank-col">
-                    <span :class="['rank-badge', `rank-${entry.rank}`]">
-                      {{ entry.rank }}
-                    </span>
-                  </td>
-                  <td class="username-col">
-                    <div class="player-identity">
-                      <span class="agent-name" :title="entry.username">{{ entry.username }}</span>
-                      <span v-if="isCurrentPlayer(entry)" class="you-badge">You</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span class="map-badge">{{ entry.map_name }}</span>
-                  </td>
-                  <td class="score-col">
-                    <span class="score-value">
-                      {{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }}
-                      <span class="score-unit">pts</span>
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Pagination Controls inside Table Card Footer -->
-          <footer v-if="totalCount > 0" class="table-card-footer pagination-bar">
-            <div class="pagination-info" aria-live="polite">
-              Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
-              <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
-              <strong>{{ totalCount }}</strong> scores
-            </div>
-            <div class="pagination-actions">
-              <button
-                type="button"
-                class="page-btn"
-                :disabled="page <= 1 || isLoading"
-                aria-label="Previous page"
-                @click="handlePrevPage"
-              >
-                ◀ Previous
-              </button>
-              <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
-              <button
-                type="button"
-                class="page-btn"
-                :disabled="page >= totalPages || isLoading"
-                aria-label="Next page"
-                @click="handleNextPage"
-              >
-                Next ▶
-              </button>
-            </div>
-          </footer>
+        <div v-if="errorMessage" class="error-banner" role="alert">
+          <span>{{ errorMessage }}</span>
+          <button type="button" class="btn-retry" :disabled="isLoading" @click="fetchLeaderboard">
+            Try again
+          </button>
         </div>
-      </template>
 
-      <!-- Empty State -->
-      <div v-else class="empty-state">
-        <h4>No scores recorded</h4>
-        <p>No scores recorded for this map selection yet.</p>
+        <!-- Loading Indicator -->
+        <div v-if="isLoading" class="loading-state" role="status" aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <p>Loading leaderboard rankings...</p>
+        </div>
+
+        <!-- Populated State -->
+        <template v-else-if="leaderboardItems.length > 0">
+          <!-- Featured Top Three Cards (Page 1 Only) -->
+          <section
+            v-if="topThreeEntries.length > 0"
+            class="podium-section"
+            aria-label="Top ranked players"
+          >
+            <div class="podium-grid">
+              <article
+                v-for="entry in topThreeEntries"
+                :key="entry.score_id || `${entry.rank}-${entry.username}`"
+                :class="[
+                  'podium-card',
+                  `rank-card-${entry.rank}`,
+                  { 'is-current-player': isCurrentPlayer(entry) },
+                ]"
+              >
+                <svg class="podium-trophy" viewBox="0 0 80 88" aria-hidden="true" focusable="false">
+                  <path class="trophy-handles" d="M22 14H10v10c0 11 7 17 18 17M58 14h12v10c0 11-7 17-18 17" />
+                  <path class="trophy-fill" d="M21 8h38v22c0 13-8 22-19 22S21 43 21 30Z" />
+                  <path class="trophy-highlight" d="M25 12h10v31c-6-3-10-8-10-15Z" />
+                  <path class="trophy-star" d="m40 18 4 8 9 1-6.5 6.3 1.5 9L40 38l-8 4.3 1.5-9L27 27l9-1Z" />
+                  <path class="trophy-fill" d="M35 52h10v13l10 7H25l10-7Z" />
+                  <rect class="trophy-base" x="21" y="72" width="38" height="9" rx="3" />
+                </svg>
+                <div class="podium-header">
+                  <span :class="['podium-rank-badge', `badge-rank-${entry.rank}`]">
+                    #{{ entry.rank }}
+                  </span>
+                </div>
+
+                <div class="podium-body">
+                  <div class="podium-player">
+                    <span class="podium-username" :title="entry.username">{{ entry.username }}</span>
+                    <span v-if="isCurrentPlayer(entry)" class="you-badge">You</span>
+                  </div>
+                  <span class="podium-map-badge">{{ entry.map_name }}</span>
+                  <div class="podium-score">
+                    <span class="score-number">{{
+                      (entry.total_score ?? entry.score ?? 0).toLocaleString()
+                    }}</span>
+                    <span class="score-suffix">pts</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Ranking Table Card -->
+          <div class="table-card">
+            <div class="table-scroll">
+              <table class="leaderboard-table" aria-label="Leaderboard rankings">
+                <thead>
+                  <tr>
+                    <th scope="col" class="rank-col">Rank</th>
+                    <th scope="col">Player</th>
+                    <th scope="col">Map</th>
+                    <th scope="col" class="score-col">High score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="entry in leaderboardItems"
+                    :key="entry.score_id || entry.id || `${entry.rank}-${entry.username}`"
+                    :class="{ 'current-player-row': isCurrentPlayer(entry) }"
+                  >
+                    <td class="rank-col">
+                      <span :class="['rank-badge', `rank-${entry.rank}`]">
+                        {{ entry.rank }}
+                      </span>
+                    </td>
+                    <td class="username-col">
+                      <div class="player-identity">
+                        <span class="agent-name" :title="entry.username">{{ entry.username }}</span>
+                        <span v-if="isCurrentPlayer(entry)" class="you-badge">You</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="map-badge">{{ entry.map_name }}</span>
+                    </td>
+                    <td class="score-col">
+                      <span class="score-value">
+                        {{ (entry.total_score ?? entry.score ?? 0).toLocaleString() }}
+                        <span class="score-unit">pts</span>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Controls inside Table Card Footer -->
+            <footer v-if="totalCount > 0" class="table-card-footer pagination-bar">
+              <div class="pagination-info" aria-live="polite">
+                Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
+                <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
+                <strong>{{ totalCount }}</strong> scores
+              </div>
+              <div class="pagination-actions">
+                <button
+                  type="button"
+                  class="page-btn"
+                  :disabled="page <= 1 || isLoading"
+                  aria-label="Previous page"
+                  @click="handlePrevPage"
+                >
+                  ◀ Previous
+                </button>
+                <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
+                <button
+                  type="button"
+                  class="page-btn"
+                  :disabled="page >= totalPages || isLoading"
+                  aria-label="Next page"
+                  @click="handleNextPage"
+                >
+                  Next ▶
+                </button>
+              </div>
+            </footer>
+          </div>
+        </template>
+
+        <!-- Empty State -->
+        <div v-else-if="totalCount === 0" class="empty-state">
+          <h4>No scores recorded</h4>
+          <p>No scores recorded for this map selection yet.</p>
+        </div>
       </div>
-    </main>
+    </component>
+
+    <PublicFooter v-if="!authStore.token" />
   </div>
 </template>
 
 <style scoped>
 .leaderboard-page {
   width: 100%;
+}
+
+.leaderboard-page.is-guest {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+}
+
+.leaderboard-main.guest-layout {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 3rem;
+  box-sizing: border-box;
+}
+
+.breadcrumb-bar {
+  margin-bottom: 1.25rem;
+}
+
+.breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.breadcrumb-link:hover {
+  text-decoration: underline;
+  color: var(--color-primary-hover, var(--color-primary));
 }
 
 .page-header {

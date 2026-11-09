@@ -135,7 +135,7 @@ const handleLogin = async () => {
 <template>
   <div class="auth-page-wrapper">
     <PublicHeader />
-    <div class="auth-container">
+    <main class="auth-container">
       <div class="auth-card">
         <h2 class="title">Sign In</h2>
         <p class="subtitle">Sign in to your CyberMorph account</p>
@@ -243,7 +243,7 @@ const handleLogin = async () => {
           <RouterLink to="/register" class="link-primary">Create an account</RouterLink>
         </p>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 

@@ -9,6 +9,12 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const isPublicLayout = computed(() => {
+  if (route.name === 'not-found') {
+    return !authStore.isAuthenticated
+  }
+  if (route.name === 'leaderboard') {
+    return !authStore.token
+  }
   return (
     !!route.meta?.isPublic ||
     route.path === '/' ||
@@ -30,7 +36,8 @@ const showSidebar = computed(() => {
 <template>
   <div class="app-layout">
     <SidebarNav v-if="showSidebar" />
-    <main
+    <component
+      :is="isPublicLayout ? 'div' : 'main'"
       :class="[
         'main-content',
         { 'with-sidebar': showSidebar, 'landing-mode': isPublicLayout },
@@ -39,7 +46,7 @@ const showSidebar = computed(() => {
       <div :class="['content-wrapper', { 'full-width': isPublicLayout }]">
         <RouterView />
       </div>
-    </main>
+    </component>
 
     <!-- Public Accessibility Preferences Modal -->
     <template v-if="isPublicLayout">

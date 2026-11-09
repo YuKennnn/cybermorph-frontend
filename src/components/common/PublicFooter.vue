@@ -34,6 +34,7 @@ const handleFooterClick = () => {
               <li><RouterLink to="/about" class="footer-link">About</RouterLink></li>
               <li><RouterLink to="/gameplay" class="footer-link">Gameplay</RouterLink></li>
               <li><RouterLink to="/download" class="footer-link">Download</RouterLink></li>
+              <li><RouterLink to="/leaderboard" class="footer-link">Leaderboard</RouterLink></li>
               <li><RouterLink to="/download#requirements" class="footer-link">System requirements</RouterLink></li>
               <li><RouterLink to="/faq" class="footer-link">FAQ</RouterLink></li>
             </ul>

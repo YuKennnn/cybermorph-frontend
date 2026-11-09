@@ -448,7 +448,7 @@ onMounted(() => {
     </div>
 
     <!-- Main Settings Container -->
-    <main v-else class="settings-container">
+    <div v-else class="settings-container">
       <!-- General Settings Card -->
       <section class="settings-card" aria-labelledby="general-settings-title">
         <header class="card-header">
@@ -589,7 +589,7 @@ onMounted(() => {
           </button>
         </div>
       </section>
-    </main>
+    </div>
 
     <!-- Delete Confirmation Modal -->
     <ClassroomDeleteModal

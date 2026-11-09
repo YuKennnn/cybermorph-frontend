@@ -17,10 +17,10 @@ import officeImg from '../assets/maps/office.png'
 import internetCafeImg from '../assets/maps/internet-cafe.png'
 import publicParkImg from '../assets/maps/public-park.png'
 
-import heroHomeImg from '../assets/hero-gameplay/home-gameplay.png'
-import heroOfficeImg from '../assets/hero-gameplay/office-gameplay.png'
-import heroInternetCafeImg from '../assets/hero-gameplay/internet-cafe-server.png'
-import heroPublicParkImg from '../assets/hero-gameplay/public-park-gameplay.png'
+import heroHomeImg from '../assets/hero-gameplay/home-gameplay.webp'
+import heroOfficeImg from '../assets/hero-gameplay/office-gameplay.webp'
+import heroInternetCafeImg from '../assets/hero-gameplay/internet-cafe-server.webp'
+import heroPublicParkImg from '../assets/hero-gameplay/public-park-gameplay.webp'
 
 const isReadAloudEnabled = computed(() => getStoredReadAloud() === 'on')
 
@@ -36,7 +36,7 @@ const LANDING_SECTIONS = {
   },
   audience: {
     title: 'How It Works',
-    text: 'Play, learn, and track your progress. Play independently at your own pace, or connect with a teacher through optional classroom features. For players: Play offline. The game runs locally on your Android device without requiring continuous internet access. Practice real defense: Identify phishing scams, spot rogue Wi-Fi networks, and protect accounts in interactive missions. Personal progress: Sync completed missions to this web portal to view scores and threat summaries. No classroom required: Anyone can download and finish the full game independently. Optional classroom features: Connect with teachers and classmates. Join with a class code: Enter your teacher\'s 6-character code to share your mission progress with them. Classroom management: Instructors can create classrooms and monitor student completion rates. Identify common mistakes: Teachers review which threat types students find most difficult to tailor their instruction. Institutional accounts: Educators register with verified institutional email addresses.',
+    text: 'Play, learn, and track your progress. Play independently at your own pace, or connect with a teacher through optional classroom features. For players: Play offline. The game runs locally on your Android device without requiring continuous internet access. Practice real defense: Identify phishing scams, spot rogue Wi-Fi networks, and protect accounts in interactive missions. Personal progress: Sync completed missions to this web portal to view scores and threat summaries. No classroom required: Anyone can download and finish the full game independently. Optional classroom features: Connect with teachers and classmates. Join with a class code: Enter your teacher\'s 6-character code to share your mission progress with them. Classroom management: Instructors can create classrooms and monitor student progress. Identify common mistakes: Teachers review which threat types students find most difficult to tailor their instruction. Institutional accounts: Educator registration requires a DNSC email address and admin approval.',
   },
   maps: {
     title: 'Simulation Maps',
@@ -232,6 +232,7 @@ const mapPreviews = [
                     :src="activeSlide.image"
                     :alt="activeSlide.alt"
                     class="phone-screen-img"
+                    :loading="activeSlideIndex === 0 ? 'eager' : 'auto'"
                   />
                   <div
                     v-if="isWiping && !reducedMotion"
@@ -354,13 +355,13 @@ const mapPreviews = [
                   <strong>Join with a class code:</strong> Enter your teacher's 6-character code to share your mission progress with them.
                 </li>
                 <li>
-                  <strong>Classroom management:</strong> Instructors can create classrooms and monitor student completion rates.
+                  <strong>Classroom management:</strong> Instructors can create classrooms and monitor student progress.
                 </li>
                 <li>
                   <strong>Identify common mistakes:</strong> Teachers review which threat types students find most difficult to tailor their instruction.
                 </li>
                 <li>
-                  <strong>Institutional accounts:</strong> Educators register with verified institutional email addresses (@dnsc.edu.ph).
+                  <strong>Institutional accounts:</strong> Educator registration requires a DNSC email address and admin approval.
                 </li>
               </ul>
               <div class="column-action">

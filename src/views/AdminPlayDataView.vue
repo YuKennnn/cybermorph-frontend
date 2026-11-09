@@ -122,6 +122,21 @@ const goToPage = (newPage) => {
   loadPlayData()
 }
 
+const getDownloadAriaLabel = (item) => {
+  const player = item?.username?.trim() ? item.username.trim() : 'unnamed player'
+  const timeInfo = formatPlayDataUploadTimestamp(item?.uploaded_at)
+  let timeStr = 'unknown time'
+  if (!timeInfo.isNull && !timeInfo.isInvalid && timeInfo.formatted && timeInfo.formatted !== '-') {
+    timeStr = timeInfo.formatted
+  } else if (timeInfo.statusText) {
+    timeStr = timeInfo.statusText.toLowerCase()
+  }
+  if (downloadingUploadId.value === item?.upload_id) {
+    return `Downloading CSV for ${player}, uploaded ${timeStr}`
+  }
+  return `Download CSV for ${player}, uploaded ${timeStr}`
+}
+
 const handleDownloadRow = async (item) => {
   if (!item?.upload_id || downloadingUploadId.value || isBulkDownloading.value) return
 
@@ -324,7 +339,7 @@ onUnmounted(() => {
     </header>
 
     <!-- Main Content -->
-    <main class="page-body">
+    <div class="page-body">
       <!-- Unsupported Browser Warning -->
       <div v-if="!hasDecompressionSupport" class="warning-banner" role="alert">
         <span>
@@ -397,7 +412,6 @@ onUnmounted(() => {
             <thead>
               <tr>
                 <th scope="col" class="th-user">Player</th>
-                <th scope="col" class="th-code">Participant code</th>
                 <th scope="col" class="th-rows">Rows</th>
                 <th scope="col" class="th-time">Uploaded (PHT)</th>
                 <th scope="col" class="th-action text-right">Action</th>
@@ -408,12 +422,6 @@ onUnmounted(() => {
                 <!-- Player username -->
                 <td class="td-user">
                   <span v-if="item.username" class="username-text">{{ item.username }}</span>
-                  <span v-else class="text-dim">—</span>
-                </td>
-
-                <!-- Participant code -->
-                <td class="td-code">
-                  <span v-if="item.participant_code" class="code-badge">{{ item.participant_code }}</span>
                   <span v-else class="text-dim">—</span>
                 </td>
 
@@ -451,7 +459,7 @@ onUnmounted(() => {
                     class="btn-download"
                     :disabled="Boolean(downloadingUploadId) || isBulkDownloading || !hasDecompressionSupport"
                     :aria-busy="downloadingUploadId === item.upload_id"
-                    :aria-label="`Download CSV for participant ${item.participant_code || item.upload_id}`"
+                    :aria-label="getDownloadAriaLabel(item)"
                     @click="handleDownloadRow(item)"
                   >
                     <AppIcon
@@ -515,7 +523,7 @@ onUnmounted(() => {
           Game research telemetry uploads will appear here when submitted by testers.
         </p>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
@@ -824,28 +832,23 @@ onUnmounted(() => {
   color: var(--color-text-dim);
 }
 
+.td-user {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .username-text {
   font-weight: 600;
   color: var(--color-text-main);
-}
-
-.code-badge {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--color-primary);
-  background-color: var(--color-violet-subtle);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  border: 1px solid rgba(124, 58, 237, 0.2);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .row-count-badge {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Timestamp container */
@@ -991,6 +994,11 @@ onUnmounted(() => {
 
   .header-actions {
     justify-content: flex-start;
+  }
+
+  .play-data-table th,
+  .play-data-table td {
+    padding: 0.75rem 0.625rem;
   }
 
   .pagination-bar {

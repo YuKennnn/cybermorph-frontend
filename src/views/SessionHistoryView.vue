@@ -48,11 +48,11 @@ const totalRecordsLabel = computed(() => {
 
 /**
  * Parses and validates raw page query.
- * Normalizes invalid values to 1 and indicates if URL sync is required.
+ * Normalizes invalid values to 1 or 10000 cap and indicates if URL sync is required.
  */
 const parseQueryPage = (rawPage) => {
   if (rawPage === undefined || rawPage === null || rawPage === '') {
-    return { page: 1, needsUrlSync: true }
+    return { page: 1, needsUrlSync: false }
   }
   const str = String(rawPage).trim()
   if (!/^\d+$/.test(str)) {
@@ -61,6 +61,9 @@ const parseQueryPage = (rawPage) => {
   const parsed = parseInt(str, 10)
   if (!Number.isFinite(parsed) || parsed < 1) {
     return { page: 1, needsUrlSync: true }
+  }
+  if (parsed > 10000) {
+    return { page: 10000, needsUrlSync: true }
   }
   return { page: parsed, needsUrlSync: false }
 }
@@ -74,6 +77,7 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
     return
   }
 
+  const clampedTarget = Math.max(1, Math.min(10000, targetPage))
   const reqId = ++sessionRequestId
   if (isRetry) {
     isRetrying.value = true
@@ -84,7 +88,7 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
 
   try {
     const rawRes = await fetchSessionHistory({
-      page: targetPage,
+      page: clampedTarget,
       page_size: PAGE_SIZE,
     })
 
@@ -108,18 +112,19 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
     const computedTotalPages =
       resolvedTotal > 0 ? Math.max(1, Math.ceil(resolvedTotal / PAGE_SIZE)) : 1
 
-    if (targetPage > computedTotalPages) {
-      router.replace({
-        query: {
-          ...route.query,
-          page: computedTotalPages,
-        },
-      })
+    if (resolvedTotal > 0 && clampedTarget > computedTotalPages) {
+      const query = { ...route.query }
+      if (computedTotalPages > 1) {
+        query.page = String(computedTotalPages)
+      } else {
+        delete query.page
+      }
+      router.replace({ query })
       return
     }
 
     sessions.value = norm.items
-    currentPage.value = targetPage
+    currentPage.value = clampedTarget
   } catch (err) {
     if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) {
       return
@@ -137,13 +142,15 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
 }
 
 const handlePageChange = (newPage) => {
-  if (newPage < 1 || newPage === currentPage.value) return
-  router.push({
-    query: {
-      ...route.query,
-      page: newPage,
-    },
-  })
+  const target = Math.max(1, Math.min(10000, newPage))
+  if (target === currentPage.value) return
+  const query = { ...route.query }
+  if (target > 1) {
+    query.page = String(target)
+  } else {
+    delete query.page
+  }
+  router.push({ query })
 }
 
 // Watch route.query.page for direct links, browser Back/Forward, and manual entry
@@ -152,12 +159,13 @@ watch(
   (newRawPage) => {
     const { page, needsUrlSync } = parseQueryPage(newRawPage)
     if (needsUrlSync) {
-      router.replace({
-        query: {
-          ...route.query,
-          page: 1,
-        },
-      })
+      const query = { ...route.query }
+      if (page > 1) {
+        query.page = String(page)
+      } else {
+        delete query.page
+      }
+      router.replace({ query })
       return
     }
     loadPage(page)

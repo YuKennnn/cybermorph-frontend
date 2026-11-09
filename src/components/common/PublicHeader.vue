@@ -106,6 +106,7 @@ onUnmounted(() => {
         <RouterLink to="/about" class="nav-link" active-class="active">About</RouterLink>
         <RouterLink to="/gameplay" class="nav-link" active-class="active">Gameplay</RouterLink>
         <RouterLink to="/download" class="nav-link" active-class="active">Download</RouterLink>
+        <RouterLink to="/leaderboard" class="nav-link" active-class="active">Leaderboard</RouterLink>
         <RouterLink to="/faq" class="nav-link" active-class="active">FAQ</RouterLink>
       </nav>
 
@@ -194,6 +195,9 @@ onUnmounted(() => {
           </RouterLink>
           <RouterLink to="/download" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
             Download
+          </RouterLink>
+          <RouterLink to="/leaderboard" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
+            Leaderboard
           </RouterLink>
           <RouterLink to="/faq" class="mobile-nav-link" active-class="active" @click="closeMobileNav">
             FAQ

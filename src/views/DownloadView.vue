@@ -19,11 +19,11 @@ const btnRefInstall = ref(null)
 const DOWNLOAD_SECTIONS = {
   requirements: {
     title: 'System Requirements',
-    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Android 9 or later. Architecture: 64-bit ARM (arm64-v8a) required. Memory: 4 GB RAM recommended. Free Storage: 200 MB free space recommended. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
+    text: 'System requirements. Device specifications and compatibility information for Android devices. Platform: Android. Android Version: Awaiting confirmation. Architecture: Awaiting confirmation. Memory: Awaiting confirmation. Free Storage: Awaiting confirmation. Network: Required for initial account sign-in and cloud progress syncing; gameplay missions run offline locally.',
   },
   install: {
-    title: 'Beta Installation Guide',
-    text: 'How to install during the beta: Step 1: Download package. Open the download link to access the APK file on Google Drive or the external release host, then download it to your device. Step 2: Allow installation. If prompted by Android, enable "Install unknown apps" for your browser or file manager in system settings. Step 3: Install application. Tap the downloaded APK file in your notifications or downloads folder and select Install. Step 4: Sign in and play. Launch CyberMorph, sign in with your player account, and start exploring missions offline.',
+    title: 'Android Installation Guide',
+    text: 'Android installation guide: Step 1: Open release link. Select Open release link to access the external package or release page. Step 2: Download package. If an APK package is provided on the release page, download it to your device. Step 3: Allow installation. If prompted by Android, enable Install unknown apps for your browser or file manager in system settings. Step 4: Install application. Tap the downloaded APK file in your notifications or downloads folder and select Install. Step 5: Sign in and play. Launch CyberMorph, sign in with your player account, and start practicing cybersecurity missions offline.',
   },
 }
 
@@ -61,17 +61,6 @@ const isSelfLoopUrl = (urlString) => {
   }
 }
 
-const isGoogleDriveUrl = (urlString) => {
-  if (typeof urlString !== 'string') return false
-  try {
-    const url = new URL(urlString.trim())
-    const host = url.hostname.toLowerCase()
-    return host === 'drive.google.com' || host === 'docs.google.com'
-  } catch {
-    return false
-  }
-}
-
 const isDownloadAvailable = computed(() => {
   if (!releaseData.value || errorType.value) return false
   const url = releaseData.value.download_url
@@ -84,11 +73,6 @@ const isDownloadEmpty = computed(() => {
   return !url || typeof url !== 'string' || url.trim().length === 0
 })
 
-const isGoogleDrive = computed(() => {
-  if (!isDownloadAvailable.value) return false
-  return isGoogleDriveUrl(releaseData.value.download_url)
-})
-
 const buildLabel = computed(() => {
   if (isLoading.value && !releaseData.value) {
     return 'Checking release...'
@@ -99,7 +83,7 @@ const buildLabel = computed(() => {
   if (errorType.value) {
     return 'Unavailable'
   }
-  return 'Beta release awaiting confirmation'
+  return 'Release awaiting confirmation'
 })
 
 const fetchRelease = async () => {
@@ -191,7 +175,7 @@ onMounted(() => {
       <!-- Hero -->
       <section class="download-hero">
         <div class="page-container">
-          <span class="badge-subtle">Android Beta</span>
+          <span class="badge-subtle">Android</span>
           <h1 class="page-title">Download CyberMorph</h1>
           <p class="page-lead">
             Install the game on your Android device to practice cybersecurity defense offline. Use this web portal to manage your account and view synced progress.
@@ -248,19 +232,27 @@ onMounted(() => {
                   </tr>
                   <tr>
                     <th scope="row">Android Version</th>
-                    <td>Android 9 or later</td>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row">Architecture</th>
-                    <td>64-bit ARM (arm64-v8a) required</td>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row">Memory (RAM)</th>
-                    <td>4 GB RAM recommended</td>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row">Free Storage</th>
-                    <td>200 MB free space recommended</td>
+                    <td>
+                      <span class="text-pending">Awaiting confirmation</span>
+                    </td>
                   </tr>
                   <tr>
                     <th scope="row">Network</th>
@@ -295,17 +287,17 @@ onMounted(() => {
                 </div>
                 <div>
                   <h3 class="platform-name">Android Package (APK)</h3>
-                  <span class="platform-badge-primary">Beta Testing</span>
+                  <span class="platform-badge-primary">Android</span>
                 </div>
               </div>
 
               <p class="platform-card-desc">
-                CyberMorph is currently available for Android. During the beta, players install the game directly using an APK package.
+                CyberMorph is currently developed for Android. When published, players can access the release package through the provided link.
               </p>
 
               <div class="apk-status-box">
                 <div class="status-row">
-                  <span class="status-label">Beta release link:</span>
+                  <span class="status-label">Release link:</span>
                   <span v-if="isLoading && !releaseData" class="status-subtle">Checking...</span>
                   <span v-else-if="errorType === 'network'" class="status-badge-pending">Connection error</span>
                   <span v-else-if="errorType" class="status-badge-pending">Configuration error</span>
@@ -325,17 +317,14 @@ onMounted(() => {
                 <p v-else-if="errorType" class="status-hint status-hint-error">
                   {{ errorMessage }}
                 </p>
-                <p v-else-if="isDownloadAvailable && isGoogleDrive" class="status-hint">
-                  The APK is hosted on Google Drive. Select "Get Android APK" to open the file page.
-                </p>
                 <p v-else-if="isDownloadAvailable" class="status-hint">
-                  The direct APK package link is active.
+                  The release link is active. Select "Open release link" to access the external package or release page.
                 </p>
                 <p v-else-if="isDownloadEmpty" class="status-hint">
-                  Download not available yet.
+                  Release link has not been published yet.
                 </p>
                 <p v-else class="status-hint">
-                  The direct APK package link will be activated once published.
+                  The release link will be activated once published.
                 </p>
               </div>
 
@@ -372,16 +361,12 @@ onMounted(() => {
                     target="_blank"
                     rel="noopener noreferrer"
                     class="btn-primary"
-                    aria-label="Get Android APK, 36.6 MB (opens in a new tab)"
+                    aria-label="Open release link in a new tab"
                   >
-                    <AppIcon name="download" :size="16" />
-                    <span>Get Android APK</span>
-                    <span class="apk-size-badge">(36.6 MB)</span>
+                    <AppIcon name="external-link" :size="16" />
+                    <span>Open release link</span>
                     <span class="sr-only">(opens in a new tab)</span>
                   </a>
-                  <p v-if="isGoogleDrive" class="destination-note">
-                    Opens Google Drive
-                  </p>
                 </template>
 
                 <!-- State 3: Download not available yet (empty URL) -->
@@ -392,7 +377,7 @@ onMounted(() => {
                     disabled
                     aria-disabled="true"
                   >
-                    Download not available yet
+                    Release link not available yet
                   </button>
                 </template>
 
@@ -404,7 +389,7 @@ onMounted(() => {
                     disabled
                     aria-disabled="true"
                   >
-                    Download unavailable
+                    Release link unavailable
                   </button>
                 </template>
               </div>
@@ -423,7 +408,7 @@ onMounted(() => {
               </div>
 
               <p class="platform-card-desc">
-                CyberMorph is not currently distributed through the Google Play Store. Beta access is provided via direct APK package.
+                CyberMorph is not currently distributed through the Google Play Store. Access is provided via the external release link.
               </p>
 
               <div class="disabled-status-note">
@@ -478,7 +463,7 @@ onMounted(() => {
           <!-- Existing APK Installation Guide -->
           <div class="install-guide-panel">
             <div class="header-with-action">
-              <h3 class="guide-title" style="margin-bottom: 0;">How to install during the beta:</h3>
+              <h3 class="guide-title" style="margin-bottom: 0;">Installation guide (when obtaining an APK package):</h3>
               <button
                 v-if="isReadAloudEnabled"
                 ref="btnRefInstall"
@@ -498,7 +483,10 @@ onMounted(() => {
             />
             <ol class="guide-steps" style="margin-top: 1.25rem;">
               <li>
-                <strong>Download package:</strong> Open the download link to access the APK file on Google Drive or the external release host, then download it to your device.
+                <strong>Open release link:</strong> Select "Open release link" to access the external package or release page.
+              </li>
+              <li>
+                <strong>Download package:</strong> If an APK package is provided on the release page, download it to your device.
               </li>
               <li>
                 <strong>Allow installation:</strong> If prompted by Android, enable "Install unknown apps" for your browser or file manager in system settings.
@@ -866,14 +854,6 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-.destination-note {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  text-align: center;
-  margin: 0.15rem 0 0 0;
-  font-weight: 500;
-}
-
 .disabled-status-note {
   font-size: 0.8rem;
   color: var(--color-text-muted);
@@ -1031,6 +1011,11 @@ onMounted(() => {
 .requirements-table td {
   color: var(--color-text-muted);
   line-height: 1.55;
+}
+
+.text-pending {
+  font-style: italic;
+  color: var(--color-warning);
 }
 
 .header-with-action {

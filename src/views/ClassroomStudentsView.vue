@@ -153,7 +153,7 @@ onUnmounted(() => {
       @retry-metadata="handleRetryMetadata"
     />
 
-    <main class="page-body">
+    <div class="page-body">
       <div v-if="rosterErrorMessage" class="error-banner" role="alert">
         <span>{{ rosterErrorMessage }}</span>
         <button
@@ -252,7 +252,7 @@ onUnmounted(() => {
           Return to classrooms
         </router-link>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 

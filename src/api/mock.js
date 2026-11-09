@@ -143,6 +143,44 @@ export const mockControl = {
     mockControl.delayAppVersionMs = 0
     mockControl.appVersionOverride = undefined
   },
+  leaderboardRequests: [],
+  leaderboardFixture: '15',
+  leaderboardOverride: undefined,
+  setLeaderboardFixture(fixtureName) {
+    mockControl.leaderboardFixture = fixtureName
+    if (typeof sessionStorage !== 'undefined') {
+      if (fixtureName) {
+        sessionStorage.setItem('__CYBERMORPH_MOCK_LEADERBOARD_FIXTURE__', fixtureName)
+      } else {
+        sessionStorage.removeItem('__CYBERMORPH_MOCK_LEADERBOARD_FIXTURE__')
+      }
+    }
+  },
+  clearLeaderboardRequests() {
+    mockControl.leaderboardRequests = []
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('__CYBERMORPH_LEADERBOARD_CALLS__')
+    }
+  },
+  getLeaderboardRequests() {
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('__CYBERMORPH_LEADERBOARD_CALLS__')
+        if (stored) return JSON.parse(stored)
+      } catch {
+        // ignore
+      }
+    }
+    return mockControl.leaderboardRequests
+  },
+  resetLeaderboard() {
+    mockControl.leaderboardFixture = '15'
+    mockControl.leaderboardOverride = undefined
+    mockControl.clearLeaderboardRequests()
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('__CYBERMORPH_MOCK_LEADERBOARD_FIXTURE__')
+    }
+  },
   resetProfiles() {
     mockWebProfiles = createDefaultMockWebProfiles()
     if (typeof localStorage !== 'undefined') {
@@ -1920,11 +1958,55 @@ mock.onDelete(new RegExp('/classroom/(?!mine$)([^/]+)$')).reply(async (config) =
 // ==========================================
 mock.onGet('/leaderboard').reply((config) => {
   const params = config.params || {}
-  const { map_name } = params
+  const captured = {
+    params: { ...params },
+    url: config.url,
+    timestamp: Date.now(),
+  }
+  mockControl.leaderboardRequests.push(captured)
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('__CYBERMORPH_LEADERBOARD_CALLS__') || '[]')
+      stored.push(captured)
+      sessionStorage.setItem('__CYBERMORPH_LEADERBOARD_CALLS__', JSON.stringify(stored))
+    } catch {
+      // ignore
+    }
+  }
+
+  if (typeof mockControl.leaderboardOverride === 'function') {
+    return mockControl.leaderboardOverride(config)
+  }
+  if (mockControl.leaderboardOverride !== undefined) {
+    return [200, mockControl.leaderboardOverride]
+  }
+
+  const activeFixture =
+    (typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem('__CYBERMORPH_MOCK_LEADERBOARD_FIXTURE__')) ||
+    mockControl.leaderboardFixture ||
+    '15'
+
   const page = Math.max(1, parseInt(params.page, 10) || 1)
   const pageSize = Math.max(1, parseInt(params.page_size, 10) || 10)
 
-  let filtered = [...mockLeaderboardEntries]
+  if (activeFixture === 'zero') {
+    return [
+      200,
+      {
+        items: [],
+        total_count: 0,
+        page,
+        page_size: pageSize,
+      },
+    ]
+  }
+
+  const entries =
+    activeFixture === '20' ? mockLeaderboardEntries : mockLeaderboardEntries.slice(0, 15)
+  const { map_name } = params
+
+  let filtered = [...entries]
 
   if (map_name && map_name !== 'All') {
     filtered = filtered.filter(

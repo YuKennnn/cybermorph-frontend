@@ -34,7 +34,7 @@ const ABOUT_SECTIONS = {
   },
   classrooms: {
     title: 'Optional classroom features',
-    text: 'Optional classroom features. For educators teaching digital safety courses, CyberMorph provides optional classroom management tools to coordinate student cohorts. Verified educator accounts: Instructors register using their institutional email address. Once approved by administrators, they gain access to teacher dashboard tools. Simple 6-character class codes: Educators create classrooms for specific subjects or sections. Each classroom generates a simple 6-character code that students can enter in their accounts. Identify common mistakes: Teachers can view overall completion rates and see which types of threats students struggle with the most, helping instructors focus classroom instruction. Reminder for students: Joining a classroom is entirely optional. It simply links your progress to your teacher roster so they can see your completed missions.',
+    text: 'Optional classroom features. For educators teaching digital safety courses, CyberMorph provides optional classroom management tools to coordinate student cohorts. Verified educator accounts: Educator registration requires a DNSC email address and admin approval. Once approved, instructors gain access to teacher dashboard tools. Simple 6-character class codes: Educators create classrooms for specific subjects or sections. Each classroom generates a simple 6-character code that students can enter in their accounts. Identify common mistakes: Teachers can view student progress and see which types of threats students struggle with the most, helping instructors focus classroom instruction. Reminder for students: Joining a classroom is entirely optional. It simply links your progress to your teacher roster so they can see your completed missions.',
   },
 }
 
@@ -253,7 +253,7 @@ onUnmounted(() => {
               <div class="step-badge">1</div>
               <h3 class="step-title">Verified educator accounts</h3>
               <p class="step-desc">
-                Instructors register using their institutional email address (such as @dnsc.edu.ph). Once approved by administrators, they gain access to teacher dashboard tools.
+                Educator registration requires a DNSC email address and admin approval. Once approved, instructors gain access to teacher dashboard tools.
               </p>
             </div>
 
@@ -269,7 +269,7 @@ onUnmounted(() => {
               <div class="step-badge">3</div>
               <h3 class="step-title">Identify common mistakes</h3>
               <p class="step-desc">
-                Teachers can view overall completion rates and see which types of threats students struggle with the most, helping instructors focus classroom instruction.
+                Teachers can view student progress and see which types of threats students struggle with the most, helping instructors focus classroom instruction.
               </p>
             </div>
           </div>

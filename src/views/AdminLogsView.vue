@@ -784,7 +784,7 @@ watch(
     </header>
 
     <!-- Main Content -->
-    <main class="page-body">
+    <div class="page-body">
       <!-- Filters Card -->
       <section class="filter-card" aria-label="Audit log filters">
         <!-- Control Row: labels on top, inputs on bottom with identical baseline -->
@@ -1164,7 +1164,7 @@ watch(
         <h4>No recorded activity</h4>
         <p>No administrative or classroom activity logs have been recorded yet.</p>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 

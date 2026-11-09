@@ -9,43 +9,48 @@ const routes = [
     path: '/',
     name: 'landing',
     component: () => import('../views/LandingView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
+  },
+  {
+    path: '/home',
+    redirect: { name: 'landing' },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/about',
     name: 'about',
     component: () => import('../views/AboutView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/gameplay',
     name: 'gameplay',
     component: () => import('../views/GameplayView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/download',
     name: 'download',
     component: () => import('../views/DownloadView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/faq',
     name: 'faq',
     component: () => import('../views/FaqView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/login',
     name: 'login',
     component: () => import('../views/LoginView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/register',
     name: 'register',
     component: () => import('../views/RegisterView.vue'),
-    meta: { isPublic: true },
+    meta: { isPublic: true, guestOnly: true },
   },
   {
     path: '/dashboard',
@@ -158,7 +163,8 @@ const routes = [
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    redirect: '/',
+    component: () => import('../views/NotFoundView.vue'),
+    meta: { isPublic: true },
   },
 ]
 
@@ -177,25 +183,36 @@ const router = createRouter({
   },
 })
 
-router.beforeEach((to, from, next) => {
-  if (to.path === '/download' && to.hash === '#faq') {
-    next({ path: '/faq', replace: true })
-    return
-  }
-
+router.beforeEach((to) => {
   const authStore = useAuthStore()
 
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
-  } else if ((to.path === '/' || to.path === '/login' || to.path === '/register') && authStore.isAuthenticated) {
-    next('/dashboard')
-  } else if (
-    to.meta.roles &&
+  // 1. Signed-in user attempting to access a guest-only route redirects to role dashboard
+  // Returning a route path performs push navigation and preserves Back history
+  if (to.meta?.guestOnly && authStore.isAuthenticated) {
+    return '/dashboard'
+  }
+
+  // 2. Legacy download FAQ hash redirect for guest visitors
+  if (to.name === 'download' && to.hash === '#faq') {
+    return { path: '/faq', replace: true }
+  }
+
+  // 3. Unauthenticated access to protected routes
+  if (to.meta?.requiresAuth && !authStore.isAuthenticated) {
+    return '/login'
+  }
+
+  // 4. Role-based route guard
+  if (
+    to.meta?.roles &&
     to.meta.roles.length > 0 &&
     (!authStore.userRole || !to.meta.roles.includes(authStore.userRole))
   ) {
-    next('/dashboard')
-  } else if (
+    return '/dashboard'
+  }
+
+  // 5. Player classroom scope sync and redirect
+  if (
     authStore.isPlayer &&
     (to.path === '/classroom' || to.path === '/classroom/join')
   ) {
@@ -203,13 +220,11 @@ router.beforeEach((to, from, next) => {
     playerClassroomStore.syncAccountScope()
     const redirectTarget = playerClassroomStore.resolveRedirectForPath(to.path)
     if (redirectTarget && redirectTarget !== to.path) {
-      next({ path: redirectTarget, replace: true })
-    } else {
-      next()
+      return { path: redirectTarget, replace: true }
     }
-  } else {
-    next()
   }
+
+  return true
 })
 
 router.afterEach((to, from, failure) => {

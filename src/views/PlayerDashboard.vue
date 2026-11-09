@@ -1,6 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { useThreatIndexStore } from '../stores/threatIndexStore'
 import { usePlayerClassroomStore } from '../stores/playerClassroomStore'
@@ -17,6 +16,7 @@ import {
   buildChartSeries,
 } from '../utils/playerSessions'
 import AppIcon from '../components/common/AppIcon.vue'
+import PlayerDownloadModal from '../components/player/PlayerDownloadModal.vue'
 import homeMapImg from '../assets/maps/home.png'
 import officeMapImg from '../assets/maps/office.png'
 import cafeMapImg from '../assets/maps/internet-cafe.png'
@@ -29,7 +29,6 @@ const MAP_PROGRESSION_METADATA = Object.freeze([
   { id: 'public-park', name: 'Public Park', index: 3, image: parkMapImg },
 ])
 
-const router = useRouter()
 const authStore = useAuthStore()
 const threatIndexStore = useThreatIndexStore()
 const playerClassroomStore = usePlayerClassroomStore()
@@ -348,13 +347,18 @@ const retryProfile = async () => {
   }
 }
 
-const handleClassroomAction = () => {
-  router.push(playerClassroomStore.navRoute)
+const isDownloadModalOpen = ref(false)
+const downloadBtnRef = ref(null)
+
+const openDownloadDialog = () => {
+  isDownloadModalOpen.value = true
 }
 
-const handleRetryClassroomMembership = () => {
-  if (playerClassroomStore.isLoading || playerClassroomStore.isRefreshing) return
-  playerClassroomStore.loadMembership({ force: true }).catch(() => {})
+const closeDownloadDialog = () => {
+  isDownloadModalOpen.value = false
+  nextTick(() => {
+    downloadBtnRef.value?.focus()
+  })
 }
 
 // Register coordinated recovery hook for tab-switching, sleep/hibernation wake-up, or online events
@@ -417,22 +421,16 @@ onUnmounted(() => {
         <div class="banner-text">
           <h2 class="title">Welcome back, {{ authStore.user?.username || 'Player' }}</h2>
         </div>
-        <div class="banner-classroom-actions">
-          <button type="button" class="btn-outline" @click="handleClassroomAction">
-            {{ playerClassroomStore.dashboardActionLabel }}
-          </button>
+        <div class="banner-download-action">
           <button
-            v-if="playerClassroomStore.status === 'error'"
+            ref="downloadBtnRef"
             type="button"
-            class="btn-inline-retry"
-            :disabled="playerClassroomStore.isLoading || playerClassroomStore.isRefreshing"
-            @click="handleRetryClassroomMembership"
+            class="btn-outline download-trigger-btn"
+            aria-haspopup="dialog"
+            @click="openDownloadDialog"
           >
-            {{
-              playerClassroomStore.isLoading || playerClassroomStore.isRefreshing
-                ? 'Retrying...'
-                : 'Retry'
-            }}
+            <AppIcon name="download" :size="16" />
+            <span>Download APK</span>
           </button>
         </div>
       </div>
@@ -863,6 +861,12 @@ onUnmounted(() => {
         </template>
       </section>
     </div>
+
+    <!-- In-place Accessible Download Modal -->
+    <PlayerDownloadModal
+      :is-open="isDownloadModalOpen"
+      @close="closeDownloadDialog"
+    />
   </div>
 </template>
 
@@ -900,7 +904,7 @@ onUnmounted(() => {
   flex: 1 1 auto;
 }
 
-.banner-classroom-actions {
+.banner-download-action {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -908,27 +912,31 @@ onUnmounted(() => {
   max-width: 100%;
 }
 
-.banner-classroom-actions .btn-outline {
+.banner-download-action .download-trigger-btn {
   max-width: 100%;
   background-color: var(--color-card);
   color: var(--color-primary);
   border: 1px solid var(--color-border-control);
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.15rem;
+  min-height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.banner-classroom-actions .btn-outline:hover {
+.banner-download-action .download-trigger-btn:hover {
   background-color: var(--color-bg-subtle);
   border-color: var(--color-primary);
   color: var(--color-primary-hover);
 }
 
-.banner-classroom-actions .btn-outline:focus-visible {
+.banner-download-action .download-trigger-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.banner-classroom-actions .btn-inline-retry {
-  color: var(--color-primary);
 }
 
 .title {
