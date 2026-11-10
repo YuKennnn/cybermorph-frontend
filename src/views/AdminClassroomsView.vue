@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import {
   fetchAdminClassrooms,
   updateAdminClassroomStatus,
@@ -9,6 +10,12 @@ import {
 import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const CLASSROOMS_TTL = 120000 // 120s
+
+const buildClassroomsKey = (p, ps, search) =>
+  `admin::classrooms::page::page=${p}&page_size=${ps}&search=${encodeURIComponent(search || '')}`
 
 const classrooms = ref([])
 const totalCount = ref(0)
@@ -152,7 +159,9 @@ const resetStateForAccountChange = () => {
   isRefreshing.value = false
 }
 
-const loadClassrooms = async ({ preserveExisting = false } = {}) => {
+let activeSubscriptionKey = ''
+
+const loadClassrooms = async ({ preserveExisting = false, force = false } = {}) => {
   const scopeAtStart = getActiveAdminScope()
   if (!scopeAtStart) {
     resetStateForAccountChange()
@@ -160,13 +169,41 @@ const loadClassrooms = async ({ preserveExisting = false } = {}) => {
   }
 
   const reqId = ++latestRequestId
-  const hadRows = classrooms.value.length > 0
-  if (preserveExisting && hadRows) {
-    isRefreshing.value = true
+  const targetKey = buildClassroomsKey(page.value, pageSize.value, searchQuery.value.trim())
+  activeSubscriptionKey = targetKey
+
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    classrooms.value = cached.data?.items || []
+    totalCount.value =
+      typeof cached.data?.total_count === 'number' && Number.isFinite(cached.data.total_count)
+        ? cached.data.total_count
+        : classrooms.value.length
+    if (typeof cached.data?.page === 'number' && cached.data.page >= 1) {
+      page.value = cached.data.page
+    }
+    if (typeof cached.data?.page_size === 'number' && cached.data.page_size >= 1) {
+      pageSize.value = cached.data.page_size
+    }
+    isLoading.value = false
+    isRefreshing.value = false
+    errorMessage.value = ''
+
+    if (!cached.isExpired) {
+      return true
+    }
   } else {
-    isLoading.value = true
+    const hadRows = classrooms.value.length > 0
+    if (preserveExisting && hadRows) {
+      isRefreshing.value = true
+    } else {
+      isLoading.value = true
+    }
+    errorMessage.value = ''
   }
-  errorMessage.value = ''
 
   try {
     const params = {
@@ -181,7 +218,12 @@ const loadClassrooms = async ({ preserveExisting = false } = {}) => {
     const data = await fetchAdminClassrooms(params)
 
     // Discard stale responses or responses arriving after logout/account switch
-    if (reqId !== latestRequestId || getActiveAdminScope() !== scopeAtStart) {
+    if (
+      reqId !== latestRequestId ||
+      getActiveAdminScope() !== scopeAtStart ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
       return false
     }
 
@@ -190,20 +232,33 @@ const loadClassrooms = async ({ preserveExisting = false } = {}) => {
       return false
     }
 
-    classrooms.value = data.items
-    totalCount.value =
-      typeof data.total_count === 'number' && Number.isFinite(data.total_count)
-        ? data.total_count
-        : data.items.length
-    if (typeof data.page === 'number' && data.page >= 1) {
-      page.value = data.page
-    }
-    if (typeof data.page_size === 'number' && data.page_size >= 1) {
-      pageSize.value = data.page_size
+    cacheStore.set(targetKey, data, CLASSROOMS_TTL)
+
+    if (targetKey === activeSubscriptionKey) {
+      classrooms.value = data.items
+      totalCount.value =
+        typeof data.total_count === 'number' && Number.isFinite(data.total_count)
+          ? data.total_count
+          : data.items.length
+      if (typeof data.page === 'number' && data.page >= 1) {
+        page.value = data.page
+      }
+      if (typeof data.page_size === 'number' && data.page_size >= 1) {
+        pageSize.value = data.page_size
+      }
     }
     return true
-  } catch {
-    if (reqId !== latestRequestId || getActiveAdminScope() !== scopeAtStart) {
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return false
+    }
+    if (
+      reqId !== latestRequestId ||
+      getActiveAdminScope() !== scopeAtStart ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
       return false
     }
     errorMessage.value =
@@ -269,6 +324,9 @@ const executeStatusUpdate = async (classroom, targetActiveState, { fromModal = f
     const updated = await updateAdminClassroomStatus(codeId, targetActiveState)
     if (getActiveAdminScope() !== scopeAtStart) return false
 
+    cacheStore.invalidatePrefix('admin::classrooms::')
+    cacheStore.invalidatePrefix('admin::logs::')
+
     if (fromModal) {
       closeEnrollmentTarget.value = null
       isClosingEnrollmentModal.value = false
@@ -302,6 +360,8 @@ const executeStatusUpdate = async (classroom, targetActiveState, { fromModal = f
       if (fromModal) {
         closeEnrollmentTarget.value = null
       }
+      cacheStore.invalidatePrefix('admin::classrooms::')
+      cacheStore.invalidatePrefix('admin::logs::')
       actionErrorMessage.value = `Classroom "${classroom.name}" was not found or has already been deleted. Refreshing list.`
       await loadClassrooms({ preserveExisting: true })
       if (fromModal) {
@@ -445,6 +505,9 @@ const confirmDeleteClassroom = async () => {
   try {
     await deleteAdminClassroom(codeId)
     if (getActiveAdminScope() !== scopeAtStart) return
+
+    cacheStore.invalidatePrefix('admin::classrooms::')
+    cacheStore.invalidatePrefix('admin::logs::')
 
     deleteTarget.value = null
     isDeletingModal.value = false

@@ -2,16 +2,19 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchSessionHistory } from '../api/session'
 import { normalizeSessionHistoryResponse } from '../utils/playerSessions'
 import PlayerSessionsTable from '../components/player/PlayerSessionsTable.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const PAGE_SIZE = 20
+const SESSIONS_TTL = 120000 // 120s
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
 
 const sessions = ref([])
 const totalCount = ref(null)
@@ -78,6 +81,31 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
   }
 
   const clampedTarget = Math.max(1, Math.min(10000, targetPage))
+  const targetKey = `player::sessions::page::page=${clampedTarget}&page_size=${PAGE_SIZE}`
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !isRetry) {
+    const rawData = cached.data
+    if (rawData && Array.isArray(rawData.items)) {
+      const norm = normalizeSessionHistoryResponse(rawData, authStore.user?.profile_id)
+      if (norm.valid) {
+        sessions.value = norm.items
+        totalCount.value =
+          norm.totalCount ?? rawData.total_count ?? rawData.totalCount ?? norm.items.length
+        currentPage.value = clampedTarget
+        isLoading.value = false
+        isRetrying.value = false
+        errorMessage.value = ''
+
+        if (!cached.isExpired) {
+          return
+        }
+      }
+    }
+  }
+
   const reqId = ++sessionRequestId
   if (isRetry) {
     isRetrying.value = true
@@ -92,7 +120,12 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
       page_size: PAGE_SIZE,
     })
 
-    if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) {
+    if (
+      reqId !== sessionRequestId ||
+      getActiveAccountScope() !== scopeAtStart ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
       return
     }
 
@@ -123,6 +156,13 @@ const loadPage = async (targetPage, { isRetry = false } = {}) => {
       return
     }
 
+    const canonicalPayload = {
+      items: rawRes.items,
+      total_count: rawRes.total_count ?? resolvedTotal,
+      page: clampedTarget,
+      page_size: PAGE_SIZE,
+    }
+    cacheStore.set(targetKey, canonicalPayload, SESSIONS_TTL)
     sessions.value = norm.items
     currentPage.value = clampedTarget
   } catch (err) {

@@ -2086,6 +2086,16 @@ mock.onGet(new RegExp('/analytics/classroom')).reply(async (config) => {
 })
 
 mock.onGet(new RegExp('/analytics/player')).reply(async (config) => {
+  const sessionStatus = typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_PLAYER_ANALYTICS_STATUS__')
+    : null
+  if (sessionStatus === '403') {
+    return [403, { detail: 'Not authorized to view student performance data' }]
+  }
+  if (sessionStatus === '404') {
+    return [404, { detail: 'Student record not found' }]
+  }
+
   let delay = mockControl.delayPlayerAnalyticsMs || 0
   if (!delay && typeof window !== 'undefined') {
     try {

@@ -1232,6 +1232,15 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
   font-size: 0.88rem;
   line-height: 1.55;
   color: var(--color-text-main);
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.warning-item > span:not(.warning-bullet) {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .warning-bullet {

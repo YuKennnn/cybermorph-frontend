@@ -1,8 +1,18 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchAdminApprovals, approveEducator, rejectEducator } from '../api/admin'
 import AdminSubNav from '../components/admin/AdminSubNav.vue'
 import AppIcon from '../components/common/AppIcon.vue'
+
+const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const APPROVALS_TTL = 60000 // 60s
+
+const buildApprovalsKey = (status, p, ps) =>
+  `admin::approvals::page::page=${p}&page_size=${ps}&status=${status}`
 
 const approvals = ref([])
 const totalCount = ref(0)
@@ -10,6 +20,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const currentStatus = ref('pending') // 'pending', 'approved', 'rejected'
 const isLoading = ref(true)
+const isRefreshing = ref(false)
 const errorMessage = ref('')
 const successNotice = ref('')
 const conflictNotice = ref('')
@@ -22,6 +33,7 @@ const cancelButtonRef = ref(null)
 let latestRequestId = 0
 let noticeTimer = null
 let initiatingControl = null
+const activeSubscriptionKey = ref('')
 
 const totalPages = computed(() => {
   if (totalCount.value <= 0) return 1
@@ -55,10 +67,33 @@ const showNotice = (msg, isConflict = false) => {
   }, 4000)
 }
 
-const loadApprovals = async () => {
+const loadApprovals = async ({ force = false } = {}) => {
   const reqId = ++latestRequestId
-  isLoading.value = true
-  errorMessage.value = ''
+  const targetKey = buildApprovalsKey(currentStatus.value, page.value, pageSize.value)
+  activeSubscriptionKey.value = targetKey
+
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    approvals.value = cached.data?.items || []
+    totalCount.value = cached.data?.total_count ?? approvals.value.length
+    if (cached.data?.page) page.value = cached.data.page
+    if (cached.data?.page_size) pageSize.value = cached.data.page_size
+    isLoading.value = false
+    errorMessage.value = ''
+
+    if (!cached.isExpired) {
+      isRefreshing.value = false
+      return
+    }
+
+    isRefreshing.value = true
+  } else {
+    isLoading.value = true
+    errorMessage.value = ''
+  }
 
   try {
     const data = await fetchAdminApprovals({
@@ -67,18 +102,42 @@ const loadApprovals = async () => {
       page_size: pageSize.value,
     })
 
-    if (reqId !== latestRequestId) return
+    // Obsolete guard: epoch or keyVersion changed
+    if (
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
+      return
+    }
 
-    approvals.value = data?.items || []
-    totalCount.value = data?.total_count ?? approvals.value.length
-    if (data?.page) page.value = data.page
-    if (data?.page_size) pageSize.value = data.page_size
-  } catch {
-    if (reqId !== latestRequestId) return
-    errorMessage.value = 'Failed to load educator approval queue. Please try again.'
+    // Populate valid cache entry for this query key
+    cacheStore.set(targetKey, data, APPROVALS_TTL)
+
+    // View guard: only update visible table if activeSubscriptionKey still matches
+    if (targetKey === activeSubscriptionKey.value) {
+      approvals.value = data?.items || []
+      totalCount.value = data?.total_count ?? approvals.value.length
+      if (data?.page) page.value = data.page
+      if (data?.page_size) pageSize.value = data.page_size
+    }
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
+    if (
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
+      return
+    }
+    if (targetKey === activeSubscriptionKey.value) {
+      errorMessage.value = 'Failed to load educator approval queue. Please try again.'
+    }
   } finally {
     if (reqId === latestRequestId) {
       isLoading.value = false
+      isRefreshing.value = false
     }
   }
 }
@@ -109,6 +168,7 @@ const handleApprove = async (item) => {
 
   try {
     await approveEducator(item.user_id)
+    cacheStore.invalidateApprovalMutations()
     showNotice(`Educator ${item.email} approved successfully.`)
 
     // Adjust page if current page became empty
@@ -117,11 +177,12 @@ const handleApprove = async (item) => {
     if (page.value > maxPage) {
       page.value = maxPage
     }
-    await loadApprovals()
+    await loadApprovals({ force: true })
   } catch (err) {
     if (err.response?.status === 409) {
+      cacheStore.invalidateApprovalMutations()
       showNotice(`Registration for ${item.email} was already updated. Refreshing queue...`, true)
-      await loadApprovals()
+      await loadApprovals({ force: true })
     } else {
       errorMessage.value = `Failed to approve educator ${item.email}.`
     }
@@ -160,6 +221,7 @@ const confirmRejection = async () => {
 
   try {
     await rejectEducator(item.user_id)
+    cacheStore.invalidateApprovalMutations()
     showNotice(`Educator ${item.email} rejected.`)
 
     // Adjust page if current page became empty
@@ -168,11 +230,12 @@ const confirmRejection = async () => {
     if (page.value > maxPage) {
       page.value = maxPage
     }
-    await loadApprovals()
+    await loadApprovals({ force: true })
   } catch (err) {
     if (err.response?.status === 409) {
+      cacheStore.invalidateApprovalMutations()
       showNotice(`Registration for ${item.email} was already updated. Refreshing queue...`, true)
-      await loadApprovals()
+      await loadApprovals({ force: true })
     } else {
       errorMessage.value = `Failed to reject educator ${item.email}.`
     }

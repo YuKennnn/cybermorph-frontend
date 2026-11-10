@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchAdminPlayData, fetchAdminPlayDataDetail } from '../api/admin'
 import { extractErrorMessage } from '../api/client'
 import { formatPlayDataUploadTimestamp } from '../utils/datetime'
@@ -15,6 +16,12 @@ import {
 import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const PLAYDATA_TTL = 120000 // 120s
+
+const buildPlayDataKey = (p, ps) =>
+  `admin::play-data::page::page=${p}&page_size=${ps}`
 
 const playData = ref([])
 const totalCount = ref(0)
@@ -75,15 +82,37 @@ const cancelPendingWork = () => {
   isBulkDownloading.value = false
 }
 
-const loadPlayData = async () => {
+let activeSubscriptionKey = ''
+
+const loadPlayData = async ({ force = false } = {}) => {
   cancelPendingWork()
   const reqId = ++currentRequestId
   activeListAbortController = new AbortController()
 
-  isLoading.value = true
-  errorMessage.value = ''
-  downloadError.value = ''
-  downloadWarning.value = ''
+  const targetKey = buildPlayDataKey(page.value, pageSize.value)
+  activeSubscriptionKey = targetKey
+
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    playData.value = Array.isArray(cached.data?.items) ? cached.data.items : []
+    totalCount.value = typeof cached.data?.total_count === 'number' ? cached.data.total_count : 0
+    isLoading.value = false
+    errorMessage.value = ''
+    downloadError.value = ''
+    downloadWarning.value = ''
+
+    if (!cached.isExpired) {
+      return
+    }
+  } else {
+    isLoading.value = true
+    errorMessage.value = ''
+    downloadError.value = ''
+    downloadWarning.value = ''
+  }
 
   try {
     const res = await fetchAdminPlayData(
@@ -94,18 +123,40 @@ const loadPlayData = async () => {
       { signal: activeListAbortController.signal },
     )
 
-    if (reqId !== currentRequestId) return
+    if (
+      reqId !== currentRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
+      return
+    }
 
-    playData.value = Array.isArray(res?.items) ? res.items : []
-    totalCount.value = typeof res?.total_count === 'number' ? res.total_count : 0
+    cacheStore.set(targetKey, res, PLAYDATA_TTL)
+
+    if (targetKey === activeSubscriptionKey) {
+      playData.value = Array.isArray(res?.items) ? res.items : []
+      totalCount.value = typeof res?.total_count === 'number' ? res.total_count : 0
+    }
   } catch (err) {
     if (err?.name === 'AbortError' || reqId !== currentRequestId) return
-    playData.value = []
-    totalCount.value = 0
-    errorMessage.value = extractErrorMessage(
-      err,
-      'Unable to load play data. Please verify your connection or try again.',
-    )
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
+    if (
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey)
+    ) {
+      return
+    }
+    if (targetKey === activeSubscriptionKey) {
+      playData.value = []
+      totalCount.value = 0
+      errorMessage.value = extractErrorMessage(
+        err,
+        'Unable to load play data. Please verify your connection or try again.',
+      )
+    }
   } finally {
     if (reqId === currentRequestId) {
       isLoading.value = false

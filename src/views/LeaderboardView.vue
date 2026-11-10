@@ -2,13 +2,17 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchLeaderboardData } from '../api/leaderboard'
 import PublicHeader from '../components/common/PublicHeader.vue'
 import PublicFooter from '../components/common/PublicFooter.vue'
 
+const LEADERBOARD_TTL = 60000 // 60s
+
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
 
 const mapOptions = ['All', 'Home', 'Office', 'Internet Cafe', 'Public Park']
 
@@ -110,11 +114,25 @@ const updateQueryParams = () => {
   }
 }
 
-const fetchLeaderboard = async () => {
+const fetchLeaderboard = async ({ force = false } = {}) => {
   const reqId = ++latestRequestId
   lastFetchedKey = `${selectedMap.value}:${page.value}`
-  isLoading.value = true
-  errorMessage.value = ''
+  const targetKey = `leaderboard::page::map=${selectedMap.value}&page=${page.value}&page_size=${pageSize.value}`
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    leaderboardItems.value = cached.data?.items || []
+    totalCount.value = cached.data?.total_count || 0
+    isLoading.value = false
+    errorMessage.value = ''
+
+    if (!cached.isExpired) {
+      return
+    }
+  } else {
+    isLoading.value = true
+    errorMessage.value = ''
+  }
 
   try {
     const params = {
@@ -144,6 +162,7 @@ const fetchLeaderboard = async () => {
       return
     }
 
+    cacheStore.set(targetKey, data, LEADERBOARD_TTL)
     leaderboardItems.value = items
   } catch {
     if (!isMounted || reqId !== latestRequestId) return

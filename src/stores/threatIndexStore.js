@@ -265,6 +265,8 @@ export const useThreatIndexStore = defineStore('threatIndex', () => {
   const error = ref('')
   const isRefreshing = ref(false)
   const loadedAccountKey = ref(null)
+  const lastFetchedAt = ref(null)
+  const THREAT_INDEX_TTL = 120000 // 120s
 
   let currentRequestId = 0
   let activeFetchPromise = null
@@ -325,6 +327,7 @@ export const useThreatIndexStore = defineStore('threatIndex', () => {
     status.value = 'idle'
     error.value = ''
     isRefreshing.value = false
+    lastFetchedAt.value = null
   }
 
   const reset = () => {
@@ -357,8 +360,12 @@ export const useThreatIndexStore = defineStore('threatIndex', () => {
       return []
     }
 
+    const now = Date.now()
+    const isFresh = lastFetchedAt.value && now - lastFetchedAt.value < THREAT_INDEX_TTL
+
     if (
       !force &&
+      isFresh &&
       (status.value === 'ready' || status.value === 'empty') &&
       loadedAccountKey.value === scopeKeyAtStart
     ) {
@@ -397,6 +404,7 @@ export const useThreatIndexStore = defineStore('threatIndex', () => {
         entries.value = validation.entries
         error.value = validation.error
         loadedAccountKey.value = currentKeyAfterFetch
+        lastFetchedAt.value = Date.now()
         return entries.value
       } catch (err) {
         const currentKeyOnError = buildAccountScopeKey(authStore)

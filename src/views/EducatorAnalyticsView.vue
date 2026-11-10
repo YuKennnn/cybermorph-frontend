@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchClassroomAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
+import { useApiCacheStore } from '../stores/apiCacheStore.js'
 import { CANONICAL_THREAT_CATEGORIES } from '../stores/threatIndexStore.js'
 import { formatLastSyncedDate, formatThreatUnlockedCount } from '../utils/datetime.js'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
@@ -12,6 +13,9 @@ import ThreatPerformanceGauge from '../components/analytics/ThreatPerformanceGau
 const route = useRoute()
 const router = useRouter()
 const classroomStore = useClassroomStore()
+const cacheStore = useApiCacheStore()
+const AGGREGATE_TTL = 120000 // 120s
+const ROSTER_TTL = 60000 // 60s
 
 // Reused Canonical DICT Threat Categories
 const CANONICAL_THREATS = CANONICAL_THREAT_CATEGORIES
@@ -87,8 +91,19 @@ const currentClassroom = computed(() => {
 // ==========================================
 // Data Fetching Operations
 // ==========================================
-const loadAggregateAnalytics = async (codeId) => {
+const loadAggregateAnalytics = async (codeId, force = false) => {
   if (!codeId) return
+  const cacheKey = `educator::analytics::classroom::code_id=${codeId}`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      classroomAnalytics.value = cached.data
+      isAnalyticsLoading.value = false
+      aggregateErrorMessage.value = ''
+      return
+    }
+  }
+
   const reqId = ++classroomRequestId
   isAnalyticsLoading.value = true
   aggregateErrorMessage.value = ''
@@ -96,6 +111,7 @@ const loadAggregateAnalytics = async (codeId) => {
   try {
     const data = await fetchClassroomAnalytics(codeId)
     if (reqId !== classroomRequestId) return
+    cacheStore.set(cacheKey, data, AGGREGATE_TTL)
     classroomAnalytics.value = data
   } catch {
     if (reqId !== classroomRequestId) return
@@ -108,8 +124,38 @@ const loadAggregateAnalytics = async (codeId) => {
   }
 }
 
-const loadStudentRoster = async (codeId, targetPage = tablePage.value) => {
+const applyStudentRosterPayload = (r, targetPage) => {
+  if (Array.isArray(r)) {
+    students.value = r
+    tableTotalCount.value = r.length
+    tablePage.value = 1
+    hasConfirmedRoster.value = true
+  } else if (r && typeof r === 'object') {
+    students.value = r.items || r.students || []
+    tableTotalCount.value = r.total_count ?? r.total ?? students.value.length
+    tablePage.value = r.page ?? targetPage
+    tablePageSize.value = r.page_size ?? tablePageSize.value
+    hasConfirmedRoster.value = true
+  } else {
+    students.value = []
+    tableTotalCount.value = 0
+    hasConfirmedRoster.value = true
+  }
+}
+
+const loadStudentRoster = async (codeId, targetPage = tablePage.value, force = false) => {
   if (!codeId) return
+  const cacheKey = `educator::roster::page::code_id=${codeId}&page=${targetPage}&page_size=${tablePageSize.value}`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      applyStudentRosterPayload(cached.data, targetPage)
+      isStudentsLoading.value = false
+      rosterErrorMessage.value = ''
+      return
+    }
+  }
+
   const reqId = ++rosterRequestId
   isStudentsLoading.value = true
   rosterErrorMessage.value = ''
@@ -121,22 +167,8 @@ const loadStudentRoster = async (codeId, targetPage = tablePage.value) => {
     })
     if (reqId !== rosterRequestId) return
 
-    if (Array.isArray(r)) {
-      students.value = r
-      tableTotalCount.value = r.length
-      tablePage.value = 1
-      hasConfirmedRoster.value = true
-    } else if (r && typeof r === 'object') {
-      students.value = r.items || r.students || []
-      tableTotalCount.value = r.total_count ?? r.total ?? students.value.length
-      tablePage.value = r.page ?? targetPage
-      tablePageSize.value = r.page_size ?? tablePageSize.value
-      hasConfirmedRoster.value = true
-    } else {
-      students.value = []
-      tableTotalCount.value = 0
-      hasConfirmedRoster.value = true
-    }
+    applyStudentRosterPayload(r, targetPage)
+    cacheStore.set(cacheKey, r, ROSTER_TTL)
   } catch {
     if (reqId !== rosterRequestId) return
     students.value = []
@@ -149,10 +181,10 @@ const loadStudentRoster = async (codeId, targetPage = tablePage.value) => {
   }
 }
 
-const loadClassroomData = (codeId, targetPage = tablePage.value) => {
+const loadClassroomData = (codeId, targetPage = tablePage.value, force = false) => {
   return Promise.allSettled([
-    loadAggregateAnalytics(codeId),
-    loadStudentRoster(codeId, targetPage),
+    loadAggregateAnalytics(codeId, force),
+    loadStudentRoster(codeId, targetPage, force),
   ])
 }
 

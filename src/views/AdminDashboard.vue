@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
@@ -8,6 +9,16 @@ import { usePageRecovery } from '../composables/usePageRecovery'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const STATS_KEY = 'admin::stats::summary'
+const STATS_TTL = 120000 // 120s
+
+const APPROVALS_KEY = 'admin::approvals::preview::page_size=1&status=pending'
+const APPROVALS_TTL = 60000 // 60s
+
+const LOGS_KEY = 'admin::logs::preview::page_size=5'
+const LOGS_TTL = 60000 // 60s
 
 const adminGreetingName = computed(() => authStore.user?.display_name?.trim() || 'Admin')
 
@@ -15,20 +26,38 @@ const adminGreetingName = computed(() => authStore.user?.display_name?.trim() ||
 const totalUsers = ref(null)
 const sessionsReceived = ref(null)
 const statsLoading = ref(true)
+const statsRefreshing = ref(false)
 const statsError = ref(false)
 const hasLoadedStatsOnce = ref(false)
 
 // Pending educator approvals
 const pendingApprovals = ref(null)
 const approvalsLoading = ref(true)
+const approvalsRefreshing = ref(false)
 const approvalsError = ref(false)
 const hasLoadedApprovalsOnce = ref(false)
 
 // Recent activity (Preview up to 5 items)
 const recentLogs = ref([])
 const activityLoading = ref(true)
+const activityRefreshing = ref(false)
 const activityError = ref(false)
 const hasLoadedActivityOnce = ref(false)
+
+const lastFetchedTimestamp = ref(null)
+
+const lastUpdatedText = computed(() => {
+  if (!lastFetchedTimestamp.value) return ''
+  const diffSec = Math.max(0, Math.floor((Date.now() - lastFetchedTimestamp.value) / 1000))
+  if (diffSec < 5) return 'Updated just now'
+  if (diffSec < 60) return `Updated ${diffSec}s ago`
+  const diffMin = Math.floor(diffSec / 60)
+  return `Updated ${diffMin}m ago`
+})
+
+const isRefreshingAny = computed(
+  () => statsRefreshing.value || approvalsRefreshing.value || activityRefreshing.value,
+)
 
 let currentSessionEpoch = 0
 let latestStatsRequestId = 0
@@ -39,43 +68,81 @@ const resetDashboardState = () => {
   totalUsers.value = null
   sessionsReceived.value = null
   statsLoading.value = false
+  statsRefreshing.value = false
   statsError.value = false
   hasLoadedStatsOnce.value = false
 
   pendingApprovals.value = null
   approvalsLoading.value = false
+  approvalsRefreshing.value = false
   approvalsError.value = false
   hasLoadedApprovalsOnce.value = false
 
   recentLogs.value = []
   activityLoading.value = false
+  activityRefreshing.value = false
   activityError.value = false
   hasLoadedActivityOnce.value = false
+  lastFetchedTimestamp.value = null
 }
 
-const loadStats = async () => {
+const loadStats = async ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestStatsRequestId
   const reqSession = currentSessionEpoch
-  statsLoading.value = !hasLoadedStatsOnce.value
-  statsError.value = false
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(STATS_KEY)
+
+  const cached = cacheStore.get(STATS_KEY)
+  if (cached && !force) {
+    totalUsers.value = typeof cached.data?.total_users === 'number' ? cached.data.total_users : null
+    sessionsReceived.value = typeof cached.data?.sessions_last_24h === 'number' ? cached.data.sessions_last_24h : null
+    hasLoadedStatsOnce.value = true
+    statsLoading.value = false
+    statsError.value = false
+    lastFetchedTimestamp.value = cached.fetchedAt
+
+    // Fresh hit: return immediately with 0 network calls
+    if (!cached.isExpired) {
+      statsRefreshing.value = false
+      return
+    }
+
+    // Expired: keep cached UI stable, revalidate in background
+    statsRefreshing.value = true
+  } else {
+    statsLoading.value = !hasLoadedStatsOnce.value
+    statsError.value = false
+  }
+
   try {
     const data = await fetchAdminStats()
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestStatsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(STATS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
+
+    cacheStore.set(STATS_KEY, data, STATS_TTL)
     totalUsers.value = typeof data?.total_users === 'number' ? data.total_users : null
     sessionsReceived.value = typeof data?.sessions_last_24h === 'number' ? data.sessions_last_24h : null
     hasLoadedStatsOnce.value = true
-  } catch {
+    lastFetchedTimestamp.value = Date.now()
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestStatsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(STATS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -89,32 +156,62 @@ const loadStats = async () => {
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestStatsRequestId) {
       statsLoading.value = false
+      statsRefreshing.value = false
     }
   }
 }
 
-const loadApprovals = async () => {
+const loadApprovals = async ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestApprovalsRequestId
   const reqSession = currentSessionEpoch
-  approvalsLoading.value = !hasLoadedApprovalsOnce.value
-  approvalsError.value = false
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(APPROVALS_KEY)
+
+  const cached = cacheStore.get(APPROVALS_KEY)
+  if (cached && !force) {
+    pendingApprovals.value = typeof cached.data?.total_count === 'number' ? cached.data.total_count : null
+    hasLoadedApprovalsOnce.value = true
+    approvalsLoading.value = false
+    approvalsError.value = false
+
+    if (!cached.isExpired) {
+      approvalsRefreshing.value = false
+      return
+    }
+
+    approvalsRefreshing.value = true
+  } else {
+    approvalsLoading.value = !hasLoadedApprovalsOnce.value
+    approvalsError.value = false
+  }
+
   try {
     const data = await fetchAdminApprovals({ status: 'pending', page_size: 1 })
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestApprovalsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(APPROVALS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
+
+    cacheStore.set(APPROVALS_KEY, data, APPROVALS_TTL)
     pendingApprovals.value = typeof data?.total_count === 'number' ? data.total_count : null
     hasLoadedApprovalsOnce.value = true
-  } catch {
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestApprovalsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(APPROVALS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -127,32 +224,62 @@ const loadApprovals = async () => {
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestApprovalsRequestId) {
       approvalsLoading.value = false
+      approvalsRefreshing.value = false
     }
   }
 }
 
-const loadRecentActivity = async () => {
+const loadRecentActivity = async ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
   const reqId = ++latestActivityRequestId
   const reqSession = currentSessionEpoch
-  activityLoading.value = !hasLoadedActivityOnce.value
-  activityError.value = false
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(LOGS_KEY)
+
+  const cached = cacheStore.get(LOGS_KEY)
+  if (cached && !force) {
+    recentLogs.value = Array.isArray(cached.data?.items) ? cached.data.items : []
+    hasLoadedActivityOnce.value = true
+    activityLoading.value = false
+    activityError.value = false
+
+    if (!cached.isExpired) {
+      activityRefreshing.value = false
+      return
+    }
+
+    activityRefreshing.value = true
+  } else {
+    activityLoading.value = !hasLoadedActivityOnce.value
+    activityError.value = false
+  }
+
   try {
     const data = await fetchAdminLogs({ page: 1, page_size: 5 })
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestActivityRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(LOGS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
+
+    cacheStore.set(LOGS_KEY, data, LOGS_TTL)
     recentLogs.value = Array.isArray(data?.items) ? data.items : []
     hasLoadedActivityOnce.value = true
-  } catch {
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestActivityRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(LOGS_KEY) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -165,13 +292,22 @@ const loadRecentActivity = async () => {
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestActivityRequestId) {
       activityLoading.value = false
+      activityRefreshing.value = false
     }
   }
 }
 
-const refreshAll = () => {
+const refreshAll = ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return Promise.resolve()
-  return Promise.allSettled([loadStats(), loadApprovals(), loadRecentActivity()])
+  return Promise.allSettled([
+    loadStats({ force }),
+    loadApprovals({ force }),
+    loadRecentActivity({ force }),
+  ])
+}
+
+const manualRefresh = () => {
+  return refreshAll({ force: true })
 }
 
 usePageRecovery(async () => {
@@ -179,7 +315,8 @@ usePageRecovery(async () => {
   if (statsLoading.value || approvalsLoading.value || activityLoading.value) {
     return
   }
-  await refreshAll()
+  // Passing force: false checks freshness; entries with age < TTL produce 0 API calls!
+  await refreshAll({ force: false })
 })
 
 onMounted(() => {
@@ -239,6 +376,26 @@ const displayStat = (val, loading, error) => {
       <div class="banner-header">
         <div class="banner-text">
           <h2 class="title">Welcome back, {{ adminGreetingName }}</h2>
+        </div>
+        <div class="dashboard-refresh-bar">
+          <span v-if="lastUpdatedText" class="dashboard-updated-meta">
+            {{ lastUpdatedText }}
+          </span>
+          <button
+            type="button"
+            class="btn-subtle btn-refresh-data"
+            :disabled="isRefreshingAny"
+            aria-label="Refresh dashboard data"
+            @click="manualRefresh"
+          >
+            <AppIcon
+              name="refresh"
+              :size="14"
+              :class="{ spinning: isRefreshingAny }"
+              aria-hidden="true"
+            />
+            <span>Refresh data</span>
+          </button>
         </div>
       </div>
     </div>
@@ -446,6 +603,40 @@ const displayStat = (val, loading, error) => {
   gap: 0.25rem;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+.dashboard-refresh-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.dashboard-updated-meta {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.btn-refresh-data {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.84rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .title {

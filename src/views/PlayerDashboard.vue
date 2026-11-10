@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { useThreatIndexStore } from '../stores/threatIndexStore'
 import { usePlayerClassroomStore } from '../stores/playerClassroomStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchPlayerProfile } from '../api/player'
 import { fetchSessionHistory } from '../api/session'
 import { classifyApiError } from '../api/client'
@@ -17,10 +18,10 @@ import {
 } from '../utils/playerSessions'
 import AppIcon from '../components/common/AppIcon.vue'
 import PlayerDownloadModal from '../components/player/PlayerDownloadModal.vue'
-import homeMapImg from '../assets/maps/home.png'
-import officeMapImg from '../assets/maps/office.png'
-import cafeMapImg from '../assets/maps/internet-cafe.png'
-import parkMapImg from '../assets/maps/public-park.png'
+import homeMapImg from '../assets/maps/home.jpg'
+import officeMapImg from '../assets/maps/office.jpg'
+import cafeMapImg from '../assets/maps/internet-cafe.jpg'
+import parkMapImg from '../assets/maps/public-park.jpg'
 
 const MAP_PROGRESSION_METADATA = Object.freeze([
   { id: 'home', name: 'Home', index: 0, image: homeMapImg },
@@ -32,6 +33,8 @@ const MAP_PROGRESSION_METADATA = Object.freeze([
 const authStore = useAuthStore()
 const threatIndexStore = useThreatIndexStore()
 const playerClassroomStore = usePlayerClassroomStore()
+const cacheStore = useApiCacheStore()
+const PLAYER_TTL = 120000 // 120s
 
 const stats = ref({
   games_played: null, // null = unknown/unavailable; number = confirmed count
@@ -81,8 +84,13 @@ const mapProgressionList = computed(() => {
   return MAP_PROGRESSION_METADATA.map((map) => ({
     ...map,
     isUnlocked: isMapUnlocked(map.index, progress),
+    isCurrent: map.index === progress,
   }))
 })
+
+const unlockedMapCount = computed(
+  () => mapProgressionList.value.filter((map) => map.isUnlocked).length,
+)
 
 // Chart is restricted to the latest 10 sessions before applying the map filter
 const chartSourceSessions = computed(() => sessionItems.value.slice(0, 10))
@@ -177,7 +185,32 @@ let dashboardRequestId = 0
 let sessionRequestId = 0
 let profileRequestId = 0
 
-const loadProfile = async (scopeAtStart, signal) => {
+const loadProfile = async (scopeAtStart, signal, force = false) => {
+  const profileKey = 'player::profile::me'
+  if (!force) {
+    const cached = cacheStore.get(profileKey)
+    if (cached && !cached.isExpired) {
+      const p = cached.data
+      const rawProgress = p ? p.map_progress : null
+      const isValidProgress =
+        typeof rawProgress === 'number' &&
+        Number.isInteger(rawProgress) &&
+        rawProgress >= 0 &&
+        rawProgress <= 3
+
+      if (isValidProgress) {
+        stats.value.map_progress = rawProgress
+        stats.value.current_map = resolveCurrentMapName(rawProgress)
+        profileFailed.value = false
+        hasLoadedProfileOnce.value = true
+        generalError.value = ''
+      }
+      isProfileLoading.value = false
+      isProfileRefreshing.value = false
+      return
+    }
+  }
+
   const reqId = ++profileRequestId
   isProfileLoading.value = !hasLoadedProfileOnce.value
   isProfileRefreshing.value = hasLoadedProfileOnce.value
@@ -187,6 +220,7 @@ const loadProfile = async (scopeAtStart, signal) => {
     const p = await fetchPlayerProfile({ signal })
     if (reqId !== profileRequestId || getActiveAccountScope() !== scopeAtStart) return
 
+    cacheStore.set(profileKey, p, PLAYER_TTL)
     const rawProgress = p ? p.map_progress : null
     const isValidProgress =
       typeof rawProgress === 'number' &&
@@ -221,7 +255,24 @@ const loadProfile = async (scopeAtStart, signal) => {
   }
 }
 
-const loadSessions = async (scopeAtStart, signal) => {
+const loadSessions = async (scopeAtStart, signal, force = false) => {
+  const sessionsKey = 'player::sessions::page::page=1&page_size=20'
+  if (!force) {
+    const cached = cacheStore.get(sessionsKey)
+    if (cached && !cached.isExpired) {
+      let resolvedProfileId = authStore.user?.profile_id || null
+      const ok = applySessionHistoryPayload(cached.data, resolvedProfileId)
+      if (ok) {
+        hasLoadedSessionsOnce.value = true
+        sessionFailed.value = false
+        generalError.value = ''
+      }
+      isSessionLoading.value = false
+      isSessionRefreshing.value = false
+      return
+    }
+  }
+
   const reqId = ++sessionRequestId
   isSessionLoading.value = !hasLoadedSessionsOnce.value
   isSessionRefreshing.value = hasLoadedSessionsOnce.value
@@ -231,8 +282,15 @@ const loadSessions = async (scopeAtStart, signal) => {
     const s = await fetchSessionHistory({ page_size: 20 }, { signal })
     if (reqId !== sessionRequestId || getActiveAccountScope() !== scopeAtStart) return
 
+    const canonicalPayload = {
+      items: s.items || (Array.isArray(s) ? s : []),
+      total_count: s.total_count ?? (Array.isArray(s) ? s.length : 0),
+      page: 1,
+      page_size: 20,
+    }
+    cacheStore.set(sessionsKey, canonicalPayload, PLAYER_TTL)
     let resolvedProfileId = authStore.user?.profile_id || null
-    const ok = applySessionHistoryPayload(s, resolvedProfileId)
+    const ok = applySessionHistoryPayload(canonicalPayload, resolvedProfileId)
     if (ok) {
       hasLoadedSessionsOnce.value = true
       sessionFailed.value = false
@@ -274,8 +332,8 @@ const loadDashboardData = async ({ forceThreatRefresh = false } = {}) => {
   generalError.value = ''
 
   // Dispatch all datasets in parallel; each updates immediately as it arrives
-  const profileP = loadProfile(scopeAtStart, signal)
-  const sessionP = loadSessions(scopeAtStart, signal)
+  const profileP = loadProfile(scopeAtStart, signal, forceThreatRefresh)
+  const sessionP = loadSessions(scopeAtStart, signal, forceThreatRefresh)
   const threatP = threatIndexStore
     .loadThreatIndex({ force: forceThreatRefresh })
     .catch(() => {})
@@ -439,6 +497,24 @@ onUnmounted(() => {
       <section class="map-progression-section" aria-label="Map progression">
         <div class="map-progression-header">
           <span class="map-progression-label">Map progression</span>
+          <div
+            v-if="hasLoadedProfileOnce && stats.map_progress !== null"
+            class="map-progression-meter"
+            :aria-label="`${unlockedMapCount} of 4 maps unlocked`"
+          >
+            <span class="map-progression-count">{{ unlockedMapCount }} / 4 unlocked</span>
+            <div class="map-progression-segments" aria-hidden="true">
+              <span
+                v-for="map in mapProgressionList"
+                :key="`seg-${map.id}`"
+                class="map-segment"
+                :class="{
+                  'is-filled': map.isUnlocked,
+                  'is-active': map.isCurrent,
+                }"
+              ></span>
+            </div>
+          </div>
         </div>
 
         <!-- Loading State: never displays fabricated progression -->
@@ -491,16 +567,30 @@ onUnmounted(() => {
               v-for="map in mapProgressionList"
               :key="map.id"
               class="map-progression-card"
-              :class="map.isUnlocked ? 'is-unlocked' : 'is-locked'"
+              :class="[
+                map.isUnlocked ? 'is-unlocked' : 'is-locked',
+                { 'is-current-stage': map.isCurrent },
+              ]"
+              :style="{ '--card-idx': map.index }"
               role="listitem"
             >
               <div class="map-card-thumb-wrap">
                 <img
                   :src="map.image"
                   alt=""
+                  width="320"
+                  height="200"
                   class="map-card-thumb"
                   loading="lazy"
                 />
+                <span class="map-stage-pill" aria-hidden="true">
+                  Stage {{ map.index + 1 }}
+                </span>
+                <div v-if="!map.isUnlocked" class="map-locked-veil" aria-hidden="true">
+                  <span class="map-locked-icon-badge">
+                    <AppIcon name="lock" :size="15" />
+                  </span>
+                </div>
               </div>
               <div class="map-card-info">
                 <span class="map-card-name">{{ map.name }}</span>
@@ -667,6 +757,19 @@ onUnmounted(() => {
               {{ threatIndexStore.progressText || '—' }}
             </div>
             <div class="stat-label">Threat index progress</div>
+            <div
+              class="stat-progress-track"
+              role="progressbar"
+              :aria-valuenow="threatIndexStore.progressPercentage"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              :aria-label="`Threat index completion: ${threatIndexStore.progressPercentage}%`"
+            >
+              <div
+                class="stat-progress-fill"
+                :style="{ width: `${threatIndexStore.progressPercentage}%` }"
+              ></div>
+            </div>
             <div class="stat-card-actions">
               <router-link to="/threat-index" class="stat-link">
                 View threat index
@@ -807,9 +910,10 @@ onUnmounted(() => {
               >
                 <div class="score-bars" role="img" :aria-label="chartAriaLabel">
                   <div
-                    v-for="point in chartData.points"
+                    v-for="(point, idx) in chartData.points"
                     :key="point.session_id"
                     class="score-bar-col"
+                    :style="{ '--bar-idx': idx }"
                   >
                     <span class="bar-score-label">{{ point.score_label }}</span>
                     <div class="bar-track">
@@ -968,6 +1072,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .map-progression-label {
@@ -975,6 +1081,51 @@ onUnmounted(() => {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.map-progression-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.map-progression-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background-color: var(--color-purple-light);
+  border: 1px solid var(--color-violet-border);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  line-height: 1.3;
+}
+
+.map-progression-segments {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.map-segment {
+  width: 18px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border);
+  transition:
+    background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.map-segment.is-filled {
+  background: var(--btn-gradient);
+  border-color: var(--color-primary);
+}
+
+.map-segment.is-active {
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.22);
 }
 
 .map-progression-status {
@@ -1015,28 +1166,39 @@ onUnmounted(() => {
 .map-progression-card {
   background-color: var(--color-card);
   border: 1.5px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
   min-width: 0;
+  animation: map-card-enter 0.36s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--card-idx, 0) * 55ms);
 }
 
 .map-progression-card.is-unlocked {
   border-color: var(--color-secondary);
 }
 
+.map-progression-card.is-current-stage {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.14), var(--shadow-purple-sm);
+}
+
 .map-progression-card.is-locked {
   background-color: var(--color-bg-subtle);
   border-color: var(--color-border);
-  opacity: 0.88;
+  opacity: 0.9;
 }
 
 .map-card-thumb-wrap {
+  position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   background-color: var(--color-bg-muted);
   overflow: hidden;
 }
@@ -1048,10 +1210,68 @@ onUnmounted(() => {
   object-position: center;
   image-rendering: pixelated;
   display: block;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.25s ease;
 }
 
 .map-progression-card.is-locked .map-card-thumb {
-  filter: grayscale(75%) opacity(0.7);
+  filter: grayscale(72%) contrast(0.95) opacity(0.72);
+}
+
+.map-stage-pill {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+  z-index: 2;
+  padding: 0.12rem 0.48rem;
+  border-radius: 999px;
+  background-color: rgba(15, 23, 42, 0.86);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+}
+
+.map-locked-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.28) 100%);
+  pointer-events: none;
+}
+
+.map-locked-icon-badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.28);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .map-progression-card.is-unlocked:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-purple-hover);
+  }
+
+  .map-progression-card.is-unlocked:hover .map-card-thumb {
+    transform: scale(1.04);
+  }
 }
 
 .map-card-info {
@@ -1202,6 +1422,24 @@ onUnmounted(() => {
   font-size: 0.76rem;
   font-weight: 500;
   color: var(--color-text-dim);
+}
+
+.stat-progress-track {
+  width: 100%;
+  max-width: 180px;
+  height: 6px;
+  margin: 0.55rem auto 0 auto;
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stat-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--btn-gradient);
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .btn-outline {
@@ -1502,8 +1740,19 @@ onUnmounted(() => {
 .bar-fill {
   width: 100%;
   border-radius: 4px;
-  background: var(--color-primary);
-  transition: height 0.2s ease;
+  background: linear-gradient(180deg, var(--color-secondary) 0%, var(--color-primary) 100%);
+  transform-origin: bottom;
+  animation: bar-grow 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--bar-idx, 0) * 35ms);
+  transition:
+    height 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .score-bar-col:hover .bar-fill {
+    filter: brightness(1.08);
+  }
 }
 
 .bar-map-tag {
@@ -1543,9 +1792,19 @@ onUnmounted(() => {
   transition: all 0.15s ease;
 }
 
+.btn-history-link :deep(.app-icon) {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .btn-history-link:hover {
   background-color: var(--color-bg-subtle);
   border-color: var(--color-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-history-link:hover :deep(.app-icon) {
+    transform: translateX(2px);
+  }
 }
 
 .btn-history-link:focus-visible {
@@ -1613,15 +1872,76 @@ onUnmounted(() => {
   }
 }
 
+@keyframes map-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
+  .spinner,
+  .map-progression-card,
+  .bar-fill {
+    animation: none !important;
   }
+  .map-progression-card,
+  .map-card-thumb,
+  .map-segment,
   .stat-card,
+  .stat-progress-fill,
   .bar-fill,
-  .btn-outline {
-    transition: none;
+  .btn-outline,
+  .btn-history-link,
+  .btn-history-link :deep(.app-icon) {
+    transition: none !important;
   }
+  .map-progression-card.is-unlocked:hover,
+  .map-progression-card.is-unlocked:hover .map-card-thumb,
+  .stat-card:hover,
+  .btn-outline:hover,
+  .btn-history-link:hover :deep(.app-icon) {
+    transform: none !important;
+  }
+}
+
+:root[data-reduced-motion='true'] .spinner,
+:root[data-reduced-motion='true'] .map-progression-card,
+:root[data-reduced-motion='true'] .bar-fill {
+  animation: none !important;
+}
+
+:root[data-reduced-motion='true'] .map-progression-card,
+:root[data-reduced-motion='true'] .map-card-thumb,
+:root[data-reduced-motion='true'] .map-segment,
+:root[data-reduced-motion='true'] .stat-card,
+:root[data-reduced-motion='true'] .stat-progress-fill,
+:root[data-reduced-motion='true'] .bar-fill,
+:root[data-reduced-motion='true'] .btn-outline,
+:root[data-reduced-motion='true'] .btn-history-link,
+:root[data-reduced-motion='true'] .btn-history-link :deep(.app-icon) {
+  transition: none !important;
+}
+
+:root[data-reduced-motion='true'] .map-progression-card.is-unlocked:hover,
+:root[data-reduced-motion='true'] .map-progression-card.is-unlocked:hover .map-card-thumb,
+:root[data-reduced-motion='true'] .stat-card:hover,
+:root[data-reduced-motion='true'] .btn-outline:hover,
+:root[data-reduced-motion='true'] .btn-history-link:hover :deep(.app-icon) {
+  transform: none !important;
 }
 
 .error-banner {

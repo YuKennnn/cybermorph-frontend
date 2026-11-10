@@ -3,12 +3,15 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom'
 import { useClassroomStore } from '../stores/classroomStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { formatLastSyncedDate, formatThreatUnlockedCount } from '../utils/datetime'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
 const classroomStore = useClassroomStore()
+const cacheStore = useApiCacheStore()
+const ROSTER_TTL = 60000 // 60s cache window
 
 const codeId = computed(() => route.params.code_id)
 const students = ref([])
@@ -42,7 +45,38 @@ const syncClassroomMetadata = (force = false) => {
   classroomStore.fetchClassrooms(force).catch(() => {})
 }
 
-const fetchStudents = async (targetPage = page.value) => {
+const applyStudentsPayload = (data, targetPage) => {
+  if (Array.isArray(data)) {
+    students.value = data
+    totalCount.value = data.length
+    page.value = 1
+    hasConfirmedRoster.value = true
+  } else if (data && typeof data === 'object') {
+    students.value = data.items || data.students || []
+    totalCount.value = data.total_count ?? data.total ?? students.value.length
+    page.value = data.page ?? targetPage
+    pageSize.value = data.page_size ?? pageSize.value
+    hasConfirmedRoster.value = true
+  } else {
+    students.value = []
+    totalCount.value = 0
+    hasConfirmedRoster.value = true
+  }
+}
+
+const fetchStudents = async (targetPage = page.value, force = false) => {
+  if (!codeId.value) return
+  const cacheKey = `educator::roster::page::code_id=${codeId.value}&page=${targetPage}&page_size=${pageSize.value}`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      applyStudentsPayload(cached.data, targetPage)
+      isRosterLoading.value = false
+      rosterErrorMessage.value = ''
+      return
+    }
+  }
+
   const reqId = ++fetchRequestId
   isRosterLoading.value = true
   rosterErrorMessage.value = ''
@@ -55,24 +89,13 @@ const fetchStudents = async (targetPage = page.value) => {
 
     if (reqId !== fetchRequestId) return
 
-    if (Array.isArray(data)) {
-      students.value = data
-      totalCount.value = data.length
-      page.value = 1
-      hasConfirmedRoster.value = true
-    } else if (data && typeof data === 'object') {
-      students.value = data.items || data.students || []
-      totalCount.value = data.total_count ?? data.total ?? students.value.length
-      page.value = data.page ?? targetPage
-      pageSize.value = data.page_size ?? pageSize.value
-      hasConfirmedRoster.value = true
-    } else {
-      students.value = []
-      totalCount.value = 0
-      hasConfirmedRoster.value = true
-    }
-  } catch {
+    applyStudentsPayload(data, targetPage)
+    cacheStore.set(cacheKey, data, ROSTER_TTL)
+  } catch (err) {
     if (reqId === fetchRequestId) {
+      if (err?.response?.status === 403 || err?.response?.status === 404) {
+        cacheStore.invalidatePrefix(`educator::roster::page::code_id=${codeId.value}`)
+      }
       rosterErrorMessage.value = 'Could not load the student list for this classroom.'
       hasConfirmedRoster.value = false
     }
@@ -87,7 +110,7 @@ const handleRetryRoster = () => {
   if (classroomStore.error || !classroomStore.currentClassroom) {
     syncClassroomMetadata(true)
   }
-  fetchStudents(page.value)
+  fetchStudents(page.value, true)
 }
 
 const handleRetryMetadata = () => {

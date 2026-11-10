@@ -524,29 +524,32 @@ const formatRole = (role) => {
 
 /* User Profile Snippet */
 .user-profile-card {
-  margin: 1rem;
-  padding: 0.75rem 0.85rem;
-  background-color: var(--color-bg);
+  margin: 0.85rem 0.85rem 0.5rem 0.85rem;
+  padding: 0.85rem;
+  background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .user-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: var(--btn-gradient);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--color-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   flex-shrink: 0;
+  box-shadow: var(--shadow-purple-sm);
 }
 
 .user-details {
@@ -557,21 +560,23 @@ const formatRole = (role) => {
 }
 
 .user-name {
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
   color: var(--color-text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .role-pill {
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-secondary);
   letter-spacing: 0.01em;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
+  line-height: 1.2;
 }
 
 /* Navigation Links */
@@ -580,38 +585,44 @@ const formatRole = (role) => {
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
   overflow-y: auto;
 }
 
 .nav-group-label {
   font-family: var(--font-sans);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.5rem 0.65rem 0.25rem 0.65rem;
+  letter-spacing: 0.08em;
+  padding: 0.65rem 0.75rem 0.35rem 0.75rem;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem 0.85rem;
-  min-height: 40px;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  min-height: 42px;
   color: var(--color-text-muted);
   text-decoration: none;
   font-family: var(--font-sans);
-  font-size: 0.88rem;
-  font-weight: 500;
-  border-radius: 10px;
-  transition: all 0.15s ease;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition:
+    background-color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
 }
 
 .nav-icon {
   color: var(--color-text-dim);
-  transition: color 0.15s ease;
+  transition:
+    color 0.18s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .nav-item:hover:not(.router-link-active) {
@@ -623,16 +634,26 @@ const formatRole = (role) => {
   color: var(--color-primary);
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .nav-item:hover:not(.router-link-active) {
+    transform: translateX(2px);
+  }
+
+  .nav-item:hover:not(.router-link-active) .nav-icon {
+    transform: scale(1.06);
+  }
+}
+
 .nav-item:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
 .nav-item.router-link-active {
-  background-color: var(--color-secondary);
+  background: var(--color-primary);
   color: #ffffff;
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.28);
 }
 
 .nav-item.router-link-active .nav-icon {
@@ -640,8 +661,8 @@ const formatRole = (role) => {
 }
 
 .nav-item.router-link-active:hover {
-  background-color: var(--color-secondary);
-  filter: brightness(0.95);
+  background: var(--color-primary);
+  filter: brightness(0.96);
   color: #ffffff;
 }
 
@@ -665,15 +686,15 @@ const formatRole = (role) => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.6rem 0.85rem;
-  min-height: 40px;
+  padding: 0.65rem 0.85rem;
+  min-height: 44px;
   background-color: transparent;
   border: 1px solid var(--color-border);
   color: var(--color-text-main);
-  border-radius: 8px;
+  border-radius: 10px;
   font-family: var(--font-sans);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -767,5 +788,33 @@ const formatRole = (role) => {
   .sidebar-nav.mobile-open {
     transform: translateX(0);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-nav,
+  .nav-item,
+  .nav-icon,
+  .logout-btn {
+    transition: none !important;
+  }
+
+  .nav-item:hover:not(.router-link-active),
+  .nav-item:hover:not(.router-link-active) .nav-icon,
+  .logout-btn:active {
+    transform: none !important;
+  }
+}
+
+:root[data-reduced-motion='true'] .sidebar-nav,
+:root[data-reduced-motion='true'] .nav-item,
+:root[data-reduced-motion='true'] .nav-icon,
+:root[data-reduced-motion='true'] .logout-btn {
+  transition: none !important;
+}
+
+:root[data-reduced-motion='true'] .nav-item:hover:not(.router-link-active),
+:root[data-reduced-motion='true'] .nav-item:hover:not(.router-link-active) .nav-icon,
+:root[data-reduced-motion='true'] .logout-btn:active {
+  transform: none !important;
 }
 </style>

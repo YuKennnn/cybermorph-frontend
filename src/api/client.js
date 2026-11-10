@@ -28,6 +28,15 @@ export const getUnauthorizedSessionHandler = () => unauthorizedSessionHandler
 
 apiClient.interceptors.request.use(
     (config) => {
+        if (typeof window !== 'undefined' && Array.isArray(window.__CYBERMORPH_API_CALLS__)) {
+            window.__CYBERMORPH_API_CALLS__.push({
+                url: config.url,
+                method: (config.method || 'GET').toUpperCase(),
+                params: config.params,
+                timestamp: Date.now(),
+            })
+        }
+
         if (!config.headers) {
             config.headers = {}
         }

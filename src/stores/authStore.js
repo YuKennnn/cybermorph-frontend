@@ -12,10 +12,28 @@ import { setUnauthorizedSessionHandler } from '../api/client.js'
 import { useClassroomStore } from './classroomStore.js'
 import { useThreatIndexStore } from './threatIndexStore.js'
 import { usePlayerClassroomStore } from './playerClassroomStore.js'
+import { useApiCacheStore } from './apiCacheStore.js'
 import { stopNarration } from '../utils/speech.js'
 import { stripDisplayNameWhitespace, validateDisplayName } from '../utils/displayName.js'
 
 const WEB_ROLES = new Set(['educator', 'admin'])
+const isDevMock = import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'
+
+export const isValidTokenFormat = (tok) => {
+  if (!tok || typeof tok !== 'string') return false
+  if (isDevMock) return true
+  const parts = tok.split('.')
+  if (parts.length !== 3) return false
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    if (payload && typeof payload.exp === 'number') {
+      return Date.now() < payload.exp * 1000
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 const normalizeWebUser = (rawUser) => {
   if (!rawUser || typeof rawUser !== 'object') return null
@@ -60,9 +78,12 @@ export const useAuthStore = defineStore('auth', () => {
   const userRole = ref(storedRole || user.value?.role || null)
   const isProfileLoading = ref(false)
   const isWebProfileVerified = ref(false)
+  const isSessionReconciling = ref(false)
+  const verificationError = ref(null)
 
   // Concurrency & account isolation guards
-  let sessionEpoch = 0
+  const sessionEpoch = ref(0)
+  const activeSessionEpoch = computed(() => sessionEpoch.value)
   let profileMutationVersion = 0
   let activeProfilePromise = null
   let activeProfileEpoch = 0
@@ -106,7 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Guarded against logout, account switching, and overwriting newer saves.
    */
   const resolveProfile = (fallbackEmail = '') => {
-    const epochAtStart = sessionEpoch
+    const epochAtStart = sessionEpoch.value
     const mutationAtStart = profileMutationVersion
     const expectedToken = token.value
     const expectedUserId = user.value?.user_id || null
@@ -129,7 +150,7 @@ export const useAuthStore = defineStore('auth', () => {
 
           // Guard against logout or session/token switch while in-flight
           if (
-            epochAtStart !== sessionEpoch ||
+            epochAtStart !== sessionEpoch.value ||
             !token.value ||
             token.value !== expectedToken
           ) {
@@ -160,7 +181,7 @@ export const useAuthStore = defineStore('auth', () => {
           return user.value
         } catch (webErr) {
           if (
-            epochAtStart !== sessionEpoch ||
+            epochAtStart !== sessionEpoch.value ||
             !token.value ||
             token.value !== expectedToken
           ) {
@@ -175,7 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
         const playerProfile = await fetchPlayerProfile()
 
         if (
-          epochAtStart !== sessionEpoch ||
+          epochAtStart !== sessionEpoch.value ||
           !token.value ||
           token.value !== expectedToken
         ) {
@@ -207,7 +228,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
         return user.value
       } finally {
-        if (epochAtStart === sessionEpoch) {
+        if (epochAtStart === sessionEpoch.value) {
           isProfileLoading.value = false
         }
       }
@@ -262,7 +283,7 @@ export const useAuthStore = defineStore('auth', () => {
       throw err
     }
 
-    const epochAtStart = sessionEpoch
+    const epochAtStart = sessionEpoch.value
     const expectedToken = token.value
     const expectedUserId = user.value?.user_id || null
 
@@ -279,7 +300,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Discard if user logged out or switched accounts while PATCH was in flight
     if (
-      epochAtStart !== sessionEpoch ||
+      epochAtStart !== sessionEpoch.value ||
       !token.value ||
       token.value !== expectedToken
     ) {
@@ -327,7 +348,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Log in user, store token, and resolve verified role from backend.
    */
   const login = async (credentials) => {
-    sessionEpoch++
+    sessionEpoch.value++
     profileMutationVersion = 0
     activeProfilePromise = null
     isWebProfileVerified.value = false
@@ -342,10 +363,10 @@ export const useAuthStore = defineStore('auth', () => {
       // Store may not be active yet
     }
 
-    const loginEpoch = sessionEpoch
+    const loginEpoch = sessionEpoch.value
     const data = await loginUser(credentials)
 
-    if (loginEpoch !== sessionEpoch) {
+    if (loginEpoch !== sessionEpoch.value) {
       return data
     }
 
@@ -382,7 +403,7 @@ export const useAuthStore = defineStore('auth', () => {
       await resolveProfile(credentials.email)
     } catch (profileError) {
       // If profile resolution fails completely, revoke session to avoid inconsistent state
-      if (loginEpoch === sessionEpoch) {
+      if (loginEpoch === sessionEpoch.value) {
         logout()
       }
       throw profileError
@@ -409,18 +430,29 @@ export const useAuthStore = defineStore('auth', () => {
    * Clear all auth session data and tokens.
    */
   const logout = () => {
-    sessionEpoch++
+    sessionEpoch.value++
     profileMutationVersion++
     activeProfilePromise = null
     isProfileLoading.value = false
     isWebProfileVerified.value = false
     stopNarration()
+    const currentToken = token.value
     token.value = null
     user.value = null
     userRole.value = null
-    localStorage.removeItem('cyber_token')
-    localStorage.removeItem('cyber_user')
-    localStorage.removeItem('cyber_role')
+
+    // Clear shared credentials only when they still match the rejected session
+    if (currentToken && localStorage.getItem('cyber_token') === currentToken) {
+      localStorage.removeItem('cyber_token')
+      localStorage.removeItem('cyber_user')
+      localStorage.removeItem('cyber_role')
+    }
+
+    try {
+      useApiCacheStore().clearAll()
+    } catch {
+      // In case store is not yet active
+    }
     try {
       useClassroomStore().reset()
     } catch {
@@ -438,6 +470,127 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Handle admin endpoint 403 Forbidden:
+   * Evicts admin cache, does NOT clear player/educator session, and re-verifies role.
+   */
+  const handleAdminForbidden = async () => {
+    try {
+      useApiCacheStore().invalidatePrefix('admin::')
+    } catch {
+      // In case store is not yet active
+    }
+    try {
+      await resolveProfile()
+    } catch {
+      // Ignore background re-verification error
+    }
+  }
+
+  /**
+   * Startup session verification:
+   * Always verifies stored session on startup even if in-memory and storage match.
+   * Keeps private UI gated (isSessionReconciling = true) until verified.
+   */
+  const verifySessionOnStartup = async () => {
+    if (!token.value) {
+      isSessionReconciling.value = false
+      return
+    }
+
+    if (!isValidTokenFormat(token.value)) {
+      logout()
+      isSessionReconciling.value = false
+      return
+    }
+
+    isSessionReconciling.value = true
+    verificationError.value = null
+    try {
+      await resolveProfile()
+    } catch {
+      // Transient verification failure: keep private UI gated with retry prompt, do not clear credentials
+      verificationError.value = 'Failed to verify session'
+    } finally {
+      if (!verificationError.value) {
+        isSessionReconciling.value = false
+      }
+    }
+  }
+
+  const retryStartupVerification = async () => {
+    verificationError.value = null
+    await verifySessionOnStartup()
+  }
+
+  // Cross-tab and browser restoration listeners
+  if (typeof window !== 'undefined') {
+    verifySessionOnStartup()
+
+    window.addEventListener('storage', (e) => {
+      if (e.key !== 'cyber_token') return
+      const currentStored = localStorage.getItem('cyber_token')
+      if (currentStored === token.value) return
+
+      sessionEpoch.value++
+      try {
+        useApiCacheStore().clearAll()
+      } catch {
+        // Ignore
+      }
+
+      user.value = null
+      userRole.value = null
+
+      if (currentStored && isValidTokenFormat(currentStored)) {
+        // Adopt replacement token preserved in storage
+        token.value = currentStored
+        isSessionReconciling.value = true
+        verificationError.value = null
+        resolveProfile()
+          .catch(() => {
+            verificationError.value = 'Failed to verify session'
+          })
+          .finally(() => {
+            if (!verificationError.value) isSessionReconciling.value = false
+          })
+      } else {
+        token.value = null
+        logout()
+      }
+    })
+
+    window.addEventListener('pageshow', (e) => {
+      if (!e.persisted) return
+      const currentStored = localStorage.getItem('cyber_token')
+      if (currentStored !== token.value) {
+        sessionEpoch.value++
+        try {
+          useApiCacheStore().clearAll()
+        } catch {
+          // Ignore
+        }
+
+        if (currentStored && isValidTokenFormat(currentStored)) {
+          token.value = currentStored
+          user.value = null
+          userRole.value = null
+          isSessionReconciling.value = true
+          verificationError.value = null
+          resolveProfile()
+            .catch(() => {
+              verificationError.value = 'Failed to verify session'
+            })
+            .finally(() => {
+              if (!verificationError.value) isSessionReconciling.value = false
+            })
+        } else {
+          logout()
+        }
+      }
+    })
+  }
+
   // Hook up client 401 session expiry handler to the store's logout action
   setUnauthorizedSessionHandler(() => {
     logout()
@@ -450,6 +603,8 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     isProfileLoading,
     isWebProfileVerified,
+    isSessionReconciling,
+    verificationError,
     // Getters
     isAuthenticated,
     isEducator,
@@ -458,6 +613,7 @@ export const useAuthStore = defineStore('auth', () => {
     displayName,
     hasEducatorDisplayName,
     isEducatorMissingDisplayName,
+    activeSessionEpoch,
     // Actions
     login,
     logout,
@@ -466,5 +622,8 @@ export const useAuthStore = defineStore('auth', () => {
     updateDisplayName,
     registerPlayer,
     registerWeb,
+    handleAdminForbidden,
+    verifySessionOnStartup,
+    retryStartupVerification,
   }
 })

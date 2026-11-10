@@ -1,4 +1,3 @@
-import publicParkMapImg from '@/assets/maps/public-park.png'
 import phishingHomeEmailImg from '@/assets/threat-lessons/phishing-home-email.webp'
 import smishingHomeGcashImg from '@/assets/threat-lessons/smishing-home-gcash.webp'
 import vishingOfficeCallImg from '@/assets/threat-lessons/vishing-office-call.webp'
@@ -6,6 +5,7 @@ import socialEngineeringOfficeHelpdeskImg from '@/assets/threat-lessons/social-e
 import credentialTheftCafeHelpdeskImg from '@/assets/threat-lessons/credential-theft-cafe-helpdesk.webp'
 import publicWifiParkCoworkImg from '@/assets/threat-lessons/public-wifi-park-cowork.jpg'
 import malwareParkModZipImg from '@/assets/threat-lessons/malware-park-mod-zip.webp'
+import ransomwareParkBackupImg from '@/assets/threat-lessons/ransomware-park-backup.jpg'
 
 /**
  * Frontend-managed educational lesson content for the 8 canonical CyberMorph threat categories.
@@ -371,51 +371,50 @@ export const THREAT_LESSON_LIST = [
     threatName: 'Ransomware',
     code: '08',
     mapName: 'Public Park',
-    isPracticeExample: true,
     summary:
-      'Ransomware is malicious software that locks or encrypts your files and demands payment to unlock them, often arriving through unexpected attachments or downloads.',
+      'Ransomware locks or encrypts files and demands payment for their recovery. Keeping verified backups and safely inspecting downloads protects your system from data loss without paying ransoms.',
     gameScenario: {
-      setting: 'Public Park — Practice example: Unexpected attachment asking to enable macros',
+      setting: 'Public Park — Verifying a project backup installer download',
       description:
-        'Practice example: You receive an urgent message with an unexpected archive or document attachment that tells you to enable macros or run a file to view its contents. Allowing an untrusted attachment or download to run lets ransomware lock your files and demand payment.',
+        'In the Public Park map (Sector 04), your teacher asks the class to back up project files. You open the maker\'s official website (https://www.safebackup.com/download) and download SafeBackup_Setup.exe (58.4 MB). Before running the file, you inspect the prompt to confirm the verified publisher ("Publisher: SafeBackup Inc (verified)") and official HTTPS source before choosing Keep and open.',
       warningSigns: [
-        'Unexpected attachments or downloads in executable or macro-enabled formats (such as .exe, .zip, or .xlsm).',
-        'Instructions asking you to enable macros, run a script, or bypass security warnings to view a document.',
-        'Files suddenly renamed with unfamiliar extensions or a note demanding payment to unlock them.',
+        'Official HTTPS download source: the installer is retrieved directly from the developer\'s official domain (https://www.safebackup.com/download) rather than an untrusted third-party host.',
+        'Verified publisher signature: SafeBackup_Setup.exe carries a verified digital signature ("Publisher: SafeBackup Inc (verified)") confirming the executable has not been tampered with.',
+        'Ransomware defense through backups: creating authentic backups before incidents occur is the primary safeguard to restore encrypted files without paying attackers.',
       ],
       suspiciousExamples: [
-        'invoice_macro_attachment.xlsm',
-        'unverified_archive.zip',
+        'https://www.safebackup.com/download',
+        'SafeBackup_Setup.exe (Publisher: SafeBackup Inc (verified))',
       ],
     },
     screenshot: {
-      image: publicParkMapImg,
-      kind: 'Map context',
+      image: ransomwareParkBackupImg,
+      kind: 'Scenario screenshot',
       mapLabel: 'Public Park map',
-      clue: null,
-      alt: 'Overview of the Public Park map where players complete advanced threat-detection lessons.',
+      clue: 'URL https://www.safebackup.com/download, file SafeBackup_Setup.exe, and "Publisher: SafeBackup Inc (verified)"',
+      alt: 'Public Park gameplay scenario showing a Downloads window for SafeBackup_Setup.exe (58.4 MB) from https://www.safebackup.com/download with Publisher: SafeBackup Inc (verified), offering Delete file and Keep and open buttons.',
       caption:
-        'Public Park overview showing the setting for file-safety lessons.',
-      sourcePdf: null,
+        'Public Park (Sector 04) — Inspect the download URL (https://www.safebackup.com/download), file name (SafeBackup_Setup.exe), and verified digital signature ("Publisher: SafeBackup Inc (verified)") before choosing Keep and open.',
+      sourcePdf: 'CyberMorph Gameplay — Public Park (Sector 04)',
       sourcePage: null,
     },
     recommendedAction: {
       inGameAction:
-        'Inspect the sender, file type, and source in the prompt, and reject or delete unexpected attachments and unverified downloads before they run.',
+        'Select Keep and open after verifying the official HTTPS maker website and verified publisher signature.',
       realWorldAction:
-        'Never open unexpected attachments or enable macros. If ransomware locks a device, disconnect it from Wi-Fi and wired networks immediately, do not pay, and restore files from an offline backup.',
+        'Maintain regular offline backups of important files, verify developer signatures before opening downloaded installers, and never enable macros or run unexpected executable attachments.',
       whatToDo:
-        'Reject suspicious attachments before they run, disconnect affected devices from the network, and restore from offline backups.',
+        'Select Keep and open in the game once publisher and source are verified, and keep offline backups to safeguard against ransomware in real life.',
       whyItMatters:
-        'Blocking a suspicious file before it runs prevents encryption, and disconnecting an infected device stops ransomware from spreading to shared folders.',
+        'Verified backups ensure you can restore encrypted files without paying ransom demands, while checking digital signatures stops tampered installers from executing malicious ransomware payloads.',
     },
     preventionTips: [
-      'Keep regular backups on an external drive or cloud version history that stays disconnected during daily use.',
-      'Keep your operating system and apps updated so ransomware cannot exploit old security bugs.',
-      'Turn on file extensions on your computer so disguised programs (such as .pdf.exe) are easy to spot.',
+      'Keep regular backups on an offline external drive or disconnected cloud storage so ransomware cannot reach them.',
+      'Verify publisher signatures and official download domains before running any .exe installer.',
+      'Never run executable files (.exe) or macro-enabled documents received from unexpected emails or group chats.',
     ],
     keyTakeaway:
-      'Never run unexpected attachments or macros, and keep offline backups so you can recover files without paying a ransom.',
+      'Verified offline backups and signed software downloads protect your data against ransomware without ever paying extortion demands.',
   },
 ]
 

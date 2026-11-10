@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchMyClassrooms } from '../api/classroom'
 import { useAuthStore } from '../stores/authStore'
 import { useClassroomStore } from '../stores/classroomStore'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
@@ -59,12 +58,12 @@ const isEditModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const selectedClassroom = ref(null)
 
-const fetchClassrooms = async () => {
-  isLoading.value = true
+const fetchClassrooms = async (force = false) => {
+  isLoading.value = !classroomStore.isFetched
   errorMessage.value = ''
 
   try {
-    const data = await fetchMyClassrooms()
+    const data = await classroomStore.fetchClassrooms(force)
     classrooms.value = Array.isArray(data) ? data : []
   } catch {
     errorMessage.value = 'Failed to load classroom roster. Please try again.'
@@ -77,7 +76,7 @@ const handleCreated = (newClassroom) => {
   const code = newClassroom.code_value || newClassroom.code || 'GENERATED'
   successMessage.value = `Classroom "${newClassroom.name}" generated with access code: ${code}`
   classroomStore.updateClassroomInState(newClassroom)
-  fetchClassrooms()
+  fetchClassrooms(true)
 }
 
 const handleOpenEdit = (classroom) => {
@@ -90,7 +89,7 @@ const handleUpdated = (updated) => {
     classroomStore.updateClassroomInState(updated)
   }
   successMessage.value = 'Classroom configurations updated successfully.'
-  fetchClassrooms()
+  fetchClassrooms(true)
 }
 
 const handleOpenDelete = (classroom) => {
@@ -103,7 +102,7 @@ const handleDeleted = (classroom) => {
     classroomStore.removeClassroomFromState(classroom.code_id)
   }
   successMessage.value = `Classroom "${classroom.name}" was soft-deleted.`
-  fetchClassrooms()
+  fetchClassrooms(true)
 }
 
 const handleViewStudents = (codeId) => {

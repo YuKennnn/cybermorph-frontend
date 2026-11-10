@@ -35,16 +35,41 @@ const showSidebar = computed(() => {
 
 <template>
   <div class="app-layout">
-    <SidebarNav v-if="showSidebar" />
+    <SidebarNav v-if="showSidebar && !authStore.isSessionReconciling" />
     <component
       :is="isPublicLayout ? 'div' : 'main'"
       :class="[
         'main-content',
-        { 'with-sidebar': showSidebar, 'landing-mode': isPublicLayout },
+        {
+          'with-sidebar': showSidebar && !authStore.isSessionReconciling,
+          'landing-mode': isPublicLayout,
+        },
       ]"
     >
       <div :class="['content-wrapper', { 'full-width': isPublicLayout }]">
-        <RouterView />
+        <!-- Protected Render Gate: Neutral shell while reconciling stored session -->
+        <div
+          v-if="!isPublicLayout && authStore.token && authStore.isSessionReconciling"
+          class="session-reconcile-gate"
+          role="status"
+          aria-live="polite"
+        >
+          <div v-if="authStore.verificationError" class="reconcile-error-box">
+            <p class="reconcile-error-text">{{ authStore.verificationError }}</p>
+            <button
+              type="button"
+              class="btn-subtle reconcile-retry-btn"
+              @click="authStore.retryStartupVerification"
+            >
+              Retry verification
+            </button>
+          </div>
+          <div v-else class="reconcile-loading-box">
+            <div class="gate-spinner" aria-hidden="true"></div>
+            <p class="gate-text">Verifying session...</p>
+          </div>
+        </div>
+        <RouterView v-else />
       </div>
     </component>
 
@@ -54,6 +79,58 @@ const showSidebar = computed(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.session-reconcile-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  width: 100%;
+}
+
+.reconcile-loading-box,
+.reconcile-error-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-card, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.gate-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-border, #e2e8f0);
+  border-top-color: var(--color-primary, #6366f1);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.gate-text,
+.reconcile-error-text {
+  font-size: 0.95rem;
+  color: var(--color-text-muted, #64748b);
+  margin: 0;
+}
+
+.reconcile-retry-btn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
 
 <style scoped>
 .app-layout {

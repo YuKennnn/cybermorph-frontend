@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchAdminLogs, fetchAdminUsers } from '../api/admin'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { ACTION_OPTIONS, getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
@@ -10,6 +11,16 @@ import AppIcon from '../components/common/AppIcon.vue'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const LOGS_TTL = 60000 // 60s
+const LOOKUP_TTL = 30000 // 30s
+
+const buildLogsKey = (action, p, ps, userId) =>
+  `admin::logs::page::action_type=${action || ''}&page=${p}&page_size=${ps}&user_id=${userId || ''}`
+
+const buildLookupKey = (query) =>
+  `admin::users::lookup::page=1&page_size=5&search=${encodeURIComponent(query || '')}`
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -254,7 +265,7 @@ const clearExpansion = () => {
   }
 }
 
-const loadLogs = async () => {
+const loadLogs = async ({ force = false } = {}) => {
   if (!isComponentMounted || !authStore.isAuthenticated || !authStore.isAdmin) {
     isLoading.value = false
     logs.value = []
@@ -264,9 +275,35 @@ const loadLogs = async () => {
 
   const reqId = ++latestLogsRequestId
   const reqSession = currentSessionEpoch
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const targetKey = buildLogsKey(selectedAction.value, page.value, pageSize.value, selectedUserId.value)
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
   clearExpansion()
-  isLoading.value = true
-  errorMessage.value = ''
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    logs.value = Array.isArray(cached.data?.items) ? cached.data.items : []
+    totalCount.value = typeof cached.data?.total_count === 'number' ? cached.data.total_count : 0
+    if (typeof cached.data?.page === 'number') page.value = cached.data.page
+    if (typeof cached.data?.page_size === 'number') pageSize.value = cached.data.page_size
+    isLoading.value = false
+    errorMessage.value = ''
+    syncUrlQuery()
+
+    for (const row of logs.value) {
+      if (row.user_id && row.user_email) {
+        cacheAccount({ user_id: row.user_id, email: row.user_email })
+      }
+    }
+
+    if (!cached.isExpired) {
+      return
+    }
+  } else {
+    isLoading.value = true
+    errorMessage.value = ''
+  }
 
   try {
     const params = {
@@ -287,12 +324,15 @@ const loadLogs = async () => {
       !isComponentMounted ||
       reqSession !== currentSessionEpoch ||
       reqId !== latestLogsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
 
+    cacheStore.set(targetKey, data, LOGS_TTL)
     logs.value = Array.isArray(data?.items) ? data.items : []
     totalCount.value = typeof data?.total_count === 'number' ? data.total_count : 0
     if (typeof data?.page === 'number') page.value = data.page
@@ -328,11 +368,17 @@ const loadLogs = async () => {
         }
       }
     }
-  } catch {
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
     if (
       !isComponentMounted ||
       reqSession !== currentSessionEpoch ||
       reqId !== latestLogsRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -380,6 +426,25 @@ const executeSearch = async (query, pageToLoad = 1, append = false) => {
     return
   }
 
+  const lookupKey = buildLookupKey(trimmed)
+  if (pageToLoad === 1 && !append) {
+    const cachedLookup = cacheStore.get(lookupKey)
+    if (cachedLookup && !cachedLookup.isExpired) {
+      const items = Array.isArray(cachedLookup.data?.items) ? cachedLookup.data.items : []
+      for (const item of items) {
+        if (item?.user_id) cacheAccount(item)
+      }
+      suggestions.value = items
+      lookupTotalCount.value = typeof cachedLookup.data?.total_count === 'number' ? cachedLookup.data.total_count : 0
+      lookupPage.value = 1
+      isDropdownOpen.value = true
+      highlightedIndex.value = -1
+      lookupLoading.value = false
+      lookupLoadingMore.value = false
+      return
+    }
+  }
+
   const reqId = ++latestLookupRequestId
   const reqSession = currentSessionEpoch
   if (append) {
@@ -404,6 +469,10 @@ const executeSearch = async (query, pageToLoad = 1, append = false) => {
       !authStore.isAdmin
     ) {
       return
+    }
+
+    if (pageToLoad === 1 && !append) {
+      cacheStore.set(lookupKey, data, LOOKUP_TTL)
     }
 
     const items = Array.isArray(data?.items) ? data.items : []

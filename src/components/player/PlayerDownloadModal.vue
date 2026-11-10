@@ -2,6 +2,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchAppVersion, extractErrorMessage } from '../../api/app.js'
+import { useApiCacheStore } from '../../stores/apiCacheStore.js'
 import AppIcon from '../common/AppIcon.vue'
 
 const props = defineProps({
@@ -14,6 +15,8 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const router = useRouter()
+const cacheStore = useApiCacheStore()
+const VERSION_TTL = 300000 // 300s cache for public app release metadata
 
 const modalRef = ref(null)
 const cancelBtnRef = ref(null)
@@ -61,7 +64,44 @@ const validateReleaseUrl = (urlString) => {
   return { valid: true, empty: false, url: trimmed }
 }
 
-const loadReleaseInfo = async () => {
+const applyReleaseData = (data) => {
+  if (!data || typeof data !== 'object' || typeof data.latest_build !== 'number') {
+    isFailure.value = true
+    errorMessage.value = 'Invalid release metadata received from server.'
+    return false
+  }
+
+  releaseData.value = data
+  const urlValidation = validateReleaseUrl(data.download_url)
+  if (!urlValidation.valid) {
+    if (urlValidation.empty) {
+      isUnavailable.value = true
+      errorMessage.value = urlValidation.error
+    } else {
+      isFailure.value = true
+      errorMessage.value = urlValidation.error
+    }
+    return false
+  }
+
+  validUrl.value = urlValidation.url
+  return true
+}
+
+const loadReleaseInfo = async (force = false) => {
+  const versionKey = 'public::app::version'
+  if (!force) {
+    const cached = cacheStore.get(versionKey)
+    if (cached && !cached.isExpired) {
+      const ok = applyReleaseData(cached.data)
+      if (ok) {
+        isLoading.value = false
+        errorMessage.value = ''
+        return
+      }
+    }
+  }
+
   if (abortController) {
     abortController.abort()
   }
@@ -79,26 +119,10 @@ const loadReleaseInfo = async () => {
     const data = await fetchAppVersion({ signal: abortController.signal })
     if (requestId !== currentRequestId) return
 
-    if (!data || typeof data !== 'object' || typeof data.latest_build !== 'number') {
-      isFailure.value = true
-      errorMessage.value = 'Invalid release metadata received from server.'
-      return
+    const ok = applyReleaseData(data)
+    if (ok) {
+      cacheStore.set(versionKey, data, VERSION_TTL)
     }
-
-    releaseData.value = data
-    const urlValidation = validateReleaseUrl(data.download_url)
-    if (!urlValidation.valid) {
-      if (urlValidation.empty) {
-        isUnavailable.value = true
-        errorMessage.value = urlValidation.error
-      } else {
-        isFailure.value = true
-        errorMessage.value = urlValidation.error
-      }
-      return
-    }
-
-    validUrl.value = urlValidation.url
   } catch (err) {
     if (requestId !== currentRequestId) return
     if (err?.name === 'CanceledError' || err?.name === 'AbortError') return

@@ -7,6 +7,7 @@ import AppIcon from '../components/common/AppIcon.vue'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchPlayerAnalytics, fetchSessionAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
+import { useApiCacheStore } from '../stores/apiCacheStore.js'
 import {
   CANONICAL_THREAT_CATEGORIES,
   validateThreatIndexResponse,
@@ -16,6 +17,9 @@ import { parseBackendUtcTimestamp, formatLastSyncedDate } from '../utils/datetim
 const route = useRoute()
 const router = useRouter()
 const classroomStore = useClassroomStore()
+const cacheStore = useApiCacheStore()
+const STUDENT_ANALYTICS_TTL = 60000 // 60s
+const TELEMETRY_TTL = 60000 // 60s
 
 const syncClassroomMetadata = (force = false) => {
   if (codeId.value) {
@@ -89,17 +93,31 @@ const formattedStudentSyncDate = computed(() => {
   return formatLastSyncedDate(studentIdentity.value.last_synced_at)
 })
 
-const resolveStudentIdentity = async () => {
+const fetchRosterPageCached = async (targetPage, force = false) => {
+  const cacheKey = `educator::roster::page::code_id=${codeId.value}&page=${targetPage}&page_size=10`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      return cached.data
+    }
+  }
+
+  const data = await fetchClassroomStudents(codeId.value, {
+    page: targetPage,
+    page_size: 10,
+  })
+  cacheStore.set(cacheKey, data, 60000)
+  return data
+}
+
+const resolveStudentIdentity = async (force = false) => {
   const reqId = ++identityRequestId
   identityStatus.value = 'loading'
   identityError.value = ''
 
   try {
     const startPage = originatingRosterPage.value
-    const firstRes = await fetchClassroomStudents(codeId.value, {
-      page: startPage,
-      page_size: 10,
-    })
+    const firstRes = await fetchRosterPageCached(startPage, force)
 
     if (reqId !== identityRequestId) return
 
@@ -132,10 +150,7 @@ const resolveStudentIdentity = async () => {
 
     for (let p = 1; p <= Math.min(totalPages, MAX_SEARCH_PAGES); p++) {
       if (p === startPage) continue
-      const pageRes = await fetchClassroomStudents(codeId.value, {
-        page: p,
-        page_size: pageSize,
-      })
+      const pageRes = await fetchRosterPageCached(p, force)
 
       if (reqId !== identityRequestId) return
 
@@ -161,8 +176,16 @@ const resolveStudentIdentity = async () => {
     } else {
       identityStatus.value = 'no_match'
     }
-  } catch {
+  } catch (err) {
     if (reqId === identityRequestId) {
+      if (err?.response?.status === 403 || err?.response?.status === 404) {
+        cacheStore.invalidatePrefix(`educator::roster::page::code_id=${codeId.value}`)
+        studentIdentity.value = {
+          username: '',
+          map_progress: null,
+          last_synced_at: undefined,
+        }
+      }
       identityStatus.value = 'error'
       identityError.value = 'Unable to verify student identity from classroom roster.'
     }
@@ -183,7 +206,25 @@ const analyticsData = ref(null)
 const isAnalyticsLoading = ref(true)
 const analyticsError = ref('')
 
-const loadPlayerAnalytics = async () => {
+const loadPlayerAnalytics = async (force = false) => {
+  if (!profileId.value) return
+  const cacheKey = `educator::analytics::student::profile_id=${profileId.value}`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      analyticsData.value = cached.data
+      if (selectedSession.value?.session_id) {
+        const match = cached.data?.recent_sessions?.find(
+          (s) => String(s.session_id) === String(selectedSession.value.session_id),
+        )
+        if (match) selectedSession.value = match
+      }
+      isAnalyticsLoading.value = false
+      analyticsError.value = ''
+      return
+    }
+  }
+
   const reqId = ++analyticsRequestId
   isAnalyticsLoading.value = true
   analyticsError.value = ''
@@ -191,6 +232,7 @@ const loadPlayerAnalytics = async () => {
   try {
     const data = await fetchPlayerAnalytics(profileId.value)
     if (reqId !== analyticsRequestId) return
+    cacheStore.set(cacheKey, data, STUDENT_ANALYTICS_TTL)
     analyticsData.value = data
     if (selectedSession.value?.session_id) {
       const match = data.recent_sessions?.find(
@@ -202,6 +244,11 @@ const loadPlayerAnalytics = async () => {
     }
   } catch (err) {
     if (reqId !== analyticsRequestId) return
+    if (err?.response?.status === 403 || err?.response?.status === 404) {
+      analyticsData.value = null
+      cacheStore.invalidateKey(cacheKey)
+      cacheStore.invalidatePrefix('educator::telemetry::')
+    }
     analyticsError.value =
       err?.response?.data?.detail ||
       'Could not load student performance data. Please try again.'
@@ -309,25 +356,46 @@ const sessionTelemetry = ref(null)
 const isSessionLoading = ref(false)
 const sessionErrorMessage = ref('')
 
-const openSession = async (sessionItem) => {
+const openSession = async (sessionItem, force = false) => {
   if (!sessionItem?.session_id) return
-  const reqId = ++sessionRequestId
+  const sessionId = String(sessionItem.session_id)
   const fullSession = analyticsData.value?.recent_sessions?.find(
-    (s) => String(s.session_id) === String(sessionItem.session_id),
+    (s) => String(s.session_id) === sessionId,
   )
   selectedSession.value = fullSession || sessionItem
   isSessionModalOpen.value = true
+
+  // Reflect session ID in URL query without wiping existing query params
+  router.push({
+    query: { ...route.query, session: sessionId },
+  })
+
+  const telemetryKey = `educator::telemetry::session_id=${sessionId}`
+  if (!force) {
+    const cached = cacheStore.get(telemetryKey)
+    if (cached && !cached.isExpired) {
+      const data = cached.data
+      if (!data?.profile_id || String(data.profile_id) !== profileId.value) {
+        sessionErrorMessage.value = 'Session details do not belong to this student.'
+        sessionTelemetry.value = null
+        selectedSession.value = null
+        isSessionLoading.value = false
+        return
+      }
+      sessionTelemetry.value = data
+      isSessionLoading.value = false
+      sessionErrorMessage.value = ''
+      return
+    }
+  }
+
+  const reqId = ++sessionRequestId
   isSessionLoading.value = true
   sessionErrorMessage.value = ''
   sessionTelemetry.value = null
 
-  // Reflect session ID in URL query without wiping existing query params
-  router.push({
-    query: { ...route.query, session: sessionItem.session_id },
-  })
-
   try {
-    const data = await fetchSessionAnalytics(sessionItem.session_id)
+    const data = await fetchSessionAnalytics(sessionId)
     if (reqId !== sessionRequestId) return
 
     // Requirement 4: Require returned session profile_id to match the page student.
@@ -339,6 +407,7 @@ const openSession = async (sessionItem) => {
       return
     }
 
+    cacheStore.set(telemetryKey, data, TELEMETRY_TTL)
     sessionTelemetry.value = data
   } catch (err) {
     if (reqId !== sessionRequestId) return
@@ -506,7 +575,7 @@ onUnmounted(() => {
       <!-- Analytics Error State -->
       <div v-else-if="analyticsError" class="error-banner" role="alert">
         <span>{{ analyticsError }}</span>
-        <button type="button" class="btn-retry" @click="loadPlayerAnalytics">
+        <button type="button" class="btn-retry" @click="loadPlayerAnalytics(true)">
           Try again
         </button>
       </div>

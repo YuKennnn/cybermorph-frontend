@@ -2,10 +2,17 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { fetchAdminUsers } from '../api/admin'
 import { useAuthStore } from '../stores/authStore'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import AdminSubNav from '../components/admin/AdminSubNav.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const authStore = useAuthStore()
+const cacheStore = useApiCacheStore()
+
+const USERS_TTL = 120000 // 120s
+
+const buildUsersKey = (p, ps, role, search) =>
+  `admin::users::page::page=${p}&page_size=${ps}&role=${role || ''}&search=${encodeURIComponent(search || '')}`
 
 const users = ref([])
 const totalCount = ref(0)
@@ -81,16 +88,38 @@ const resetUsersState = () => {
   })
 }
 
-const loadUsers = async () => {
+let activeSubscriptionKey = ''
+
+const loadUsers = async ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) {
     isLoading.value = false
     return
   }
 
+  const targetKey = buildUsersKey(page.value, pageSize.value, selectedRole.value, searchQuery.value.trim())
+  activeSubscriptionKey = targetKey
+
   const reqSession = currentSessionEpoch
   const reqId = ++latestRequestId
-  isLoading.value = true
-  errorMessage.value = ''
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(targetKey)
+
+  const cached = cacheStore.get(targetKey)
+  if (cached && !force) {
+    users.value = cached.data?.items || []
+    totalCount.value = cached.data?.total_count ?? users.value.length
+    if (cached.data?.page) page.value = cached.data.page
+    if (cached.data?.page_size) pageSize.value = cached.data.page_size
+    isLoading.value = false
+    errorMessage.value = ''
+
+    if (!cached.isExpired) {
+      return
+    }
+  } else {
+    isLoading.value = true
+    errorMessage.value = ''
+  }
 
   try {
     const params = {
@@ -110,26 +139,40 @@ const loadUsers = async () => {
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
 
-    users.value = data?.items || []
-    totalCount.value = data?.total_count ?? users.value.length
-    if (data?.page) page.value = data.page
-    if (data?.page_size) pageSize.value = data.page_size
-  } catch {
+    cacheStore.set(targetKey, data, USERS_TTL)
+
+    if (targetKey === activeSubscriptionKey) {
+      users.value = data?.items || []
+      totalCount.value = data?.total_count ?? users.value.length
+      if (data?.page) page.value = data.page
+      if (data?.page_size) pageSize.value = data.page_size
+    }
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(targetKey) ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
       return
     }
-    errorMessage.value = 'Failed to load user accounts. Please check your connection and try again.'
+    if (targetKey === activeSubscriptionKey) {
+      errorMessage.value = 'Failed to load user accounts. Please check your connection and try again.'
+    }
   } finally {
     if (reqSession === currentSessionEpoch && reqId === latestRequestId) {
       isLoading.value = false

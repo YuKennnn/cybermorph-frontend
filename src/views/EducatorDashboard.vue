@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useClassroomStore } from '../stores/classroomStore'
-import { fetchMyClassrooms } from '../api/classroom'
+import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchClassroomAnalytics } from '../api/analytics'
 import { extractErrorMessage } from '../api/client'
 import { usePageRecovery } from '../composables/usePageRecovery'
@@ -14,6 +14,8 @@ import AppIcon from '../components/common/AppIcon.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 const classroomStore = useClassroomStore()
+const cacheStore = useApiCacheStore()
+const SNAPSHOT_TTL = 120000 // 120s cache window
 
 const educatorGreetingName = computed(() => authStore.user?.display_name?.trim() || 'Educator')
 
@@ -74,7 +76,7 @@ const resolveSnapshotSelection = (list) => {
   return list[0].code_id || list[0].id
 }
 
-const loadSnapshotData = async (codeId) => {
+const loadSnapshotData = async (codeId, force = false) => {
   if (!codeId || !authStore.isAuthenticated || !authStore.isEducator) {
     snapshotAnalytics.value = null
     isSnapshotLoading.value = false
@@ -82,11 +84,21 @@ const loadSnapshotData = async (codeId) => {
     return
   }
 
+  const cacheKey = `educator::analytics::classroom::code_id=${codeId}`
+  if (!force) {
+    const cached = cacheStore.get(cacheKey)
+    if (cached && !cached.isExpired) {
+      snapshotAnalytics.value = cached.data
+      isSnapshotLoading.value = false
+      snapshotError.value = ''
+      return
+    }
+  }
+
   const reqId = ++snapshotRequestId
   const reqSession = currentSessionEpoch
   isSnapshotLoading.value = true
   snapshotError.value = ''
-  snapshotAnalytics.value = null // Prevent older classroom data from displaying while loading
 
   try {
     const data = await fetchClassroomAnalytics(codeId)
@@ -98,6 +110,7 @@ const loadSnapshotData = async (codeId) => {
     ) {
       return
     }
+    cacheStore.set(cacheKey, data, SNAPSHOT_TTL)
     snapshotAnalytics.value = data
   } catch (err) {
     if (
@@ -107,6 +120,9 @@ const loadSnapshotData = async (codeId) => {
       !authStore.isEducator
     ) {
       return
+    }
+    if (err?.response?.status === 403 || err?.response?.status === 404) {
+      cacheStore.invalidateKey(cacheKey)
     }
     snapshotError.value = extractErrorMessage(
       err,
@@ -165,16 +181,16 @@ const formatScoreLabel = (mapName) => {
   return `${Math.round(val)} pts`
 }
 
-const loadDashboardData = async () => {
+const loadDashboardData = async ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isEducator) return
   const reqId = ++latestDashboardRequestId
   const reqSession = currentSessionEpoch
-  isLoading.value = !hasLoadedOnce.value
-  isRefreshing.value = hasLoadedOnce.value
+  isLoading.value = !hasLoadedOnce.value && !classroomStore.isFetched
+  isRefreshing.value = hasLoadedOnce.value || classroomStore.isFetched
   errorMessage.value = ''
 
   try {
-    const data = await fetchMyClassrooms()
+    const data = await classroomStore.fetchClassrooms(force)
     if (
       reqSession !== currentSessionEpoch ||
       reqId !== latestDashboardRequestId ||
@@ -193,8 +209,8 @@ const loadDashboardData = async () => {
       const nextCodeId = resolveSnapshotSelection(list)
       const isSwitching = nextCodeId !== selectedSnapshotCodeId.value
       selectedSnapshotCodeId.value = nextCodeId
-      if (isSwitching || !snapshotAnalytics.value) {
-        await loadSnapshotData(nextCodeId)
+      if (isSwitching || !snapshotAnalytics.value || force) {
+        await loadSnapshotData(nextCodeId, force)
       }
     } else {
       selectedSnapshotCodeId.value = ''
@@ -233,7 +249,7 @@ const handleClassroomCreated = (newClassroom) => {
   setTimeout(() => {
     successMessage.value = ''
   }, 4500)
-  loadDashboardData()
+  loadDashboardData({ force: true })
 }
 
 const handleViewStudents = (codeId) => {
@@ -292,7 +308,7 @@ watch(
       snapshotRequestId++
       resetDashboardState()
       authStore.ensureWebProfileLoaded().catch(() => {})
-      loadDashboardData()
+      loadDashboardData({ force: true })
     }
   },
 )

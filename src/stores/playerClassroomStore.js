@@ -184,6 +184,8 @@ export const usePlayerClassroomStore = defineStore('playerClassroom', () => {
   const partialJoinInfo = ref(null)
   const flashMessage = ref('')
   const loadedAccountKey = ref(null)
+  const lastFetchedAt = ref(null)
+  const MEMBERSHIP_TTL = 120000 // 120s
 
   let currentRequestId = 0
   let mutationVersion = 0
@@ -281,6 +283,7 @@ export const usePlayerClassroomStore = defineStore('playerClassroom', () => {
     joinSucceededRefreshFailed.value = false
     partialJoinInfo.value = null
     flashMessage.value = ''
+    lastFetchedAt.value = null
   }
 
   const reset = () => {
@@ -321,8 +324,12 @@ export const usePlayerClassroomStore = defineStore('playerClassroom', () => {
       return null
     }
 
+    const now = Date.now()
+    const isFresh = lastFetchedAt.value && now - lastFetchedAt.value < MEMBERSHIP_TTL
+
     if (
       !force &&
+      isFresh &&
       (status.value === 'enrolled' || status.value === 'unenrolled') &&
       loadedAccountKey.value === scopeKeyAtStart
     ) {
@@ -379,6 +386,7 @@ export const usePlayerClassroomStore = defineStore('playerClassroom', () => {
         const wasPostJoinRetry = joinSucceededRefreshFailed.value
         membership.value = validation.data
         status.value = 'enrolled'
+        lastFetchedAt.value = Date.now()
         error.value = ''
         joinSucceededRefreshFailed.value = false
         partialJoinInfo.value = null
@@ -402,6 +410,7 @@ export const usePlayerClassroomStore = defineStore('playerClassroom', () => {
         if (isNotEnrolledClassroom404(err) && !joinSucceededRefreshFailed.value) {
           membership.value = null
           status.value = 'unenrolled'
+          lastFetchedAt.value = Date.now()
           error.value = ''
           partialJoinInfo.value = null
           loadedAccountKey.value = currentKeyOnError

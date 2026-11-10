@@ -19,6 +19,8 @@ export const useClassroomStore = defineStore('classroom', () => {
   const isLoading = ref(false)
   const error = ref('')
   const isFetched = ref(false)
+  const lastFetchedAt = ref(null)
+  const CLASSROOMS_TTL = 120000 // 120s
 
   // Classroom creation draft & missing display_name recovery state
   const createDraftName = ref('')
@@ -60,8 +62,10 @@ export const useClassroomStore = defineStore('classroom', () => {
    * - Supports deliberate force refresh via `force = true`.
    */
   const fetchClassrooms = async (force = false) => {
-    // 1. Reuse existing completed result (even if empty []) when not forcing
-    if (isFetched.value && !force) {
+    // 1. Reuse existing fresh result when not forcing
+    const now = Date.now()
+    const isFresh = isFetched.value && lastFetchedAt.value && now - lastFetchedAt.value < CLASSROOMS_TTL
+    if (isFresh && !force) {
       return classrooms.value
     }
 
@@ -85,6 +89,7 @@ export const useClassroomStore = defineStore('classroom', () => {
         const list = Array.isArray(data) ? data : []
         classrooms.value = list
         isFetched.value = true
+        lastFetchedAt.value = Date.now()
         error.value = ''
         return list
       } catch (err) {
@@ -216,6 +221,7 @@ export const useClassroomStore = defineStore('classroom', () => {
     isLoading.value = false
     error.value = ''
     isFetched.value = false
+    lastFetchedAt.value = null
     clearCreateDraft()
   }
 
