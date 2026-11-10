@@ -32,6 +32,15 @@ const backendEntry = computed(() => {
 
 const isUnlocked = computed(() => Boolean(backendEntry.value?.is_unlocked))
 const isMapContextImage = computed(() => lesson.value?.screenshot?.kind === 'Map context')
+const isPracticeExample = computed(() =>
+  Boolean(lesson.value?.isPracticeExample || !lesson.value?.screenshot?.sourcePdf),
+)
+const hasSplitActions = computed(() =>
+  Boolean(
+    lesson.value?.recommendedAction?.inGameAction &&
+      lesson.value?.recommendedAction?.realWorldAction,
+  ),
+)
 
 function formatUnlockDate(isoString) {
   if (!isoString) return null
@@ -350,7 +359,9 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
         <!-- Section 1: Game Encounter + Integrated Visual Evidence -->
         <section class="lesson-section encounter-section" aria-labelledby="section-encounter">
           <div class="section-header">
-            <span class="section-kicker">01 · Game encounter</span>
+            <span class="section-kicker">
+              {{ isPracticeExample ? '01 · Practice example' : '01 · Game encounter' }}
+            </span>
             <h2 id="section-encounter" class="section-title">
               {{ lesson.gameScenario.setting }}
             </h2>
@@ -430,7 +441,9 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
 
           <!-- Warning Signs & Inert Suspicious Examples -->
           <div class="warning-signs-box">
-            <h3 class="subsection-title">Warning signs in this encounter</h3>
+            <h3 class="subsection-title">
+              {{ isPracticeExample ? 'What to notice in this example' : 'Warning signs in this encounter' }}
+            </h3>
             <ul class="warning-list">
               <li
                 v-for="(sign, index) in lesson.gameScenario.warningSigns"
@@ -446,7 +459,7 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
               v-if="lesson.gameScenario.suspiciousExamples?.length"
               class="inert-examples"
             >
-              <span class="inert-label">Suspicious indicators (inert text):</span>
+              <span class="inert-label">Examples to watch for</span>
               <div class="inert-code-list">
                 <code
                   v-for="(example, idx) in lesson.gameScenario.suspiciousExamples"
@@ -465,7 +478,7 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
           <div class="section-header">
             <span class="section-kicker">02 · Recommended response</span>
             <h2 id="section-action" class="section-title">
-              How to respond in the game and in real life
+              How to respond
             </h2>
           </div>
 
@@ -487,19 +500,25 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                   <polyline points="22 4 12 14.01 9 11.01"></polyline>
                 </svg>
-                <h3 class="action-subheading">In-game &amp; real-world action</h3>
+                <h3 class="action-subheading">What to do</h3>
               </div>
-              <p class="action-body">{{ lesson.recommendedAction.whatToDo }}</p>
+              <p
+                v-if="!hasSplitActions && lesson.recommendedAction.whatToDo"
+                class="action-body"
+              >
+                {{ lesson.recommendedAction.whatToDo }}
+              </p>
               <dl
                 v-if="lesson.recommendedAction.inGameAction || lesson.recommendedAction.realWorldAction"
                 class="action-split-list"
+                :class="{ 'is-standalone': hasSplitActions }"
               >
                 <div v-if="lesson.recommendedAction.inGameAction" class="action-split-row">
                   <dt class="action-split-term">In CyberMorph</dt>
                   <dd class="action-split-def">{{ lesson.recommendedAction.inGameAction }}</dd>
                 </div>
                 <div v-if="lesson.recommendedAction.realWorldAction" class="action-split-row">
-                  <dt class="action-split-term">Real-world safety</dt>
+                  <dt class="action-split-term">In real life</dt>
                   <dd class="action-split-def">{{ lesson.recommendedAction.realWorldAction }}</dd>
                 </div>
               </dl>
@@ -531,11 +550,15 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
         </section>
 
         <!-- Section 3: Prevention Checklist -->
-        <section class="lesson-section" aria-labelledby="section-prevention">
+        <section
+          v-if="lesson.preventionTips?.length"
+          class="lesson-section"
+          aria-labelledby="section-prevention"
+        >
           <div class="section-header">
             <span class="section-kicker">03 · Everyday defense</span>
             <h2 id="section-prevention" class="section-title">
-              Real-world prevention checklist
+              Prevention checklist
             </h2>
           </div>
 
@@ -552,7 +575,11 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
         </section>
 
         <!-- Section 4: Key Takeaway Callout -->
-        <aside class="takeaway-card" aria-label="Key takeaway">
+        <aside
+          v-if="lesson.keyTakeaway"
+          class="takeaway-card"
+          aria-label="Key takeaway"
+        >
           <div class="takeaway-badge">
             <svg
               width="16"
@@ -1324,6 +1351,12 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
   gap: 0.55rem;
 }
 
+.action-split-list.is-standalone {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 .action-split-row {
   display: flex;
   flex-direction: column;
@@ -1331,10 +1364,8 @@ watch([currentSlug, () => threatStore.status, isUnlocked], async ([newSlug], [ol
 }
 
 .action-split-term {
-  font-size: 0.74rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--color-text-main);
 }
 

@@ -4,6 +4,7 @@ import smishingHomeGcashImg from '@/assets/threat-lessons/smishing-home-gcash.we
 import vishingOfficeCallImg from '@/assets/threat-lessons/vishing-office-call.webp'
 import socialEngineeringOfficeHelpdeskImg from '@/assets/threat-lessons/social-engineering-office-helpdesk.webp'
 import credentialTheftCafeHelpdeskImg from '@/assets/threat-lessons/credential-theft-cafe-helpdesk.webp'
+import publicWifiParkCoworkImg from '@/assets/threat-lessons/public-wifi-park-cowork.jpg'
 import malwareParkModZipImg from '@/assets/threat-lessons/malware-park-mod-zip.webp'
 
 /**
@@ -51,19 +52,19 @@ export const THREAT_LESSON_LIST = [
       inGameAction:
         'Select Block / Report after checking the sender address and the link preview bar.',
       realWorldAction:
-        'Do not click the verification button or type your password on the linked page. Check account activity by opening a new browser tab and signing in directly on the official service website.',
+        'Do not click the verification button. Open a new browser tab and sign in on the official website directly to check your account.',
       whatToDo:
-        'In the game, select Block / Report. In real life, never follow login links inside unexpected security alerts; open a new browser tab and visit the official website or app directly to check your account status.',
+        'Select Block / Report in the game, and check account alerts by visiting the official website in a new browser tab.',
       whyItMatters:
-        'Lookalike domains and third-party verification pages exist to capture your username, password, and verification codes the moment you submit the form.',
+        'Lookalike domains and fake verification pages capture your username, password, and security codes the moment you submit the form.',
     },
     preventionTips: [
-      'Check the exact domain after the @ symbol and in the link preview bar before trusting a security alert.',
-      'Watch for hyphenated brand names such as security-google.com or unrelated domains such as account-verification-service.net.',
-      'Review recent sign-in activity directly inside your official account settings rather than through email buttons.',
+      'Bookmark your email, banking, and school login pages so you do not rely on links inside messages.',
+      'Use a password manager—it will not auto-fill your password on a lookalike domain.',
+      'Turn on multi-factor authentication (MFA) with an authenticator app to protect your account even if a password is exposed.',
     ],
     keyTakeaway:
-      'Always verify the sender domain and actual link destination before acting on an urgent account alert.',
+      'Verify the sender domain and link preview before acting on any urgent account alert.',
   },
   {
     slug: 'smishing',
@@ -71,15 +72,15 @@ export const THREAT_LESSON_LIST = [
     code: '02',
     mapName: 'Home',
     summary:
-      'Smishing (SMS phishing) uses text messages that claim your wallet, bank, or delivery account is restricted so you will tap a fraudulent verification link on your phone.',
+      'Smishing (SMS phishing) uses text messages claiming your wallet, bank, or delivery account is restricted so you will tap a fake verification link on your phone.',
     gameScenario: {
       setting: 'Home — Fake GCash account-blocked text message',
       description:
         'While checking the phone in the Home map, you receive a text message labeled GCash (0917-123-4567). It claims your account was temporarily blocked due to unusual login attempts and tells you to re-verify within 24 hours at an external web link to avoid permanent deactivation.',
       warningSigns: [
-        'Regular mobile number: the alert arrives from a standard 11-digit number (0917-123-4567) while pretending to be an official wallet notice.',
+        'Regular mobile number: the alert arrives from a standard 11-digit number (0917-123-4567) instead of an official sender.',
         'External verification domain: the message and link bar direct you to https://gcash-verification-portal.net.',
-        '24-hour permanent deactivation threat intended to make you tap the link instead of checking the official app.',
+        '24-hour deactivation threat meant to rush you into tapping the link instead of checking the official app.',
       ],
       suspiciousExamples: [
         '0917-123-4567',
@@ -101,19 +102,19 @@ export const THREAT_LESSON_LIST = [
       inGameAction:
         'Select Block / Report instead of accepting the text message.',
       realWorldAction:
-        'Do not tap links inside SMS account alerts. Close the text message and open the official GCash or banking app from your home screen to check your real account status.',
+        'Do not tap links inside SMS account alerts. Close the message and open the official GCash or banking app from your home screen.',
       whatToDo:
-        'In the game, select Block / Report. In real life, never open account-verification links sent by SMS; check notifications inside the official mobile app instead.',
+        'Select Block / Report in the game, and check account alerts inside the official mobile app rather than through SMS links.',
       whyItMatters:
-        'HTTPS only means the connection to that domain is encrypted—it does not mean the domain belongs to GCash. Entering your MPIN or one-time password on a fake portal hands full wallet access to the attacker.',
+        'HTTPS only means the connection is encrypted—it does not mean the site belongs to GCash. Typing your MPIN or one-time code on a fake site gives attackers full wallet access.',
     },
     preventionTips: [
-      'Treat any SMS that includes a web link for wallet or bank re-verification as fraudulent.',
-      'Remember that a padlock or https:// on a domain like gcash-verification-portal.net does not prove the site is legitimate.',
-      'Never enter your MPIN, password, or six-digit OTP on a web page reached from a text message.',
+      'Never enter your MPIN, password, or six-digit OTP on a web page opened from a text message.',
+      'Block and report spam numbers in your phone’s messaging app.',
+      'Check wallet or bank notices only inside the official app from your device home screen.',
     ],
     keyTakeaway:
-      'Legitimate wallet and banking services do not ask you to unlock your account through a text-message link.',
+      'Wallet and banking services do not ask you to unlock your account through a text-message link.',
   },
   {
     slug: 'vishing',
@@ -121,15 +122,15 @@ export const THREAT_LESSON_LIST = [
     code: '03',
     mapName: 'Office',
     summary:
-      'Vishing (voice phishing) uses live or recorded phone calls where an impostor claims to be from IT security, a bank, or a courier to pressure you into approving a sign-in or reading out a code.',
+      'Vishing (voice phishing) uses phone calls where an impostor claims to be from IT security, a bank, or a courier to pressure you into approving a sign-in or reading out a code.',
     gameScenario: {
       setting: 'Office — Impostor IT security phone call requesting sign-in approval',
       description:
         'In the Office map, an incoming call from UNKNOWN (Hidden number) claims to be from Reyes Logistics IT. The caller says someone tried to sign in to your account from abroad, claims to be resetting your account right now, and asks you to tap Approve on a sign-in prompt appearing on your phone.',
       warningSigns: [
         'Unverified caller identity: the caller ID shows UNKNOWN and Hidden number while claiming to be Reyes Logistics IT.',
-        'Unsolicited MFA approval request: the "They ask for" panel highlights "Tap Approve on a sign-in prompt you did not start."',
-        'False urgency: the caller uses a foreign sign-in story so you will approve the prompt before realizing the caller triggered that sign-in attempt.',
+        'Unexpected sign-in approval request: the "They ask for" panel highlights "Tap Approve on a sign-in prompt you did not start."',
+        'False urgency: the caller uses a foreign sign-in story so you approve the prompt before realizing the caller triggered it.',
       ],
       suspiciousExamples: [
         'UNKNOWN (Hidden number) — SAYS THEY ARE FROM Reyes Logistics IT',
@@ -151,19 +152,19 @@ export const THREAT_LESSON_LIST = [
       inGameAction:
         'Select Hang up / Report to end the call and reject the request.',
       realWorldAction:
-        'Deny any sign-in notification you did not initiate yourself, hang up immediately, and contact your IT service desk through an internal directory number to report the attempt.',
+        'Deny any sign-in notification you did not start, hang up, and call your IT desk back using an official internal directory number.',
       whatToDo:
-        'In the game, select Hang up / Report. In real life, never approve a multi-factor authentication prompt triggered during an incoming phone call; deny the prompt, hang up, and change your password if prompts continue.',
+        'Select Hang up / Report in the game, and deny any sign-in prompt you did not start yourself.',
       whyItMatters:
-        'When an attacker already has your password, they trigger a sign-in and call you so you will tap Approve on your phone—granting them immediate access to your work account.',
+        'When an attacker already has your password, they trigger a sign-in and call you so you will tap Approve—giving them immediate access to your account.',
     },
     preventionTips: [
       'Only approve a sign-in prompt when you personally just signed in on your own device.',
-      'Do not trust spoken claims of identity or caller ID labels on unexpected support calls.',
-      'Verify urgent IT requests by hanging up and calling back on a known internal number.',
+      'Change your password right away if you receive unexpected sign-in approval prompts.',
+      'Never read out one-time verification codes to anyone over the phone.',
     ],
     keyTakeaway:
-      'Never approve a sign-in prompt or share a verification code because a caller tells you they are fixing your account.',
+      'Never approve a sign-in prompt or share a code because a caller says they are fixing your account.',
   },
   {
     slug: 'social-engineering',
@@ -171,15 +172,15 @@ export const THREAT_LESSON_LIST = [
     code: '04',
     mapName: 'Office',
     summary:
-      'Social engineering manipulates trust, authority, or helpfulness under a believable pretext—such as a routine IT upgrade—so you willingly hand over access or sensitive information.',
+      'Social engineering uses authority, urgency, or a helpful excuse—such as a routine IT upgrade—so you willingly hand over passwords or sensitive information.',
     gameScenario: {
       setting: 'Office — IT Helpdesk laptop upgrade pretext requesting credentials',
       description:
         'In the Office map, an email from IT Helpdesk (<helpdesk@reyeslogistics.ph>) with the subject "Laptop security upgrade tonight: action needed" tells Juan that all laptops are being upgraded tonight and asks him to reply with his username and current password before 6 PM so his profile and files can be backed up.',
       warningSigns: [
-        'Direct request for your current password: the message asks you to reply with your username and current password in plain text.',
-        'Authority and helpfulness pretext: the sender poses as internal IT Helpdesk performing a routine laptop security upgrade and profile backup.',
-        'End-of-day deadline ("before 6 PM" / "avoid losing your files") designed to make you comply without checking IT policy.',
+        'Direct request for your password: the message asks you to reply with your username and current password in plain text.',
+        'Routine maintenance excuse: the sender poses as internal IT Helpdesk performing an overnight laptop upgrade and backup.',
+        'End-of-day deadline ("before 6 PM" / "avoid losing your files") designed to make you reply without checking IT policy.',
       ],
       suspiciousExamples: [
         'Laptop security upgrade tonight: action needed',
@@ -199,21 +200,21 @@ export const THREAT_LESSON_LIST = [
     },
     recommendedAction: {
       inGameAction:
-        'Select Block / Report to reject the credential request.',
+        'Select Block / Report to reject the password request.',
       realWorldAction:
-        'Never send your password, PIN, or verification code by email or chat—even to someone claiming to be internal IT support. Confirm maintenance announcements through official internal channels.',
+        'Never send your password, PIN, or verification code by email or chat. Confirm unusual maintenance notices with IT on a separate official channel.',
       whatToDo:
-        'In the game, select Block / Report. In real life, refuse any request for your password or PIN and report the message to your security or helpdesk team.',
+        'Select Block / Report in the game, and refuse any email or chat request asking for your password.',
       whyItMatters:
-        'Real IT administrators have management tools to deploy updates and backups without ever knowing or asking for a user’s password.',
+        'Real IT administrators use management tools to run updates and backups without ever needing or asking for your password.',
     },
     preventionTips: [
-      'Remember that legitimate IT staff will never ask for your password, PIN, or MFA code to run updates or back up files.',
-      'Evaluate what a message is asking you to hand over, even if the sender address or internal branding looks familiar.',
-      'Confirm unusual maintenance requests with your supervisor or IT team on a separate, verified channel.',
+      'Focus on what a message asks you to hand over, even when the sender name looks internal.',
+      'Pause when a message uses a tight deadline or fear of losing files to rush you.',
+      'Report internal-looking password requests so IT can check for compromised colleague accounts.',
     ],
     keyTakeaway:
-      'No legitimate IT upgrade or backup requires you to reply with your password.',
+      'No legitimate IT upgrade or backup ever requires you to reply with your password.',
   },
   {
     slug: 'credential-theft',
@@ -221,15 +222,15 @@ export const THREAT_LESSON_LIST = [
     code: '05',
     mapName: 'Internet Cafe',
     summary:
-      'Credential theft targets your login username and password using fake expiration warnings, spoofed webmail portals, or shared-terminal traps so an attacker can take over your accounts.',
+      'Credential theft targets your username and password using fake expiration warnings, spoofed webmail pages, or shared-computer traps to take over your accounts.',
     gameScenario: {
       setting: 'Internet Cafe — Fake School IT Helpdesk mailbox-full password prompt',
       description:
-        'At the Internet Cafe map, an inbox message from School IT Helpdesk (<it.helpdesk.support@gmail.com>) warns "ATTENTION: Mailbox 98% FULL, password expires TODAY" and threatens that your account will be deleted and your emails lost unless you click KEEP MY ACCOUNT and enter your current password at http://school-mail-upgrade.work/webmail.',
+        'At the Internet Cafe map, an inbox message from School IT Helpdesk (<it.helpdesk.support@gmail.com>) warns "ATTENTION: Mailbox 98% FULL, password expires TODAY" and threatens that your account will be deleted unless you click KEEP MY ACCOUNT and enter your current password at http://school-mail-upgrade.work/webmail.',
       warningSigns: [
-        'Free webmail sender address: a message claiming to come from School IT Helpdesk is sent from <it.helpdesk.support@gmail.com> instead of an official school domain.',
-        'External credential-harvesting URL: the KEEP MY ACCOUNT button leads to http://school-mail-upgrade.work/webmail over unencrypted HTTP.',
-        'Combined quota and deletion scare ("Mailbox 98% FULL, password expires TODAY") pressuring you to enter your current password immediately.',
+        'Free webmail sender address: a notice claiming to come from School IT Helpdesk is sent from <it.helpdesk.support@gmail.com> instead of an official school domain.',
+        'Unencrypted external URL: the KEEP MY ACCOUNT button leads to http://school-mail-upgrade.work/webmail.',
+        'Deletion scare ("Mailbox 98% FULL, password expires TODAY") pressuring you to type your current password right away.',
       ],
       suspiciousExamples: [
         'it.helpdesk.support@gmail.com',
@@ -251,19 +252,19 @@ export const THREAT_LESSON_LIST = [
       inGameAction:
         'Select Block / Report after spotting the Gmail sender and fake webmail URL.',
       realWorldAction:
-        'Do not enter your school or work password on an external link. Manage your password only through your institution’s official portal, and avoid signing into primary accounts on shared cafe computers.',
+        'Do not enter your school or work password on an external link. Change passwords only inside your school’s official portal, and sign out completely after using a shared computer.',
       whatToDo:
-        'In the game, select Block / Report. In real life, never type your password into a page linked from a mailbox-full warning, and always sign out and clear sessions when using shared computers.',
+        'Select Block / Report in the game, and never enter school or work passwords on external links or save them on shared computers.',
       whyItMatters:
-        'Entering your current password on a harvesting page gives attackers direct access to your school email, linked cloud storage, and password-reset messages for other services.',
+        'Entering your password on a fake webmail page gives attackers access to your school email, cloud files, and password-reset links for other accounts.',
     },
     preventionTips: [
-      'Check whether an institutional notice actually comes from your school’s official domain rather than a free @gmail.com or @yahoo.com address.',
-      'Inspect the full domain before entering credentials—domains ending in .work, .top, or .xyz are not school webmail portals.',
-      'Use unique passphrases for every account and enable multi-factor authentication so a stolen password alone cannot unlock your account.',
+      'Never let a shared or internet cafe browser save your passwords, and use a private browsing window when possible.',
+      'Use a unique passphrase for every account so one stolen password cannot unlock your other accounts.',
+      'Check that school notices come from your school’s official domain rather than @gmail.com or .work domains.',
     ],
     keyTakeaway:
-      'Schools and organizations do not use free Gmail addresses or external HTTP links to collect your current password.',
+      'Schools and organizations do not use free Gmail addresses or external HTTP links to collect your password.',
   },
   {
     slug: 'public-wi-fi-attack',
@@ -271,49 +272,49 @@ export const THREAT_LESSON_LIST = [
     code: '06',
     mapName: 'Public Park',
     summary:
-      'Public Wi-Fi attacks occur when an untrusted or lookalike hotspot in a shared space intercepts unencrypted traffic or redirects users to spoofed login portals.',
+      'Public Wi-Fi attacks target unencrypted or rogue hotspots in shared spaces—such as open guest networks with no password—to intercept network traffic, harvest credentials, or redirect users to malicious pages.',
     gameScenario: {
-      setting: 'Public Park — Untrusted open hotspot and network-login risks',
+      setting: 'Public Park — Available networks in a coworking space',
       description:
-        'In the Public Park map, visitors connect portable devices while away from home or office networks. Connecting to an open or lookalike park hotspot without verifying the network allows an attacker on the same wireless connection to observe unencrypted HTTP traffic or present fake captive-portal login screens.',
+        'In the Public Park map (Sector 04), you need to connect to the internet in a shared coworking space. The Available Networks prompt asks "Members log in with their member account. Which network is yours?" and displays three choices: Cowork_Members_Guest (Open: no password), Cowork_Members (WPA2-Enterprise: asks for your member account), and Cowork-Visitors (WPA2: a shared password on the wall).',
       warningSigns: [
-        'Open wireless networks that require no Wi-Fi password or use generic names like Free_Park_WiFi.',
-        'Captive-portal pages that ask for your email, social media, or banking password just to get internet access.',
-        'Browser certificate warnings or sites unexpectedly dropping from https:// to http:// while on a public hotspot.',
+        'Unencrypted open network: Cowork_Members_Guest requires no password, leaving communications unencrypted and exposed to rogue hotspot interception.',
+        'Mismatched security level: the prompt specifies members must log in with their member account, which requires the WPA2-Enterprise network rather than an open guest network.',
+        'Deceptive lookalike network names: rogue hotspots often copy legitimate venue names (such as adding "_Guest" or "_Free") to trick users into connecting without encryption.',
       ],
       suspiciousExamples: [
-        'Free_Park_WiFi_NoPassword',
-        'http://park-wifi-login.local/verify-account',
+        'Cowork_Members_Guest (Open: no password)',
+        'Open Wi-Fi with no encryption',
       ],
     },
     screenshot: {
-      image: publicParkMapImg,
-      kind: 'Map context',
-      mapLabel: 'Public Park map (Map context)',
-      clue: 'Map context showing the Public Park setting; this overview illustrates the location rather than a live Wi-Fi attack screen',
-      alt: 'Map context overview of the Public Park environment with benches, pathways, and a fountain where players encounter mobile and public network scenarios.',
+      image: publicWifiParkCoworkImg,
+      kind: 'Scenario screenshot',
+      mapLabel: 'Public Park map',
+      clue: 'Open network Cowork_Members_Guest ("Open: no password") vs authenticated Cowork_Members ("WPA2-Enterprise: asks for your member account")',
+      alt: 'Public Park gameplay scenario showing available Wi-Fi networks in a coworking space: an open Cowork_Members_Guest network, an authenticated Cowork_Members enterprise network, and a Cowork-Visitors network with a Continue button.',
       caption:
-        'Public Park map (Map context) — Environment overview for the Public Park stage. Shown as map context rather than a specific network-interception screenshot.',
-      sourcePdf: null,
+        'Public Park (Sector 04) — Inspect the Available Networks list: compare the unencrypted open network (Cowork_Members_Guest) with the official authenticated enterprise network (Cowork_Members).',
+      sourcePdf: 'CyberMorph Gameplay — Public Park (Sector 04)',
       sourcePage: null,
     },
     recommendedAction: {
       inGameAction:
-        'Inspect sender domains, HTTPS indicators, and login requests carefully during Public Park encounters, and select Block / Report on spoofed prompts.',
+        'Select Cowork_Members (WPA2-Enterprise: asks for your member account) and click Continue instead of joining the unencrypted open guest network.',
       realWorldAction:
-        'Avoid logging into banking, wallet, or school accounts over open public Wi-Fi; switch to mobile data or a trusted VPN, and disconnect immediately if a hotspot shows a certificate warning.',
+        'Avoid joining open, unencrypted Wi-Fi in public spaces. Use official enterprise or password-protected networks, and switch to mobile data or a trusted VPN if you must handle sensitive data.',
       whatToDo:
-        'In the game, verify URLs and reject suspicious login prompts in the Public Park stage. In real life, use mobile data or a trusted VPN for sensitive accounts and turn off automatic Wi-Fi joining.',
+        'Select the authenticated WPA2-Enterprise network in the game, and avoid unencrypted open hotspots in real life by using mobile data or a trusted VPN.',
       whyItMatters:
-        'Anyone running a rogue hotspot can inspect unencrypted traffic and redirect domains to fake login pages.',
+        'Open Wi-Fi transmits data without encryption, allowing attackers on the same network to intercept unencrypted traffic, spoof DNS, or push fake login prompts.',
     },
     preventionTips: [
-      'Disable automatic connection to open Wi-Fi networks in your phone and laptop settings.',
-      'Use your mobile data connection instead of public Wi-Fi when checking financial or work accounts.',
-      'Never enter social media or email passwords into a public Wi-Fi splash page.',
+      'Turn off automatic connection to open Wi-Fi networks in your phone and computer settings.',
+      'Verify the official network name and security requirements with venue staff before connecting.',
+      'Use mobile data or a trusted VPN whenever you connect in public places or transit hubs.',
     ],
     keyTakeaway:
-      'Treat open public Wi-Fi networks as untrusted and keep sensitive sign-ins on mobile data or a trusted encrypted connection.',
+      'Never connect to open, password-free networks in shared spaces when an authenticated network or mobile data is available.',
   },
   {
     slug: 'malware-infection',
@@ -321,15 +322,15 @@ export const THREAT_LESSON_LIST = [
     code: '07',
     mapName: 'Public Park',
     summary:
-      'Malware often spreads through unofficial downloads—such as "unlocked" game mods, cracked software, or unexpected attachments—shared in group chats and third-party file hosts.',
+      'Malware often spreads through unofficial downloads—such as "unlocked" game mods, cracked installers, or unknown archives—shared in group chats and third-party file hosts.',
     gameScenario: {
       setting: 'Public Park — Untrusted game-mod ZIP download from a gaming group chat',
       description:
-        'In the Public Park map, the Downloads window shows SuperRacer_Mod_Unlocked.zip (212 MB, Publisher: Unknown) downloaded from https://modshare-ph.net/dl/superracer. The "What happened" note explains that a friend shared the link in a gaming group chat claiming it unlocks every car in the game for free. While the screenshot shows a download prompt rather than an active infection, keeping and opening an unverified archive from a third-party mod site risks running hidden malware.',
+        'In the Public Park map, the Downloads window shows SuperRacer_Mod_Unlocked.zip (212 MB, Publisher: Unknown) downloaded from https://modshare-ph.net/dl/superracer. The "What happened" note explains that a friend shared the link in a gaming group chat claiming it unlocks every car in the game for free.',
       warningSigns: [
-        'Unofficial third-party download host: the file comes from https://modshare-ph.net/dl/superracer rather than an official game store.',
-        'Unverified archive and publisher: SuperRacer_Mod_Unlocked.zip (212 MB) lists "Publisher: Unknown".',
-        '"Too good to be true" lure: a chat link promising to unlock every paid car for free is a common way to bundle trojans or password-stealing scripts inside a ZIP file.',
+        'Unofficial download host: the file comes from https://modshare-ph.net/dl/superracer rather than an official game store.',
+        'Unknown publisher: SuperRacer_Mod_Unlocked.zip (212 MB) lists "Publisher: Unknown".',
+        '"Too good to be true" lure: a chat link promising to unlock paid items for free often hides spyware or password-stealing scripts inside a ZIP file.',
       ],
       suspiciousExamples: [
         'https://modshare-ph.net/dl/superracer',
@@ -343,7 +344,7 @@ export const THREAT_LESSON_LIST = [
       clue: 'URL https://modshare-ph.net/dl/superracer, file SuperRacer_Mod_Unlocked.zip, and "Publisher: Unknown"',
       alt: 'Public Park map malware risk scenario showing a Downloads window for SuperRacer_Mod_Unlocked.zip (212 MB, Publisher: Unknown) from https://modshare-ph.net/dl/superracer shared in a gaming group chat, with Delete file and Keep and open buttons.',
       caption:
-        'Public Park map — Inspect the third-party download URL (https://modshare-ph.net/dl/superracer), the archive name (SuperRacer_Mod_Unlocked.zip), and the "Publisher: Unknown" label before deciding between Delete file and Keep and open.',
+        'Public Park map — Inspect the download URL (https://modshare-ph.net/dl/superracer), the archive name (SuperRacer_Mod_Unlocked.zip), and "Publisher: Unknown" before choosing Delete file.',
       sourcePdf: 'Public-Park-Scenario-Gameplay.pdf',
       sourcePage: 19,
     },
@@ -351,69 +352,70 @@ export const THREAT_LESSON_LIST = [
       inGameAction:
         'Select Delete file instead of Keep and open.',
       realWorldAction:
-        'Delete unverified mod archives or installers downloaded from chat links, and only install games, updates, or add-ons from verified official stores.',
+        'Delete unverified mod archives or installers from chat links, and install games or add-ons only from official stores.',
       whatToDo:
-        'In the game, select Delete file. In real life, do not extract or run "unlocked" mods or cracked archives even when shared by a friend in a group chat, as their account may be compromised or they may not know what is inside the ZIP.',
+        'Select Delete file in the game, and never extract or run unverified game mods from chat links.',
       whyItMatters:
-        'A screenshot of a ZIP file does not by itself prove malware is running, but opening executable files or scripts packed inside untrusted game mods is one of the most common ways spyware and info-stealers infect personal devices.',
+        'Opening scripts or installers packed inside untrusted mod archives is a common way spyware and password stealers infect phones and computers.',
     },
     preventionTips: [
-      'Download games, apps, and updates only from official stores and verified publishers.',
-      'Be skeptical of "unlocked" mods, cheat tools, or free-currency archives shared in gaming group chats.',
-      'Keep your operating system and built-in security scanner active so suspicious archives are flagged before execution.',
+      'Keep your operating system and built-in security scanner active so suspicious downloads are blocked before they run.',
+      'Do not trust a download link just because it appears in a friend’s group chat—their account may be compromised.',
+      'Never turn off your antivirus or device security settings to make a game mod or cracked installer work.',
     ],
     keyTakeaway:
-      'Delete untrusted mod archives and unknown downloads before opening them—even when the link was shared in a friend’s group chat.',
+      'Delete untrusted mod archives and unknown downloads before opening them, even when shared in a group chat.',
   },
   {
     slug: 'ransomware',
     threatName: 'Ransomware',
     code: '08',
     mapName: 'Public Park',
+    isPracticeExample: true,
     summary:
-      'Ransomware is malicious software that locks or encrypts your files and demands payment for a decryption key, often arriving through macro-enabled attachments or untrusted downloads.',
+      'Ransomware is malicious software that locks or encrypts your files and demands payment to unlock them, often arriving through unexpected attachments or downloads.',
     gameScenario: {
-      setting: 'Public Park — High-risk attachments and file-encryption threats',
+      setting: 'Public Park — Practice example: Unexpected attachment asking to enable macros',
       description:
-        'As you progress through advanced scenarios in the Public Park stage, you encounter suspicious file downloads and password-protected macro spreadsheets (such as fake payroll `.xlsm` files). Allowing untrusted attachments or archives to run is how ransomware gains the access needed to encrypt personal and shared documents.',
+        'Practice example: You receive an urgent message with an unexpected archive or document attachment that tells you to enable macros or run a file to view its contents. Allowing an untrusted attachment or download to run lets ransomware lock your files and demand payment.',
       warningSigns: [
-        'Unexpected attachments using macro-enabled or executable formats (such as .xlsm, .zip, or .exe) accompanied by a password in the email body.',
-        'Programs that suddenly rename files with unfamiliar extensions or display a ransom note demanding payment.',
-        'Urgent instructions to enable macros or bypass security warnings to view a document.',
+        'Unexpected attachments or downloads in executable or macro-enabled formats (such as .exe, .zip, or .xlsm).',
+        'Instructions asking you to enable macros, run a script, or bypass security warnings to view a document.',
+        'Files suddenly renamed with unfamiliar extensions or a note demanding payment to unlock them.',
       ],
       suspiciousExamples: [
-        'November_Payroll_2024.xlsm (Password to open: company2024)',
-        'YOUR_FILES_ARE_ENCRYPTED.txt',
+        'invoice_macro_attachment.xlsm',
+        'unverified_archive.zip',
       ],
     },
     screenshot: {
       image: publicParkMapImg,
       kind: 'Map context',
-      mapLabel: 'Public Park map (Map context)',
-      clue: 'Map context showing the Public Park setting; this overview illustrates the location rather than a confirmed ransomware screen',
-      alt: 'Map context overview of the Public Park environment where players complete advanced threat-detection scenarios.',
+      mapLabel: 'Public Park map',
+      clue: null,
+      alt: 'Overview of the Public Park map where players complete advanced threat-detection lessons.',
       caption:
-        'Public Park map (Map context) — Environment overview for the Public Park stage. Shown as map context rather than a confirmed ransomware lock screen.',
+        'Public Park overview showing the setting for file-safety lessons.',
       sourcePdf: null,
       sourcePage: null,
     },
     recommendedAction: {
       inGameAction:
-        'Select Block / Report or Delete file when confronted with suspicious macro spreadsheets or unverified downloads.',
+        'Inspect the sender, file type, and source in the prompt, and reject or delete unexpected attachments and unverified downloads before they run.',
       realWorldAction:
-        'Never open unexpected macro-enabled attachments. If ransomware ever strikes a device, disconnect it from Wi-Fi and wired networks immediately, do not pay the ransom, and restore files from a clean offline backup.',
+        'Never open unexpected attachments or enable macros. If ransomware locks a device, disconnect it from Wi-Fi and wired networks immediately, do not pay, and restore files from an offline backup.',
       whatToDo:
-        'In the game, block or delete suspicious attachments and downloads before they can run. In real life, isolate an affected device from the network right away, report the incident, and recover data from offline backups.',
+        'Reject suspicious attachments before they run, disconnect affected devices from the network, and restore from offline backups.',
       whyItMatters:
-        'Stopping a malicious attachment or download before execution prevents encryption altogether, and isolating an infected device stops ransomware from spreading to shared folders.',
+        'Blocking a suspicious file before it runs prevents encryption, and disconnecting an infected device stops ransomware from spreading to shared folders.',
     },
     preventionTips: [
-      'Maintain regular backups on an external drive or cloud version history that stays disconnected during normal use.',
-      'Never enable macros in documents received from unverified or unexpected emails.',
-      'Keep your operating system and software patched so ransomware cannot exploit known vulnerabilities.',
+      'Keep regular backups on an external drive or cloud version history that stays disconnected during daily use.',
+      'Keep your operating system and apps updated so ransomware cannot exploit old security bugs.',
+      'Turn on file extensions on your computer so disguised programs (such as .pdf.exe) are easy to spot.',
     ],
     keyTakeaway:
-      'Reject suspicious attachments before they run, and keep offline backups so you never have to rely on an attacker to recover your files.',
+      'Never run unexpected attachments or macros, and keep offline backups so you can recover files without paying a ransom.',
   },
 ]
 
