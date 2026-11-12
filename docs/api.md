@@ -667,6 +667,18 @@ Per `API_GUIDE.md`, the following endpoints are **not yet built** on the backend
 - Modifying or deleting user accounts (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
 - Deleted-records inspection and restore screens (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
 - Uploading avatars or self-service password reset
+- Post-test assessment submission, scoring, and admin results endpoints (see proposed capabilities below)
+
+### Proposed Future Backend Capabilities for Admin Post-Test Results (Not Yet Implemented)
+To replace the frontend development-only preview in `AdminPostTestResultsView.vue` with real persisted data, the FastAPI backend will need:
+1. **Persisted Post-Test Attempts**: Server-side storage and grading of submitted player post-test attempts (`attempt_id`, `player_id`/`profile_id`, `score` out of 30, `total_questions`, `percentage`, `passed` where `score >= 23`, `submitted_at` UTC timestamp), keeping the answer key and per-question answers out of admin summary/history responses.
+2. **Paginated Admin Player Summary (`GET /admin/post-test-results`, proposed)**:
+   - Query parameters: `?search=&page=&page_size=` (standard `{ items, total_count, page, page_size }` envelope).
+   - Includes **all** player accounts, including independent players without a classroom (`classroom_name: null`).
+   - Returns per-player summary fields: `player_id`, `username`, `display_name`, `classroom_name`, `attempt_count`, `latest_score`, `latest_percentage`, `latest_passed`, `best_score`, `best_percentage`, `best_passed`, `last_submitted_at` (with `attempt_count: 0` / `null` scores distinct from a submitted `0/30` score).
+3. **Per-Player Attempt History (`GET /admin/post-test-results/{player_id}`, proposed)**:
+   - Returns player summary plus chronological `attempts` list (`attempt_id`, `attempt_number`, `score`, `total_questions`, `percentage`, `passed`, `submitted_at`).
+4. **Independent Server-Side Authorization**: Both proposed endpoints must enforce `get_current_admin` on the backend independently of the Vue Router role guard.
 
 ## 11. Synchronization Endpoints
 

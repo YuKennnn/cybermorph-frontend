@@ -143,12 +143,12 @@ const focusFirstInvalidField = async () => {
     displayNameInputRef.value?.focus()
     return
   }
-  if (fieldErrors.email) {
-    emailInputRef.value?.focus()
-    return
-  }
   if (role.value === 'player' && fieldErrors.username) {
     usernameInputRef.value?.focus()
+    return
+  }
+  if (fieldErrors.email) {
+    emailInputRef.value?.focus()
     return
   }
   if (fieldErrors.password) {
@@ -298,32 +298,6 @@ const handleRegister = async () => {
             </p>
           </div>
 
-          <div class="form-group">
-            <label for="email">Email Address</label>
-            <input
-              id="email"
-              ref="emailInputRef"
-              v-model="email"
-              type="email"
-              :class="{ 'input-invalid': !!fieldErrors.email }"
-              :aria-invalid="fieldErrors.email ? 'true' : 'false'"
-              :aria-describedby="emailDescribedBy"
-              :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
-              required
-              autocomplete="email"
-              @input="handleFieldInput('email')"
-            />
-            <p
-              v-if="fieldErrors.email"
-              id="register-email-error"
-              class="field-error"
-              role="alert"
-            >
-              <AppIcon name="alert" :size="13" class="field-error-icon" />
-              <span>{{ fieldErrors.email }}</span>
-            </p>
-          </div>
-
           <div v-if="role === 'player'" class="form-group">
             <label for="username">Username</label>
             <input
@@ -347,6 +321,32 @@ const handleRegister = async () => {
             >
               <AppIcon name="alert" :size="13" class="field-error-icon" />
               <span>{{ fieldErrors.username }}</span>
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input
+              id="email"
+              ref="emailInputRef"
+              v-model="email"
+              type="email"
+              :class="{ 'input-invalid': !!fieldErrors.email }"
+              :aria-invalid="fieldErrors.email ? 'true' : 'false'"
+              :aria-describedby="emailDescribedBy"
+              :placeholder="role === 'educator' ? 'instructor@dnsc.edu.ph' : 'player@example.com'"
+              required
+              autocomplete="email"
+              @input="handleFieldInput('email')"
+            />
+            <p
+              v-if="fieldErrors.email"
+              id="register-email-error"
+              class="field-error"
+              role="alert"
+            >
+              <AppIcon name="alert" :size="13" class="field-error-icon" />
+              <span>{{ fieldErrors.email }}</span>
             </p>
           </div>
 

@@ -2,12 +2,27 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/authStore.js'
-import { usePlayerClassroomStore } from '../stores/playerClassroomStore.js'
+import {
+  PLAYER_MAP_NAMES,
+  usePlayerClassroomStore,
+} from '../stores/playerClassroomStore.js'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const playerClassroomStore = usePlayerClassroomStore()
+
+const getMemberMapName = (mapProgress) => {
+  if (
+    typeof mapProgress === 'number' &&
+    Number.isInteger(mapProgress) &&
+    mapProgress >= 0 &&
+    mapProgress < PLAYER_MAP_NAMES.length
+  ) {
+    return PLAYER_MAP_NAMES[mapProgress]
+  }
+  return 'Unavailable'
+}
 
 const isLeaveModalOpen = ref(false)
 const leaveError = ref('')
@@ -180,21 +195,26 @@ onUnmounted(() => {
 
 <template>
   <div class="player-classroom-page">
-    <header class="page-header">
-      <div class="header-text">
-        <span class="section-kicker">Optional classroom features</span>
-        <h1 class="page-title">
-          {{
-            playerClassroomStore.isEnrolled
-              ? playerClassroomStore.membership.name
-              : 'My classroom'
-          }}
-        </h1>
+    <header class="classroom-hero">
+      <div class="hero-identity">
+        <div class="hero-icon" aria-hidden="true">
+          <AppIcon name="users" :size="22" />
+        </div>
+        <div class="hero-text">
+          <h1 class="page-title">
+            {{
+              playerClassroomStore.isEnrolled
+                ? playerClassroomStore.membership.name
+                : 'My classroom'
+            }}
+          </h1>
+        </div>
       </div>
 
       <div class="header-actions">
         <router-link to="/dashboard" class="btn-secondary">
-          Overview
+          <AppIcon name="arrow-left" :size="15" />
+          <span>Overview</span>
         </router-link>
         <button
           type="button"
@@ -251,15 +271,24 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Initial Loading State -->
+    <!-- Initial Loading State (Structural Skeleton) -->
     <div
       v-if="playerClassroomStore.isLoading && !playerClassroomStore.isEnrolled"
-      class="state-card loading-state"
+      class="loading-skeleton"
       role="status"
       aria-live="polite"
+      aria-label="Loading classroom details"
     >
-      <div class="spinner" aria-hidden="true"></div>
-      <p class="state-message">Loading classroom details...</p>
+      <div class="details-grid">
+        <div v-for="n in 3" :key="n" class="detail-card skeleton-card">
+          <div class="skeleton-line skeleton-sm"></div>
+          <div class="skeleton-line skeleton-lg"></div>
+        </div>
+      </div>
+      <div class="members-section">
+        <div class="skeleton-line skeleton-md"></div>
+        <div v-for="r in 3" :key="r" class="skeleton-row"></div>
+      </div>
     </div>
 
     <!-- Post-Join Refresh Failure OR Initial Membership Lookup Error -->
@@ -328,14 +357,10 @@ onUnmounted(() => {
 
       <section class="details-grid" aria-label="Classroom summary">
         <div class="detail-card">
-          <span class="detail-label">Classroom</span>
-          <strong class="detail-value">{{
-            playerClassroomStore.membership.name
-          }}</strong>
-        </div>
-
-        <div class="detail-card">
-          <span class="detail-label">Educator</span>
+          <div class="detail-head">
+            <span class="detail-label">Educator</span>
+            <AppIcon name="shield" :size="16" class="detail-icon" aria-hidden="true" />
+          </div>
           <strong class="detail-value">
             {{
               playerClassroomStore.membership.educator_name ||
@@ -345,15 +370,21 @@ onUnmounted(() => {
         </div>
 
         <div class="detail-card">
-          <span class="detail-label">Joined</span>
+          <div class="detail-head">
+            <span class="detail-label">Joined</span>
+            <AppIcon name="clock" :size="16" class="detail-icon" aria-hidden="true" />
+          </div>
           <strong class="detail-value">{{
             playerClassroomStore.membership.joined_date_label
           }}</strong>
         </div>
 
-        <div class="detail-card">
-          <span class="detail-label">Enrolled players</span>
-          <strong class="detail-value highlight-secondary">
+        <div class="detail-card highlight-card">
+          <div class="detail-head">
+            <span class="detail-label">Enrolled players</span>
+            <AppIcon name="users" :size="16" class="detail-icon" aria-hidden="true" />
+          </div>
+          <strong class="detail-value highlight-primary">
             {{ playerClassroomStore.membership.member_count }}
           </strong>
         </div>
@@ -362,8 +393,11 @@ onUnmounted(() => {
       <section class="members-section" aria-labelledby="members-heading">
         <div class="members-header">
           <h2 id="members-heading" class="members-title">
-            Classroom members ({{ playerClassroomStore.membership.member_count }})
+            Classroom members
           </h2>
+          <span class="members-count-pill">
+            {{ playerClassroomStore.membership.member_count }}
+          </span>
         </div>
 
         <ul
@@ -395,7 +429,31 @@ onUnmounted(() => {
             </div>
 
             <div class="member-progress">
-              <span class="progress-badge">{{ member.map_label }}</span>
+              <div
+                class="stage-pips"
+                :aria-label="member.map_label"
+              >
+                <span
+                  v-for="stageIndex in PLAYER_MAP_NAMES.length"
+                  :key="stageIndex"
+                  class="stage-pip"
+                  :class="{
+                    'is-unlocked':
+                      typeof member.map_progress === 'number' &&
+                      stageIndex - 1 <= member.map_progress,
+                  }"
+                ></span>
+              </div>
+              <span class="progress-map-name">
+                {{ getMemberMapName(member.map_progress) }}
+              </span>
+              <span class="progress-ratio">
+                {{
+                  typeof member.map_progress === 'number'
+                    ? `${member.map_progress + 1}/${PLAYER_MAP_NAMES.length}`
+                    : '—'
+                }}
+              </span>
             </div>
           </li>
         </ul>
@@ -487,36 +545,51 @@ onUnmounted(() => {
   gap: 1.5rem;
 }
 
-.page-header {
+.classroom-hero {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 1rem 1.25rem;
+  padding: 1.25rem 1.45rem;
+  border-radius: 14px;
+  border: 1px solid var(--color-violet-border);
+  background: linear-gradient(135deg, var(--color-card) 0%, var(--color-violet-subtle) 100%);
+  box-shadow: var(--shadow-purple);
 }
 
-.section-kicker {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-primary);
-  margin-bottom: 0.25rem;
+.hero-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.hero-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--btn-gradient);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--btn-rim-shadow);
+}
+
+.hero-text {
+  min-width: 0;
 }
 
 .page-title {
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   color: var(--color-text-main);
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
-}
-
-.page-subtitle {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.92rem;
 }
 
 .header-actions {
@@ -621,7 +694,7 @@ onUnmounted(() => {
 
 .details-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 1.15rem;
 }
 
@@ -633,11 +706,37 @@ onUnmounted(() => {
   box-shadow: var(--shadow-purple-sm);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.detail-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-purple);
+}
+
+.detail-card.highlight-card {
+  border-color: var(--color-violet-border);
+  background: linear-gradient(180deg, var(--color-card) 0%, var(--color-purple-light) 100%);
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.detail-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
 }
 
 .detail-label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: var(--color-text-muted);
   text-transform: uppercase;
@@ -645,15 +744,17 @@ onUnmounted(() => {
 }
 
 .detail-value {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 1.22rem;
   font-weight: 700;
   color: var(--color-text-main);
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
 
-.detail-value.highlight-secondary {
-  color: var(--color-secondary);
+.detail-value.highlight-primary {
+  color: var(--color-primary);
+  font-size: 1.65rem;
 }
 
 .optional-note {
@@ -678,7 +779,7 @@ onUnmounted(() => {
 .members-section {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 1.35rem 1.5rem;
   box-shadow: var(--shadow-purple-sm);
   display: flex;
@@ -689,23 +790,34 @@ onUnmounted(() => {
 .members-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
   border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.75rem;
+  padding-bottom: 0.85rem;
 }
 
 .members-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.08rem;
   font-weight: 700;
   color: var(--color-text-main);
 }
 
-.members-caption {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
+.members-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 0.6rem;
+  border-radius: 9999px;
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .members-list {
@@ -722,16 +834,24 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1.05rem;
+  border-radius: 11px;
   border: 1px solid var(--color-border);
   background-color: var(--color-bg-subtle);
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.member-row:hover {
+  border-color: var(--color-violet-border);
 }
 
 .member-row.is-self {
-  border-color: var(--color-primary);
-  background-color: var(--color-card);
+  border-color: var(--color-violet-border);
+  background: linear-gradient(90deg, var(--color-violet-subtle) 0%, var(--color-card) 70%);
 }
 
 .member-identity {
@@ -742,18 +862,25 @@ onUnmounted(() => {
 }
 
 .member-avatar {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--btn-gradient);
   background-color: var(--color-primary);
   color: #ffffff;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: var(--btn-rim-shadow);
+}
+
+.member-row.is-self .member-avatar {
+  box-shadow:
+    0 0 0 2px var(--color-card),
+    0 0 0 4px var(--color-primary);
 }
 
 .member-name-wrap {
@@ -772,25 +899,142 @@ onUnmounted(() => {
 }
 
 .self-badge {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.15rem 0.5rem;
   border-radius: 9999px;
   background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
   color: var(--color-primary);
 }
 
-.progress-badge {
-  display: inline-block;
-  padding: 0.3rem 0.7rem;
+.member-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.38rem 0.75rem;
   border-radius: 9999px;
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
+}
+
+.stage-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stage-pip {
+  width: 14px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--color-bg-muted);
+  transition: background-color 0.2s ease;
+}
+
+.stage-pip.is-unlocked {
+  background: var(--btn-gradient);
+}
+
+.progress-map-name {
   color: var(--color-text-main);
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.progress-ratio {
+  color: var(--color-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.skeleton-card {
+  min-height: 92px;
+  justify-content: center;
+}
+
+.skeleton-line {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-subtle) 25%,
+    var(--color-bg-muted) 50%,
+    var(--color-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-sm {
+  width: 42%;
+  height: 12px;
+}
+
+.skeleton-md {
+  width: 30%;
+  height: 18px;
+}
+
+.skeleton-lg {
+  width: 72%;
+  height: 22px;
+}
+
+.skeleton-row {
+  height: 58px;
+  border-radius: 11px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-subtle) 25%,
+    var(--color-bg-muted) 50%,
+    var(--color-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .classroom-hero {
+    padding: 1.1rem;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .btn-secondary,
+  .btn-refresh,
+  .btn-danger-outline {
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+
+  .members-section {
+    padding: 1.1rem;
+  }
+
+  .member-progress {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 .state-card {
@@ -991,8 +1235,19 @@ onUnmounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .spinner,
-  .icon-spin {
+  .icon-spin,
+  .skeleton-line,
+  .skeleton-row {
     animation: none !important;
+  }
+
+  .detail-card,
+  .member-row {
+    transition: none !important;
+  }
+
+  .detail-card:hover {
+    transform: none !important;
   }
 }
 

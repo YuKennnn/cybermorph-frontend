@@ -349,7 +349,6 @@ const mapPreviews = [
               <!-- Below Phone: Active Map Name (left) and Navigation Controls (right) -->
               <div class="preview-footer">
                 <div class="preview-map-info" aria-live="polite" aria-atomic="true">
-                  <span class="hud-sector-dot" aria-hidden="true"></span>
                   <span class="sr-only">Active map: </span>
                   <span
                     :key="activeSlide.id"
@@ -1042,17 +1041,7 @@ const mapPreviews = [
 .preview-map-info {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
   min-width: 0;
-}
-
-.hud-sector-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-violet-subtle);
-  flex-shrink: 0;
 }
 
 .preview-map-name {

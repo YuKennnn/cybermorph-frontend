@@ -399,6 +399,17 @@ const formatRole = (role) => {
           <span class="nav-label">Play data</span>
         </router-link>
 
+        <router-link
+          v-if="authStore.isAdmin"
+          to="/admin/post-test-results"
+          class="nav-item"
+          :class="{ 'router-link-active': $route.path.startsWith('/admin/post-test-results') }"
+          @click="closeMobileMenu"
+        >
+          <AppIcon name="clipboard-check" :size="18" class="nav-icon" />
+          <span class="nav-label">Post-test results</span>
+        </router-link>
+
         <!-- Settings Link -->
         <router-link to="/settings" class="nav-item" @click="closeMobileMenu">
           <AppIcon name="settings" :size="18" class="nav-icon" />

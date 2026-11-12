@@ -144,14 +144,19 @@ onMounted(() => {
     <div class="join-card">
       <div class="card-header">
         <button type="button" class="back-link" @click="handleBack">
-          Return to overview
+          <AppIcon name="arrow-left" :size="14" />
+          <span>Overview</span>
         </button>
-        <span class="card-kicker">Optional classroom features</span>
-        <h1 class="title">
-          {{
-            playerClassroomStore.isUnenrolled ? 'Join classroom' : 'Classroom'
-          }}
-        </h1>
+        <div class="join-title-row">
+          <div class="join-icon" aria-hidden="true">
+            <AppIcon name="key" :size="20" />
+          </div>
+          <h1 class="title">
+            {{
+              playerClassroomStore.isUnenrolled ? 'Join classroom' : 'Classroom'
+            }}
+          </h1>
+        </div>
         <p class="subtitle">
           Enter the 6-character access code provided by your educator to link your account to a classroom. Independent gameplay is always available without joining a classroom.
         </p>
@@ -184,12 +189,14 @@ onMounted(() => {
           playerClassroomStore.isLoading ||
           playerClassroomStore.status === 'idle'
         "
-        class="checking-state"
+        class="checking-skeleton"
         role="status"
         aria-live="polite"
+        aria-label="Checking classroom membership"
       >
-        <div class="spinner" aria-hidden="true"></div>
-        <p>Checking classroom membership...</p>
+        <div class="skeleton-line skeleton-label"></div>
+        <div class="skeleton-input"></div>
+        <div class="skeleton-btn"></div>
       </div>
 
       <!-- Membership Check Error State (Never defaults to Join Form on error) -->
@@ -324,20 +331,29 @@ onMounted(() => {
 }
 
 .back-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  color: var(--color-text-main);
   font-family: var(--font-sans);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  padding: 0;
-  margin-bottom: 0.85rem;
-  display: inline-block;
+  padding: 0.38rem 0.8rem;
+  margin-bottom: 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .back-link:hover {
-  text-decoration: underline;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background-color: var(--color-violet-subtle);
 }
 
 .back-link:focus-visible,
@@ -348,22 +364,33 @@ onMounted(() => {
   outline-offset: 2px;
 }
 
-.card-kicker {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-primary);
-  margin-bottom: 0.3rem;
+.join-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.join-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--btn-gradient);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--btn-rim-shadow);
 }
 
 .title {
-  margin: 0 0 0.35rem 0;
+  margin: 0;
   color: var(--color-text-main);
-  font-size: 1.65rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
@@ -404,20 +431,50 @@ onMounted(() => {
   display: inline-flex;
 }
 
-.checking-state {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: var(--color-text-muted);
+.checking-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  margin: 0 auto 0.85rem auto;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.skeleton-line,
+.skeleton-input,
+.skeleton-btn {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-subtle) 25%,
+    var(--color-bg-muted) 50%,
+    var(--color-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-label {
+  width: 45%;
+  height: 14px;
+}
+
+.skeleton-input {
+  width: 100%;
+  height: 54px;
+}
+
+.skeleton-btn {
+  width: 100%;
+  height: 44px;
+  margin-top: 0.5rem;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .form-group {
@@ -539,8 +596,10 @@ input:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .icon-spin {
+  .icon-spin,
+  .skeleton-line,
+  .skeleton-input,
+  .skeleton-btn {
     animation: none !important;
   }
 }
