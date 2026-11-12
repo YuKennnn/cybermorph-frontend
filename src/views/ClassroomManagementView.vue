@@ -105,12 +105,12 @@ const handleDeleted = (classroom) => {
   fetchClassrooms(true)
 }
 
-const handleViewStudents = (codeId) => {
-  router.push(`/classroom/students/${codeId}`)
-}
-
 const handleViewAnalytics = (codeId) => {
   router.push(`/analytics/${codeId}`)
+}
+
+const handleViewSettings = (codeId) => {
+  router.push(`/classroom/settings/${codeId}`)
 }
 
 onMounted(() => {
@@ -232,8 +232,8 @@ onMounted(() => {
           v-for="c in filteredClassrooms"
           :key="c.code_id || c.id"
           :classroom="c"
-          @view-students="handleViewStudents"
           @view-analytics="handleViewAnalytics"
+          @view-settings="handleViewSettings"
           @edit="handleOpenEdit"
           @delete="handleOpenDelete"
         />
@@ -281,7 +281,7 @@ onMounted(() => {
 }
 
 .page-header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .header-content {
@@ -470,9 +470,9 @@ onMounted(() => {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  padding: 1.15rem 1.25rem;
-  margin-bottom: 1.75rem;
-  box-shadow: var(--shadow-sm);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-card);
 }
 
 .toolbar-controls {
@@ -566,6 +566,10 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
+  .classroom-toolbar {
+    padding: 1.15rem 1rem;
+  }
+
   .toolbar-controls {
     flex-direction: column;
     align-items: stretch;
@@ -584,6 +588,7 @@ onMounted(() => {
 
   .btn-clear-filters {
     width: 100%;
+    min-height: 44px;
   }
 }
 </style>

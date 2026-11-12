@@ -3,12 +3,15 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchClassroomStudents } from '../api/classroom'
 import { useClassroomStore } from '../stores/classroomStore'
+import { useAuthStore } from '../stores/authStore'
 import { useApiCacheStore } from '../stores/apiCacheStore'
+import { classifyApiError } from '../api/client'
 import { formatLastSyncedDate, formatThreatUnlockedCount } from '../utils/datetime'
 import ClassroomWorkspaceHeader from '../components/classroom/ClassroomWorkspaceHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const classroomStore = useClassroomStore()
 const cacheStore = useApiCacheStore()
 const ROSTER_TTL = 60000 // 60s cache window
@@ -20,6 +23,7 @@ const rosterErrorMessage = ref('')
 const hasConfirmedRoster = ref(false)
 
 let fetchRequestId = 0
+let isComponentMounted = true
 
 const initialPage = parseInt(route.query.page, 10)
 const page = ref(!isNaN(initialPage) && initialPage > 0 ? initialPage : 1)
@@ -41,6 +45,7 @@ const formatMapProgress = (progress) => {
 }
 
 const syncClassroomMetadata = (force = false) => {
+  if (!codeId.value || !authStore.isAuthenticated || !authStore.isEducator) return
   classroomStore.setCurrentClassroomId(codeId.value)
   classroomStore.fetchClassrooms(force).catch(() => {})
 }
@@ -65,11 +70,30 @@ const applyStudentsPayload = (data, targetPage) => {
 }
 
 const fetchStudents = async (targetPage = page.value, force = false) => {
-  if (!codeId.value) return
-  const cacheKey = `educator::roster::page::code_id=${codeId.value}&page=${targetPage}&page_size=${pageSize.value}`
+  const reqId = ++fetchRequestId
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const targetCodeId = codeId.value
+
+  if (!targetCodeId || !authStore.isAuthenticated || !authStore.isEducator) {
+    isRosterLoading.value = false
+    return
+  }
+
+  const isCurrentRosterReq = () =>
+    isComponentMounted &&
+    reqId === fetchRequestId &&
+    authStore.isAuthenticated &&
+    authStore.isEducator &&
+    authStore.activeSessionEpoch === reqAuthEpoch &&
+    codeId.value === targetCodeId
+
+  const cacheKey = `educator::roster::page::code_id=${targetCodeId}&page=${targetPage}&page_size=${pageSize.value}`
+  const reqKeyVersion = cacheStore.getKeyVersion(cacheKey)
+
   if (!force) {
     const cached = cacheStore.get(cacheKey)
     if (cached && !cached.isExpired) {
+      if (!isCurrentRosterReq()) return
       applyStudentsPayload(cached.data, targetPage)
       isRosterLoading.value = false
       rosterErrorMessage.value = ''
@@ -77,30 +101,50 @@ const fetchStudents = async (targetPage = page.value, force = false) => {
     }
   }
 
-  const reqId = ++fetchRequestId
   isRosterLoading.value = true
   rosterErrorMessage.value = ''
 
   try {
-    const data = await fetchClassroomStudents(codeId.value, {
+    const data = await fetchClassroomStudents(targetCodeId, {
       page: targetPage,
       page_size: pageSize.value,
     })
 
-    if (reqId !== fetchRequestId) return
+    if (!isCurrentRosterReq()) return
 
     applyStudentsPayload(data, targetPage)
-    cacheStore.set(cacheKey, data, ROSTER_TTL)
+    if (cacheStore.getKeyVersion(cacheKey) === reqKeyVersion) {
+      cacheStore.set(cacheKey, data, ROSTER_TTL)
+    }
   } catch (err) {
-    if (reqId === fetchRequestId) {
-      if (err?.response?.status === 403 || err?.response?.status === 404) {
-        cacheStore.invalidatePrefix(`educator::roster::page::code_id=${codeId.value}`)
-      }
+    if (!isCurrentRosterReq()) return
+    const status = err?.response?.status
+    const errType = classifyApiError(err)
+
+    students.value = []
+    totalCount.value = 0
+    hasConfirmedRoster.value = false
+
+    if (status === 403 || status === 404) {
+      cacheStore.invalidatePrefix(`educator::roster::page::code_id=${targetCodeId}`)
+      cacheStore.invalidateKey(`educator::analytics::classroom::code_id=${targetCodeId}`)
+    }
+
+    if (status === 403) {
+      rosterErrorMessage.value = 'You do not have permission to view students for this classroom.'
+    } else if (status === 404) {
+      rosterErrorMessage.value = 'Classroom not found or no longer exists.'
+    } else if (errType === 'timeout') {
+      rosterErrorMessage.value = 'Request timed out while loading the student list. Please try again.'
+    } else {
       rosterErrorMessage.value = 'Could not load the student list for this classroom.'
-      hasConfirmedRoster.value = false
     }
   } finally {
-    if (reqId === fetchRequestId) {
+    if (
+      isComponentMounted &&
+      reqId === fetchRequestId &&
+      authStore.activeSessionEpoch === reqAuthEpoch
+    ) {
       isRosterLoading.value = false
     }
   }
@@ -143,22 +187,56 @@ watch(
 watch(
   () => route.params.code_id,
   (newCode) => {
-    if (newCode) {
+    fetchRequestId++
+    students.value = []
+    totalCount.value = 0
+    hasConfirmedRoster.value = false
+    rosterErrorMessage.value = ''
+
+    if (newCode && authStore.isAuthenticated && authStore.isEducator) {
       page.value = 1
       syncClassroomMetadata()
       fetchStudents(1)
+    } else {
+      isRosterLoading.value = false
     }
+  },
+)
+
+// Clear private roster state and invalidate in-flight requests on logout or account switch
+watch(
+  [() => authStore.activeSessionEpoch, () => authStore.isAuthenticated, () => authStore.isEducator],
+  ([, isAuth, isEd]) => {
+    fetchRequestId++
+    students.value = []
+    totalCount.value = 0
+    hasConfirmedRoster.value = false
+    rosterErrorMessage.value = ''
+
+    if (!isComponentMounted || !isAuth || !isEd || !codeId.value) {
+      isRosterLoading.value = false
+      return
+    }
+
+    syncClassroomMetadata()
+    fetchStudents(page.value)
   },
 )
 
 const formatLastSynced = formatLastSyncedDate
 
 onMounted(() => {
+  isComponentMounted = true
+  if (!authStore.isAuthenticated || !authStore.isEducator) {
+    isRosterLoading.value = false
+    return
+  }
   syncClassroomMetadata()
   fetchStudents(page.value)
 })
 
 onUnmounted(() => {
+  isComponentMounted = false
   fetchRequestId++
 })
 </script>

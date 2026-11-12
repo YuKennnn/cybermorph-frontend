@@ -13,9 +13,18 @@ const classroomStore = useClassroomStore()
 const authStore = useAuthStore()
 
 const codeId = computed(() => String(route.params.code_id || ''))
+const parsePositivePage = (val) => {
+  const normalized = Array.isArray(val) ? val[0] : val
+  const parsed = Number.parseInt(String(normalized ?? ''), 10)
+  return Number.isFinite(parsed) && parsed > 1 ? parsed : null
+}
 const originatingRosterPage = computed(() => {
-  const p = parseInt(route.query.roster_page, 10)
-  return !isNaN(p) && p > 1 ? p : 1
+  return (
+    parsePositivePage(route.query.table_page) ??
+    parsePositivePage(route.query.roster_page) ??
+    parsePositivePage(route.query.page) ??
+    1
+  )
 })
 
 // Editable form state
@@ -603,22 +612,21 @@ onMounted(() => {
 
 <style scoped>
 .settings-workspace-page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 0 2.5rem 0;
+  width: 100%;
+  padding: 0 0 2rem 0;
 }
 
 .settings-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .settings-card {
   background-color: var(--color-card, #ffffff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 12px;
-  padding: 1.75rem 1.5rem;
+  padding: 1.5rem;
   box-shadow: var(--shadow-card, 0 1px 3px 0 rgba(15, 23, 42, 0.06));
 }
 
@@ -921,21 +929,27 @@ onMounted(() => {
 }
 
 .btn-delete {
-  padding: 0.65rem 1.25rem;
+  min-height: 40px;
+  padding: 0.6rem 1.25rem;
   font-size: 0.9rem;
   font-weight: 600;
   border-radius: 8px;
   border: 1px solid var(--color-danger, #dc2626);
-  background-color: #ffffff;
+  background-color: var(--color-card);
   color: var(--color-danger, #dc2626);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 180ms ease, color 180ms ease;
   white-space: nowrap;
 }
 
 .btn-delete:hover {
   background-color: var(--color-danger, #dc2626);
   color: #ffffff;
+}
+
+.btn-delete:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 2px;
 }
 
 /* Not Found Card */
@@ -976,7 +990,7 @@ onMounted(() => {
 
 @media (max-width: 640px) {
   .settings-card {
-    padding: 1.25rem 1.25rem;
+    padding: 1.25rem 1rem;
   }
 
   .danger-action-row {
@@ -986,6 +1000,7 @@ onMounted(() => {
 
   .btn-delete {
     width: 100%;
+    min-height: 44px;
     text-align: center;
   }
 }

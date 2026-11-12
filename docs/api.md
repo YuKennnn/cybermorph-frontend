@@ -357,20 +357,40 @@ Possible backend outcomes:
 ### GET /classroom/{code_id}/students
 
 Purpose:
-Retrieve students associated with a classroom.
+Retrieve paginated students currently enrolled in a classroom. Serves as the portal's source for student identity (`username`) and overall sync status (`last_synced_at`).
 
 Authentication:
 Educator / authorized web user.
 
 Authorization:
-The educator must own the classroom code.
+The educator must own the classroom code (`403` `"You do not own this classroom"` when owned by another educator; `404` `"Classroom not found"` when unknown or soft-deleted).
 
-Returned student information includes:
+Query parameters:
+- `page` (default: `1`, range `1–10000`)
+- `page_size` (default: `10`, range `1–100`)
 
-- profile_id
-- username
-- map_progress (integer 0–3: 0 = Home, 1 = Office, 2 = Internet Cafe, 3 = Public Park)
-- last_synced_at
+Response:
+```json
+{
+  "items": [
+    {
+      "profile_id": "...",
+      "username": "ben_reyes",
+      "map_progress": 1,
+      "last_synced_at": "2026-10-28T08:00:00",
+      "threat_unlocked_count": 3
+    }
+  ],
+  "total_count": 1,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+*Data nuances*:
+- `map_progress` is an integer `0–3` (`0 = Home`, `1 = Office`, `2 = Internet Cafe`, `3 = Public Park`).
+- `last_synced_at` is `string | null`. An explicit `null` means the student has never uploaded gameplay data (`"Not synced yet"`).
+- `threat_unlocked_count` is `0–8` across the 8 canonical threat categories (`0` both for never-synced students and synced students with no unlocks; inspect `last_synced_at` to tell them apart).
 
 ### PATCH /classroom/{code_id}
 
@@ -450,13 +470,16 @@ CONFIRMED
 
 ## 9. Educator Analytics
 
+> [!NOTE]
+> Current live Godot mobile game upload coverage is treated as unverified from the web portal repository; this contract documents what the FastAPI analytics endpoints store and return today.
+
 ### GET /analytics/classroom
 
 Purpose:
 Retrieve class-wide analytics summary for an educator-owned classroom.
 
 Authentication:
-Educator token required.
+Educator token required (`403` `"You do not own this classroom"` for another educator's classroom; `404` `"Classroom not found"` when unknown or soft-deleted).
 
 Query:
 `code_id` (must be owned by authenticated educator)
@@ -468,13 +491,23 @@ Response:
   "student_count": 3,
   "avg_map_progress": 1.33,
   "avg_best_score_by_map": { "Home": 723.3, "Office": 750.0 },
-  "category_fail_rates": { "Phishing": 0.15, "Ransomware": null }
+  "category_fail_rates": {
+    "Phishing": 0.15,
+    "Smishing": 0.0,
+    "Vishing": null,
+    "Social Engineering": null,
+    "Credential Theft": null,
+    "Public Wi-Fi Attack": null,
+    "Malware Infection": null,
+    "Ransomware": null
+  }
 }
 ```
 
 *Data nuances*:
-- Unplayed maps are **absent** from `avg_best_score_by_map`.
-- Unattempted threat categories are `null`, not `0`. The UI must render `null` as "no data recorded", never "0% fail rate".
+- `avg_map_progress` is `float | null` (`null` when `student_count` is `0`, rather than `0`). Measured `0.0` indicates students currently enrolled have `map_progress: 0`.
+- `avg_best_score_by_map` averages **one stored best score per current student** (`LeaderboardScore`) on each map. Unplayed maps are **absent** from `avg_best_score_by_map`.
+- `category_fail_rates` always contains all 8 canonical threat category keys. Values measure uploaded decision error rates across current students' live sessions (`0.0–1.0`, or `null` when no decisions were uploaded for that category). Render `null` as `"No data yet"` (distinct from measured `0%`).
 
 Status:
 CONFIRMED
@@ -482,37 +515,69 @@ CONFIRMED
 ### GET /analytics/player
 
 Purpose:
-Retrieve individual proficiency breakdown for a student enrolled in the educator's classroom.
+Retrieve individual proficiency breakdown for a student currently enrolled in **any** classroom owned by the authenticated educator.
 
 Authentication:
-Educator token required.
+Educator token required (`403` `"Not your student"` if the player exists but is not currently enrolled in any classroom owned by the educator; `404` `"Player not found"` when unknown or soft-deleted).
 
 Query:
-`profile_id` (must belong to educator's classroom)
+`profile_id`
 
 Response:
 ```json
 {
   "profile_id": "...",
+  "map_progress": 1,
   "wins": 4,
   "losses": 3,
   "avg_duration_seconds": 132.5,
   "best_score_by_map": { "Home": 800, "Office": 610 },
-  "category_breakdown": { "Phishing": 0.10 },
+  "category_breakdown": {
+    "Phishing": 0.10,
+    "Smishing": 0.0,
+    "Vishing": null,
+    "Social Engineering": null,
+    "Credential Theft": null,
+    "Public Wi-Fi Attack": null,
+    "Malware Infection": null,
+    "Ransomware": null
+  },
+  "threat_index": [
+    { "threat_name": "Phishing", "is_unlocked": true, "unlocked_at": "2026-10-28T08:00:00" },
+    { "threat_name": "Smishing", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Vishing", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Social Engineering", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Credential Theft", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Public Wi-Fi Attack", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Malware Infection", "is_unlocked": false, "unlocked_at": null },
+    { "threat_name": "Ransomware", "is_unlocked": false, "unlocked_at": null }
+  ],
   "recent_sessions": [
     {
       "session_id": "...",
+      "profile_id": "...",
       "map_name": "Office",
       "duration_seconds": 120,
       "credits_earned": 50,
       "credits_lost": 10,
+      "credits_left": 130,
       "false_positives": 0,
       "result": "win",
-      "played_at": "2026-09-28T14:00:00+08:00"
+      "is_synced": true,
+      "played_at": "2026-09-28T14:00:00+08:00",
+      "created_at": "2026-09-28T14:00:05"
     }
   ]
 }
 ```
+
+*Data nuances*:
+- `username` and `last_synced_at` are not returned by `/analytics/player`; obtain both from `GET /classroom/{code_id}/students`.
+- `wins` counts uploaded sessions with `result === "win"`. `losses` counts **all other uploaded outcomes** (`"lose"`, `"timeout"`, `null`/missing results, and goal-met runs that did not unlock the next map). Uploaded sessions equal `wins + losses`.
+- `avg_duration_seconds` is `float | null` (`null` when the student has 0 uploaded sessions).
+- `category_breakdown` **always contains all eight canonical threat category keys** (`Phishing` through `Ransomware`). Categories without uploaded decisions have `null` rates; `0.0` indicates zero incorrect decisions among uploaded events.
+- `threat_index` always contains all 8 canonical entries in fixed order (`unlocked_at` may omit `Z` and must be parsed as UTC).
+- `recent_sessions` contains at most **10 entries** (newest first). Each session's `duration_seconds` is a required non-negative integer (may be `0`); `result` (`"win" | "lose" | "timeout" | null`) and `credits_left` (`int | null`) are nullable.
 
 Status:
 CONFIRMED
@@ -520,13 +585,13 @@ CONFIRMED
 ### GET /analytics/session
 
 Purpose:
-Retrieve detailed attack event telemetry for a specific session.
+Retrieve detailed attack event telemetry for a specific session belonging to one of the educator's students (across any classroom owned by the educator).
 
 Authentication:
-Educator token required.
+Educator token required (`403` `"Not your student"` if the session exists for a student not in any of the educator's classrooms; `404` `"Session not found"` when the session or player does not exist).
 
 Query:
-`session_id` (must belong to one of educator's students)
+`session_id`
 
 Response:
 ```json
@@ -536,16 +601,31 @@ Response:
   "username": "AgentZero",
   "map_name": "Office",
   "result": "lose",
-  "threat_events": []
+  "threat_events": [
+    {
+      "attack_log_id": "...",
+      "session_id": "...",
+      "threat_type": "Social Engineering",
+      "player_action": "ignored",
+      "is_correct": false,
+      "is_legitimate_item": false,
+      "scenario_difficulty": "beginner",
+      "credits_affected": -15,
+      "response_time_ms": 4200,
+      "logged_at": "2026-09-28T14:01:12+08:00"
+    }
+  ]
 }
 ```
 
 *Data nuances*:
-- `threat_events` contains individual decision events uploaded for that session by the Godot game client via `POST /sync/threat-events` (oldest first).
-- The list remains empty `[]` for older sessions or devices that have not synced events yet. The frontend must handle this as an expected empty state, not an error.
+- `result` is `'win' | 'lose' | 'timeout' | null`.
+- `threat_events` contains individual uploaded decision events (`oldest first`). Every event, including legacy events, includes a unique UUID `attack_log_id` (used as the UI row key).
+- Legacy-build events may have `scenario_difficulty: null` and `response_time_ms: null`. Show missing values as `—`, while preserving measured `response_time_ms: 0` as `0 ms`.
+- The list remains empty `[]` for sessions without uploaded events; handle `[]` as a normal empty state, not an error.
 
 Status:
-DOCUMENTED IN BACKEND CONTRACT
+CONFIRMED
 
 ## 10. Admin Endpoints
 

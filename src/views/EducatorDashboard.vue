@@ -5,7 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useClassroomStore } from '../stores/classroomStore'
 import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchClassroomAnalytics } from '../api/analytics'
-import { extractErrorMessage } from '../api/client'
+import { classifyApiError, extractErrorMessage } from '../api/client'
 import { usePageRecovery } from '../composables/usePageRecovery'
 import ClassroomCard from '../components/classroom/ClassroomCard.vue'
 import ClassroomCreateModal from '../components/classroom/ClassroomCreateModal.vue'
@@ -77,6 +77,10 @@ const resolveSnapshotSelection = (list) => {
 }
 
 const loadSnapshotData = async (codeId, force = false) => {
+  const reqId = ++snapshotRequestId
+  const reqSession = currentSessionEpoch
+  const reqAuthEpoch = authStore.activeSessionEpoch
+
   if (!codeId || !authStore.isAuthenticated || !authStore.isEducator) {
     snapshotAnalytics.value = null
     isSnapshotLoading.value = false
@@ -85,6 +89,8 @@ const loadSnapshotData = async (codeId, force = false) => {
   }
 
   const cacheKey = `educator::analytics::classroom::code_id=${codeId}`
+  const reqKeyVersion = cacheStore.getKeyVersion(cacheKey)
+
   if (!force) {
     const cached = cacheStore.get(cacheKey)
     if (cached && !cached.isExpired) {
@@ -95,8 +101,6 @@ const loadSnapshotData = async (codeId, force = false) => {
     }
   }
 
-  const reqId = ++snapshotRequestId
-  const reqSession = currentSessionEpoch
   isSnapshotLoading.value = true
   snapshotError.value = ''
 
@@ -104,7 +108,10 @@ const loadSnapshotData = async (codeId, force = false) => {
     const data = await fetchClassroomAnalytics(codeId)
     if (
       reqSession !== currentSessionEpoch ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(cacheKey) ||
       reqId !== snapshotRequestId ||
+      selectedSnapshotCodeId.value !== codeId ||
       !authStore.isAuthenticated ||
       !authStore.isEducator
     ) {
@@ -115,21 +122,38 @@ const loadSnapshotData = async (codeId, force = false) => {
   } catch (err) {
     if (
       reqSession !== currentSessionEpoch ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
       reqId !== snapshotRequestId ||
+      selectedSnapshotCodeId.value !== codeId ||
       !authStore.isAuthenticated ||
       !authStore.isEducator
     ) {
       return
     }
-    if (err?.response?.status === 403 || err?.response?.status === 404) {
+    const status = err?.response?.status
+    if (status === 403 || status === 404) {
+      snapshotAnalytics.value = null
       cacheStore.invalidateKey(cacheKey)
+      cacheStore.invalidatePrefix(`educator::roster::page::code_id=${codeId}`)
+      snapshotError.value =
+        status === 403
+          ? 'You do not have permission to view analytics for this classroom.'
+          : 'Classroom not found or no longer exists.'
+    } else {
+      const errType = classifyApiError(err)
+      snapshotError.value =
+        errType === 'timeout'
+          ? 'Connection timed out while loading classroom performance snapshot. Please try again.'
+          : errType === 'network'
+            ? 'Unable to reach the server for classroom performance snapshot. Please check your connection.'
+            : 'Failed to load classroom performance snapshot. Please try again.'
     }
-    snapshotError.value = extractErrorMessage(
-      err,
-      'Failed to load classroom performance snapshot. Please try again.',
-    )
   } finally {
-    if (reqSession === currentSessionEpoch && reqId === snapshotRequestId) {
+    if (
+      reqSession === currentSessionEpoch &&
+      reqAuthEpoch === authStore.activeSessionEpoch &&
+      reqId === snapshotRequestId
+    ) {
       isSnapshotLoading.value = false
     }
   }
@@ -252,15 +276,17 @@ const handleClassroomCreated = (newClassroom) => {
   loadDashboardData({ force: true })
 }
 
-const handleViewStudents = (codeId) => {
-  router.push(`/classroom/students/${codeId}`)
-}
-
 const handleViewAnalytics = (codeId) => {
   if (codeId) {
     router.push(`/analytics/${codeId}`)
   } else {
     router.push('/analytics')
+  }
+}
+
+const handleViewSettings = (codeId) => {
+  if (codeId) {
+    router.push(`/classroom/settings/${codeId}`)
   }
 }
 
@@ -421,7 +447,7 @@ watch(
         <div class="snapshot-card-header">
           <div class="snapshot-title-group">
             <h3 class="snapshot-card-title">Classroom snapshot</h3>
-            <span class="snapshot-subtitle">Average best score by map</span>
+            <span class="snapshot-subtitle">Average best score per current student by map</span>
           </div>
 
           <div class="snapshot-header-actions">
@@ -512,7 +538,7 @@ watch(
             </div>
 
             <p class="snapshot-footnote">
-              Scores reflect different map scenarios and are not a direct measure of comparative skill.
+              Map averages reflect one stored best score per current student for each map and are not directly comparable across different map scenarios.
             </p>
           </div>
         </div>
@@ -541,8 +567,8 @@ watch(
             :key="classroom.code_id || classroom.id"
             :classroom="classroom"
             :show-utility-actions="false"
-            @view-students="handleViewStudents"
             @view-analytics="handleViewAnalytics"
+            @view-settings="handleViewSettings"
           />
         </div>
 

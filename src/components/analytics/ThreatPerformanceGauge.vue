@@ -1,63 +1,89 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { isValidErrorRate } from '../../utils/analyticsValidation.js'
+
+const props = defineProps({
   threatName: {
     type: String,
     required: true,
   },
+  // Accepts arbitrary standalone runtime values without Vue prop warnings;
+  // parents should pre-validate payloads with classifyCategoryBreakdown().
   failRate: {
-    type: [Number, null],
     default: null,
   },
 })
 
-const formatFailRate = (rate) => {
-  if (rate === null || rate === undefined) return null
-  return `${(rate * 100).toFixed(1)}%`
-}
+const hasValidRate = computed(() => isValidErrorRate(props.failRate))
 
-const getRiskLevelClass = (rate) => {
-  if (rate === null || rate === undefined) return 'no-data'
-  if (rate >= 0.4) return 'risk-high'
-  if (rate >= 0.2) return 'risk-moderate'
+const isInvalidRate = computed(
+  () => props.failRate !== null && !hasValidRate.value,
+)
+
+const formattedRate = computed(() => {
+  if (!hasValidRate.value) return null
+  return `${(props.failRate * 100).toFixed(1)}%`
+})
+
+const riskLevelClass = computed(() => {
+  if (!hasValidRate.value) return 'no-data'
+  if (props.failRate >= 0.4) return 'risk-high'
+  if (props.failRate >= 0.2) return 'risk-moderate'
   return 'risk-low'
-}
+})
 
-const getRiskLabel = (rate) => {
-  if (rate === null || rate === undefined) return 'No Data Yet'
-  if (rate >= 0.4) return 'High Fail Rate'
-  if (rate >= 0.2) return 'Moderate Fail Rate'
-  return 'Low Fail Rate'
-}
+const riskLabel = computed(() => {
+  if (isInvalidRate.value) return 'Unavailable'
+  if (!hasValidRate.value) return 'No data yet'
+  if (props.failRate >= 0.4) return 'High error rate'
+  if (props.failRate >= 0.2) return 'Moderate error rate'
+  return 'Low error rate'
+})
+
+const barWidthStyle = computed(() => {
+  if (!hasValidRate.value) return null
+  return { width: `${props.failRate * 100}%` }
+})
 </script>
 
 <template>
   <div class="threat-card">
     <div class="threat-top">
       <h5 class="threat-name">{{ threatName }}</h5>
-      <span :class="['risk-badge', getRiskLevelClass(failRate)]">
-        {{ getRiskLabel(failRate) }}
+      <span :class="['risk-badge', riskLevelClass]">
+        {{ riskLabel }}
       </span>
     </div>
 
     <!-- Metric Value -->
     <div class="threat-rate-row">
-      <template v-if="failRate !== null && failRate !== undefined">
+      <template v-if="hasValidRate">
         <span class="rate-number">
-          {{ formatFailRate(failRate) }}
+          {{ formattedRate }}
         </span>
-        <span class="rate-sub">fail frequency</span>
+        <span class="rate-sub">decision error rate</span>
+      </template>
+      <template v-else-if="isInvalidRate">
+        <span class="rate-null">Unavailable metric</span>
       </template>
       <template v-else>
-        <span class="rate-null">No Encounters Logged</span>
+        <span class="rate-null">No decisions uploaded</span>
       </template>
     </div>
 
     <!-- Visual Progress Bar -->
-    <div class="progress-bar-bg">
+    <div
+      class="progress-bar-bg"
+      :role="hasValidRate ? 'progressbar' : undefined"
+      :aria-valuenow="hasValidRate ? Number((props.failRate * 100).toFixed(1)) : undefined"
+      :aria-valuemin="hasValidRate ? 0 : undefined"
+      :aria-valuemax="hasValidRate ? 100 : undefined"
+      :aria-label="hasValidRate ? `${threatName} error rate` : undefined"
+    >
       <div
-        v-if="failRate !== null && failRate !== undefined"
-        :class="['progress-bar-fill', getRiskLevelClass(failRate)]"
-        :style="{ width: `${Math.min(failRate * 100, 100)}%` }"
+        v-if="hasValidRate"
+        :class="['progress-bar-fill', riskLevelClass]"
+        :style="barWidthStyle"
       ></div>
       <div v-else class="progress-bar-empty"></div>
     </div>
@@ -73,13 +99,11 @@ const getRiskLabel = (rate) => {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.04);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: border-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .threat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-purple);
+  border-color: var(--color-violet-border);
 }
 
 .threat-top {
@@ -116,18 +140,16 @@ const getRiskLabel = (rate) => {
 
 .rate-null {
   font-size: 0.82rem;
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 /* Risk Badges */
 .risk-badge {
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 0.2rem 0.55rem;
   border-radius: 9999px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
 }
 
 .risk-badge.risk-low {
@@ -150,15 +172,15 @@ const getRiskLabel = (rate) => {
 
 .risk-badge.no-data {
   background-color: var(--color-bg-subtle);
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   border: 1px solid var(--color-border);
 }
 
 /* Progress Bars */
 .progress-bar-bg {
   width: 100%;
-  height: 6px;
-  background-color: var(--color-border-subtle);
+  height: 8px;
+  background-color: var(--color-bg-muted);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -166,7 +188,19 @@ const getRiskLabel = (rate) => {
 .progress-bar-fill {
   height: 100%;
   border-radius: 9999px;
-  transition: width 0.4s ease;
+  transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .threat-card,
+  .progress-bar-fill {
+    transition: none;
+  }
+}
+
+:global([data-reduced-motion='true']) .threat-card,
+:global([data-reduced-motion='true']) .progress-bar-fill {
+  transition: none;
 }
 
 .progress-bar-fill.risk-low {

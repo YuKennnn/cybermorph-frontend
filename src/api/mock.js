@@ -1806,6 +1806,16 @@ mock.onPost('/classroom/join').reply((config) => {
 
 // GET /classroom/:code_id/students
 mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply(async (config) => {
+  const sessionStatus = typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_ROSTER_STATUS__')
+    : null
+  if (sessionStatus === '403') {
+    return [403, { detail: 'You do not own this classroom' }]
+  }
+  if (sessionStatus === '404') {
+    return [404, { detail: 'Classroom not found.' }]
+  }
+
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_STUDENTS__') || '0', 10) : 0
   if (mockControl.failClassroomStudentsCount > 0 || sessionFail > 0) {
     if (mockControl.failClassroomStudentsCount > 0) mockControl.failClassroomStudentsCount--
@@ -1828,6 +1838,10 @@ mock.onGet(new RegExp('/classroom/([^/]+)/students')).reply(async (config) => {
   }
   if (delay > 0) {
     await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  if (codeId === 'c-forbidden') {
+    return [403, { detail: 'You do not own this classroom' }]
   }
 
   const classroom = mockClassrooms.find(
@@ -2039,7 +2053,65 @@ mock.onGet('/leaderboard').reply((config) => {
 // ==========================================
 // Analytics Endpoints (Educator)
 // ==========================================
+const CANONICAL_MOCK_THREAT_NAMES = [
+  'Phishing',
+  'Smishing',
+  'Vishing',
+  'Social Engineering',
+  'Credential Theft',
+  'Public Wi-Fi Attack',
+  'Malware Infection',
+  'Ransomware',
+]
+
+const buildNullThreatMap = () => ({
+  Phishing: null,
+  Smishing: null,
+  Vishing: null,
+  'Social Engineering': null,
+  'Credential Theft': null,
+  'Public Wi-Fi Attack': null,
+  'Malware Infection': null,
+  Ransomware: null,
+})
+
+const resolvePerIdDelay = (storageKey, targetId, numericFallback = 0) => {
+  if (numericFallback > 0) return numericFallback
+  if (typeof window === 'undefined') return 0
+  try {
+    const raw = sessionStorage.getItem(storageKey)
+    if (!raw) return 0
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('{')) {
+      const parsed = JSON.parse(trimmed)
+      return Number(parsed?.[targetId]) || 0
+    }
+    return parseInt(trimmed, 10) || 0
+  } catch {
+    return 0
+  }
+}
+
 mock.onGet(new RegExp('/analytics/classroom')).reply(async (config) => {
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const calls = JSON.parse(sessionStorage.getItem('__CYBERMORPH_CLASSROOM_ANALYTICS_CALLS__') || '[]')
+      calls.push({ code_id: config.params?.code_id || '', ts: Date.now() })
+      sessionStorage.setItem('__CYBERMORPH_CLASSROOM_ANALYTICS_CALLS__', JSON.stringify(calls))
+    } catch {
+      /* ignore */
+    }
+  }
+  const sessionStatus = typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_CLASSROOM_ANALYTICS_STATUS__')
+    : null
+  if (sessionStatus === '403') {
+    return [403, { detail: 'You do not own this classroom' }]
+  }
+  if (sessionStatus === '404') {
+    return [404, { detail: 'Classroom not found' }]
+  }
+
   const sessionFail = typeof window !== 'undefined' ? parseInt(sessionStorage.getItem('__CYBERMORPH_FAIL_CLASSROOM_ANALYTICS__') || '0', 10) : 0
   if (mockControl.failClassroomAnalyticsCount > 0 || sessionFail > 0) {
     if (mockControl.failClassroomAnalyticsCount > 0) mockControl.failClassroomAnalyticsCount--
@@ -2048,34 +2120,92 @@ mock.onGet(new RegExp('/analytics/classroom')).reply(async (config) => {
     }
     return [500, { detail: 'Temporary classroom analytics failure' }]
   }
-  const codeId = config.params?.code_id || 'c1'
-  let delay = mockControl.delayClassroomAnalytics?.[codeId] || 0
-  if (!delay && typeof window !== 'undefined') {
-    try {
-      const stored = JSON.parse(sessionStorage.getItem('__CYBERMORPH_DELAY_CLASSROOM__') || '{}')
-      delay = stored[codeId] || 0
-    } catch {
-      /* ignore */
-    }
-  }
+
+  const codeId = config.params?.code_id || ''
+  const delay = resolvePerIdDelay(
+    '__CYBERMORPH_DELAY_CLASSROOM__',
+    codeId,
+    mockControl.delayClassroomAnalytics?.[codeId] || 0,
+  )
   if (delay > 0) {
     await new Promise((resolve) => setTimeout(resolve, delay))
   }
+
+  if (codeId === 'c-forbidden') {
+    return [403, { detail: 'You do not own this classroom' }]
+  }
+
+  const classroom = mockClassrooms.find(
+    (c) =>
+      !c.deleted_at &&
+      (c.id === codeId ||
+        c.code_id === codeId ||
+        c.code === codeId ||
+        c.code_value === codeId),
+  )
+  if (!classroom) {
+    return [404, { detail: 'Classroom not found' }]
+  }
+
+  if (typeof sessionStorage !== 'undefined') {
+    const rawOverride = sessionStorage.getItem('__CYBERMORPH_OVERRIDE_CLASSROOM_ANALYTICS__')
+    if (rawOverride) {
+      try {
+        const parsedOverride = JSON.parse(rawOverride)
+        if (parsedOverride && typeof parsedOverride === 'object') {
+          const overridePayload = parsedOverride[codeId] || parsedOverride[classroom.code_id] || (parsedOverride.code_id ? parsedOverride : null)
+          if (overridePayload) {
+            return [200, { code_id: classroom.code_id, ...overridePayload }]
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const enrolledStudents = mockStudentEnrollments.filter(
+    (s) =>
+      s.classroom_id === classroom.id ||
+      s.classroom_id === classroom.code_id ||
+      s.classroom_id === classroom.code ||
+      s.classroom_id === classroom.code_value,
+  )
+
+  if (enrolledStudents.length === 0) {
+    return [
+      200,
+      {
+        code_id: classroom.code_id,
+        student_count: 0,
+        avg_map_progress: null,
+        avg_best_score_by_map: {},
+        category_fail_rates: buildNullThreatMap(),
+      },
+    ]
+  }
+
+  const isMainDemo = classroom.code_id === 'c1' || classroom.code_value === 'CYB101'
   return [
     200,
     {
-      code_id: codeId,
-      student_count: codeId === 'c1' || codeId === 'CYB101' ? 23 : 1,
-      avg_map_progress: 2.33,
-      avg_best_score_by_map: {
-        Home: 723.3,
-        Office: 750.0,
-      },
+      code_id: classroom.code_id,
+      student_count: enrolledStudents.length,
+      avg_map_progress: isMainDemo ? 2.33 : 2.0,
+      avg_best_score_by_map: isMainDemo
+        ? {
+            Home: 723.3,
+            Office: 750.0,
+          }
+        : {
+            Home: 850.0,
+            Office: 720.0,
+          },
       category_fail_rates: {
         Phishing: 0.15,
         Smishing: 0.28,
         Vishing: 0.45,
-        'Social Engineering': 0.12,
+        'Social Engineering': 0.0,
         'Credential Theft': 0.35,
         'Public Wi-Fi Attack': null,
         'Malware Infection': 0.52,
@@ -2090,139 +2220,325 @@ mock.onGet(new RegExp('/analytics/player')).reply(async (config) => {
     ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_PLAYER_ANALYTICS_STATUS__')
     : null
   if (sessionStatus === '403') {
-    return [403, { detail: 'Not authorized to view student performance data' }]
+    return [403, { detail: 'Not your student' }]
   }
   if (sessionStatus === '404') {
-    return [404, { detail: 'Student record not found' }]
+    return [404, { detail: 'Student not found' }]
   }
 
-  let delay = mockControl.delayPlayerAnalyticsMs || 0
-  if (!delay && typeof window !== 'undefined') {
-    try {
-      delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_PLAYER__') || '0', 10) || 0
-    } catch {
-      /* ignore */
-    }
-  }
+  const profileId = config.params?.profile_id || ''
+  const delay = resolvePerIdDelay(
+    '__CYBERMORPH_DELAY_PLAYER__',
+    profileId,
+    mockControl.delayPlayerAnalyticsMs || 0,
+  )
   if (delay > 0) {
     await new Promise((resolve) => setTimeout(resolve, delay))
   }
-  const profileId = config.params?.profile_id || 'p1'
-  const enrolledStudent = mockStudentEnrollments.find((s) => s.profile_id === profileId)
-  const isNeverSynced = enrolledStudent ? enrolledStudent.last_synced_at === null : false
-  const threatCount = isNeverSynced ? 0 : (enrolledStudent?.threat_unlocked_count ?? 5)
-  const mapProgress = enrolledStudent?.map_progress ?? 2
 
-  const canonicalThreatNames = [
-    'Phishing',
-    'Smishing',
-    'Vishing',
-    'Social Engineering',
-    'Credential Theft',
-    'Public Wi-Fi Attack',
-    'Malware Infection',
-    'Ransomware',
-  ]
+  if (profileId === 'p-other-student') {
+    return [403, { detail: 'Not your student' }]
+  }
 
-  const mockThreatIndex = canonicalThreatNames.map((name, idx) => {
+  const enrolledStudent = mockStudentEnrollments.find((s) => String(s.profile_id) === String(profileId))
+  if (!enrolledStudent) {
+    return [404, { detail: 'Student not found' }]
+  }
+
+  const isNeverSynced = enrolledStudent.last_synced_at === null
+  const isZeroStudent = profileId === 'p8'
+  const threatCount = isNeverSynced ? 0 : (enrolledStudent.threat_unlocked_count ?? 5)
+  const mapProgress = enrolledStudent.map_progress ?? 0
+
+  const mockThreatIndex = CANONICAL_MOCK_THREAT_NAMES.map((name, idx) => {
     const isUnlocked = !isNeverSynced && idx < threatCount
     return {
       threat_name: name,
       is_unlocked: isUnlocked,
-      unlocked_at: isUnlocked ? `2026-09-${String(20 + idx).padStart(2, '0')}T10:00:00Z` : null,
+      unlocked_at: isUnlocked
+        ? idx === 0
+          ? '2026-10-28T08:00:00'
+          : `2026-09-${String(20 + idx).padStart(2, '0')}T10:00:00Z`
+        : null,
     }
   })
+
+  if (typeof sessionStorage !== 'undefined') {
+    const rawOverride = sessionStorage.getItem('__CYBERMORPH_OVERRIDE_PLAYER_ANALYTICS__')
+    if (rawOverride) {
+      try {
+        const parsedOverride = JSON.parse(rawOverride)
+        if (parsedOverride && typeof parsedOverride === 'object') {
+          const overridePayload =
+            parsedOverride[profileId] || (parsedOverride.__replace ? parsedOverride : null)
+          if (overridePayload && typeof overridePayload === 'object') {
+            const payload = {
+              profile_id: profileId,
+              wins: 1,
+              losses: 0,
+              avg_duration_seconds: 120.0,
+              map_progress: mapProgress,
+              threat_index: mockThreatIndex,
+              best_score_by_map: { Home: 600 },
+              recent_sessions: [],
+              ...overridePayload,
+            }
+            delete payload.__replace
+            return [200, payload]
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (isNeverSynced) {
+    return [
+      200,
+      {
+        profile_id: profileId,
+        wins: 0,
+        losses: 0,
+        avg_duration_seconds: null,
+        map_progress: mapProgress,
+        threat_index: mockThreatIndex,
+        best_score_by_map: {},
+        category_breakdown: buildNullThreatMap(),
+        recent_sessions: [],
+      },
+    ]
+  }
+
+  if (profileId === 'p15') {
+    return [
+      200,
+      {
+        profile_id: 'p15',
+        wins: 0,
+        losses: 1,
+        avg_duration_seconds: 95.0,
+        map_progress: mapProgress,
+        threat_index: mockThreatIndex,
+        best_score_by_map: {
+          Home: 420,
+        },
+        category_breakdown: buildNullThreatMap(),
+        recent_sessions: [
+          {
+            session_id: 'e1a5f420-1122-4c33-8a44-556677889915',
+            profile_id: 'p15',
+            map_name: 'Home',
+            duration_seconds: 95,
+            credits_earned: 30,
+            credits_lost: 40,
+            credits_left: 10,
+            false_positives: 1,
+            result: 'lose',
+            is_synced: true,
+            played_at: '2026-09-16T15:48:00Z',
+            created_at: '2026-09-16T15:48:05Z',
+          },
+        ],
+      },
+    ]
+  }
+
+  if (isZeroStudent) {
+    return [
+      200,
+      {
+        profile_id: 'p8',
+        wins: 0,
+        losses: 1,
+        avg_duration_seconds: 0.0,
+        map_progress: 0,
+        threat_index: mockThreatIndex,
+        best_score_by_map: {
+          Home: 0,
+        },
+        category_breakdown: {
+          ...buildNullThreatMap(),
+          Phishing: 0.0,
+        },
+        recent_sessions: [
+          {
+            session_id: 'b9e1f204-7a3c-4910-8123-543627180945',
+            profile_id: 'p8',
+            map_name: 'Home',
+            duration_seconds: 0,
+            credits_earned: 0,
+            credits_lost: 0,
+            credits_left: 0,
+            false_positives: 0,
+            result: 'timeout',
+            is_synced: true,
+            played_at: '2026-09-23T14:00:00',
+            created_at: '2026-09-23T14:00:00Z',
+          },
+        ],
+      },
+    ]
+  }
+
+  const p1Sessions = [
+    {
+      session_id: 'e2a8b351-9c2f-4612-8342-210394857612',
+      profile_id: 'p1',
+      map_name: 'Office',
+      duration_seconds: 145,
+      credits_earned: 40,
+      credits_lost: 60,
+      credits_left: 45,
+      false_positives: 2,
+      result: 'lose',
+      is_synced: true,
+      played_at: '2026-09-28T13:45:00',
+      created_at: '2026-09-28T13:45:05Z',
+    },
+    {
+      session_id: 'c1f7a240-8b1e-4501-9231-109283746501',
+      profile_id: 'p1',
+      map_name: 'Home',
+      duration_seconds: 110,
+      credits_earned: 95,
+      credits_lost: 5,
+      credits_left: 0,
+      false_positives: 0,
+      result: 'win',
+      is_synced: true,
+      played_at: '2026-09-27T10:20:00+08:00',
+      created_at: '2026-09-27T02:20:10Z',
+    },
+    {
+      session_id: 'f3b9c462-0d3a-4723-9453-321405968723',
+      profile_id: 'p1',
+      map_name: 'Office',
+      duration_seconds: 160,
+      credits_earned: 80,
+      credits_lost: 20,
+      credits_left: null,
+      false_positives: 1,
+      result: 'win',
+      is_synced: true,
+      played_at: '2026-09-26T16:10:00+08:00',
+      created_at: '2026-09-26T08:10:12Z',
+    },
+    {
+      session_id: 'd4a0d573-1e4b-4834-a564-432516079834',
+      profile_id: 'p1',
+      map_name: 'Public Park',
+      duration_seconds: 0,
+      credits_earned: 10,
+      credits_lost: 30,
+      credits_left: 0,
+      false_positives: 1,
+      result: 'timeout',
+      is_synced: true,
+      played_at: '2026-09-25T11:00:00Z',
+      created_at: '2026-09-25T11:00:05Z',
+    },
+    {
+      session_id: 'a7c2e819-3f5d-4a11-b222-654321098765',
+      profile_id: 'p1',
+      map_name: 'Internet Cafe',
+      duration_seconds: 95,
+      credits_earned: 55,
+      credits_lost: 15,
+      credits_left: null,
+      false_positives: 0,
+      result: null,
+      is_synced: true,
+      played_at: '2026-09-24T09:30:00Z',
+      created_at: '2026-09-24T09:30:08Z',
+    },
+  ]
+
+  const studentSessions =
+    profileId === 'p1'
+      ? p1Sessions
+      : [
+          {
+            session_id: `s-${profileId}-01`,
+            profile_id: profileId,
+            map_name: 'Home',
+            duration_seconds: 120,
+            credits_earned: 80,
+            credits_lost: 20,
+            credits_left: 80,
+            false_positives: 0,
+            result: 'win',
+            is_synced: true,
+            played_at: '2026-09-27T10:20:00',
+            created_at: '2026-09-27T10:20:05Z',
+          },
+          {
+            session_id: `s-${profileId}-02`,
+            profile_id: profileId,
+            map_name: 'Office',
+            duration_seconds: 0,
+            credits_earned: 30,
+            credits_lost: 40,
+            credits_left: 0,
+            false_positives: 1,
+            result: null,
+            is_synced: true,
+            played_at: '2026-09-26T09:00:00Z',
+            created_at: '2026-09-26T09:00:04Z',
+          },
+        ]
 
   return [
     200,
     {
       profile_id: profileId,
-      wins: isNeverSynced ? 0 : 6,
-      losses: isNeverSynced ? 0 : 2,
-      avg_duration_seconds: isNeverSynced ? 0 : 132.5,
+      wins: 6,
+      losses: 2,
+      avg_duration_seconds: 132.5,
       map_progress: mapProgress,
       threat_index: mockThreatIndex,
-      best_score_by_map: isNeverSynced
-        ? {}
-        : {
-            Home: 850,
-            Office: 720,
-          },
-      category_breakdown: isNeverSynced
-        ? {
-            Phishing: null,
-            Smishing: null,
-            Vishing: null,
-            'Social Engineering': null,
-            'Credential Theft': null,
-            'Public Wi-Fi Attack': null,
-            'Malware Infection': null,
-            Ransomware: null,
-          }
-        : {
-            Phishing: 0.10,
-            Smishing: 0.25,
-            Vishing: 0.40,
-            'Social Engineering': 0.08,
-            'Credential Theft': 0.30,
-            'Public Wi-Fi Attack': null,
-            'Malware Infection': 0.45,
-            Ransomware: null,
-          },
-      recent_sessions: isNeverSynced
-        ? []
-        : [
-        {
-          session_id: 'e2a8b351-9c2f-4612-8342-210394857612',
-          map_name: 'Office',
-          duration_seconds: 145,
-          credits_earned: 40,
-          credits_lost: 60,
-          credits_left: 45,
-          false_positives: 2,
-          result: 'lose',
-          played_at: '2026-09-28T13:45:00+08:00',
-        },
-        {
-          session_id: 'c1f7a240-8b1e-4501-9231-109283746501',
-          map_name: 'Home',
-          duration_seconds: 110,
-          credits_earned: 95,
-          credits_lost: 5,
-          credits_left: 0,
-          false_positives: 0,
-          result: 'win',
-          played_at: '2026-09-27T10:20:00+08:00',
-        },
-        {
-          session_id: 'f3b9c462-0d3a-4723-9453-321405968723',
-          map_name: 'Office',
-          duration_seconds: 160,
-          credits_earned: 80,
-          credits_lost: 20,
-          credits_left: null,
-          false_positives: 1,
-          result: 'win',
-          played_at: '2026-09-26T16:10:00+08:00',
-        },
-      ],
+      best_score_by_map: {
+        Home: 850,
+        Office: 720,
+      },
+      category_breakdown: {
+        Phishing: 0.1,
+        Smishing: 0.25,
+        Vishing: 0.4,
+        'Social Engineering': 0.0,
+        'Credential Theft': 0.3,
+        'Public Wi-Fi Attack': null,
+        'Malware Infection': 0.45,
+        Ransomware: null,
+      },
+      recent_sessions: studentSessions.slice(0, 10),
     },
   ]
 })
 
 mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
-  const sessionId = config.params?.session_id || ''
-
-  let delay = mockControl.delaySessionAnalyticsMs || 0
-  if (!delay && typeof window !== 'undefined') {
-    try {
-      delay = parseInt(sessionStorage.getItem('__CYBERMORPH_DELAY_SESSION__') || '0', 10) || 0
-    } catch {
-      /* ignore */
-    }
+  const sessionStatus = typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('__CYBERMORPH_OVERRIDE_SESSION_STATUS__')
+    : null
+  if (sessionStatus === '403') {
+    return [403, { detail: 'Not your student' }]
   }
+  if (sessionStatus === '404') {
+    return [404, { detail: 'Session not found' }]
+  }
+
+  const sessionId = config.params?.session_id || ''
+  const delay = resolvePerIdDelay(
+    '__CYBERMORPH_DELAY_SESSION__',
+    sessionId,
+    mockControl.delaySessionAnalyticsMs || 0,
+  )
   if (delay > 0) {
     await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  if (sessionId === 'session-other-student') {
+    return [403, { detail: 'Not your student' }]
   }
 
   if (sessionId === 'session-missing-profile') {
@@ -2232,6 +2548,20 @@ mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
         session_id: 'session-missing-profile',
         profile_id: null,
         username: 'NoProfileUser',
+        map_name: 'Home',
+        result: 'win',
+        threat_events: [],
+      },
+    ]
+  }
+
+  if (sessionId === 'session-wrong-owner') {
+    return [
+      200,
+      {
+        session_id: 'session-wrong-owner',
+        profile_id: 'p2',
+        username: 'CipherQueen',
         map_name: 'Home',
         result: 'win',
         threat_events: [],
@@ -2250,27 +2580,39 @@ mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
         result: 'lose',
         threat_events: [
           {
+            attack_log_id: 'al-e2a8-001',
+            session_id: sessionId,
             threat_type: 'Social Engineering',
             player_action: 'ignored',
             is_correct: false,
             is_legitimate_item: false,
+            scenario_difficulty: 'medium',
             credits_affected: -15,
-            logged_at: '2026-09-28T13:46:12+08:00',
+            response_time_ms: 1450,
+            logged_at: '2026-09-28T13:46:12',
           },
           {
+            attack_log_id: 'al-e2a8-002',
+            session_id: sessionId,
             threat_type: 'Phishing',
             player_action: 'quarantined',
             is_correct: true,
             is_legitimate_item: false,
+            scenario_difficulty: 'easy',
             credits_affected: 20,
+            response_time_ms: 0,
             logged_at: '2026-09-28T13:47:35+08:00',
           },
           {
+            attack_log_id: 'al-e2a8-003',
+            session_id: sessionId,
             threat_type: 'Credential Theft',
             player_action: 'accepted',
             is_correct: false,
             is_legitimate_item: false,
+            scenario_difficulty: 'hard',
             credits_affected: -45,
+            response_time_ms: 2890,
             logged_at: '2026-09-28T13:48:50+08:00',
           },
         ],
@@ -2278,18 +2620,179 @@ mock.onGet(new RegExp('/analytics/session')).reply(async (config) => {
     ]
   }
 
-  // Graceful empty threat_events list matching real backend behavior
-  return [
-    200,
-    {
-      session_id: sessionId || 'c1f7a240-8b1e-4501-9231-109283746501',
-      profile_id: 'p1',
-      username: 'AgentZero',
-      map_name: 'Home',
-      result: 'win',
-      threat_events: [],
-    },
-  ]
+  // Legacy telemetry fixture: attack_log_id present, scenario_difficulty & response_time_ms null
+  if (sessionId === 'f3b9c462-0d3a-4723-9453-321405968723') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p1',
+        username: 'AgentZero',
+        map_name: 'Office',
+        result: 'win',
+        threat_events: [
+          {
+            attack_log_id: 'al-f3b9-legacy-001',
+            session_id: sessionId,
+            threat_type: 'Smishing',
+            player_action: 'blocked',
+            is_correct: true,
+            is_legitimate_item: false,
+            scenario_difficulty: null,
+            credits_affected: 15,
+            response_time_ms: null,
+            logged_at: '2026-09-26T16:12:00',
+          },
+          {
+            attack_log_id: 'al-f3b9-legacy-002',
+            session_id: sessionId,
+            threat_type: 'Vishing',
+            player_action: 'rejected',
+            is_correct: false,
+            is_legitimate_item: true,
+            scenario_difficulty: null,
+            credits_affected: 0,
+            response_time_ms: null,
+            logged_at: '2026-09-26T16:14:20',
+          },
+        ],
+      },
+    ]
+  }
+
+  // Empty threat_events fixture matching uploaded session without threat events
+  if (sessionId === 'c1f7a240-8b1e-4501-9231-109283746501') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p1',
+        username: 'AgentZero',
+        map_name: 'Home',
+        result: 'win',
+        threat_events: [],
+      },
+    ]
+  }
+
+  if (sessionId === 'd4a0d573-1e4b-4834-a564-432516079834') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p1',
+        username: 'AgentZero',
+        map_name: 'Public Park',
+        result: 'timeout',
+        threat_events: [
+          {
+            attack_log_id: 'al-d4a0-001',
+            session_id: sessionId,
+            threat_type: 'Public Wi-Fi Attack',
+            player_action: 'quarantined',
+            is_correct: true,
+            is_legitimate_item: false,
+            scenario_difficulty: 'hard',
+            credits_affected: 0,
+            response_time_ms: 0,
+            logged_at: '2026-09-25T11:00:00Z',
+          },
+        ],
+      },
+    ]
+  }
+
+  if (sessionId === 'e1a5f420-1122-4c33-8a44-556677889915') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p15',
+        username: 'KernelPanic',
+        map_name: 'Home',
+        result: 'lose',
+        threat_events: [],
+      },
+    ]
+  }
+
+  if (sessionId === 'a7c2e819-3f5d-4a11-b222-654321098765') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p1',
+        username: 'AgentZero',
+        map_name: 'Internet Cafe',
+        result: null,
+        threat_events: [],
+      },
+    ]
+  }
+
+  if (sessionId === 'b9e1f204-7a3c-4910-8123-543627180945') {
+    return [
+      200,
+      {
+        session_id: sessionId,
+        profile_id: 'p8',
+        username: 'DataNinja',
+        map_name: 'Home',
+        result: 'timeout',
+        threat_events: [
+          {
+            attack_log_id: 'al-b9e1-001',
+            session_id: sessionId,
+            threat_type: 'Phishing',
+            player_action: 'reported',
+            is_correct: true,
+            is_legitimate_item: false,
+            scenario_difficulty: 'easy',
+            credits_affected: 0,
+            response_time_ms: 0,
+            logged_at: '2026-09-23T14:00:00',
+          },
+        ],
+      },
+    ]
+  }
+
+  const dynamicMatch = sessionId.match(/^s-(p\d+)-(\d+)$/)
+  if (dynamicMatch) {
+    const targetPid = dynamicMatch[1]
+    const student = mockStudentEnrollments.find((s) => String(s.profile_id) === targetPid)
+    if (student) {
+      return [
+        200,
+        {
+          session_id: sessionId,
+          profile_id: targetPid,
+          username: student.username,
+          map_name: dynamicMatch[2] === '02' ? 'Office' : 'Home',
+          result: dynamicMatch[2] === '02' ? null : 'win',
+          threat_events:
+            dynamicMatch[2] === '02'
+              ? []
+              : [
+                  {
+                    attack_log_id: `al-${targetPid}-001`,
+                    session_id: sessionId,
+                    threat_type: 'Phishing',
+                    player_action: 'quarantined',
+                    is_correct: true,
+                    is_legitimate_item: false,
+                    scenario_difficulty: 'medium',
+                    credits_affected: 10,
+                    response_time_ms: 920,
+                    logged_at: '2026-09-27T10:21:00',
+                  },
+                ],
+        },
+      ]
+    }
+  }
+
+  return [404, { detail: 'Session not found' }]
 })
 
 // ==========================================

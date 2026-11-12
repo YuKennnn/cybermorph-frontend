@@ -13,7 +13,7 @@ const props = defineProps({
   },
 })
 
-defineEmits(['view-students', 'view-analytics', 'edit', 'delete'])
+defineEmits(['view-analytics', 'view-settings', 'edit', 'delete'])
 
 const copyStatus = ref('idle') // 'idle' | 'copied' | 'error'
 
@@ -108,19 +108,19 @@ const formatDate = (isoString) => {
       <div class="primary-actions">
         <button
           type="button"
-          class="btn-action btn-roster"
-          @click="$emit('view-students', classroom.code_id || classroom.id)"
-        >
-          <AppIcon name="users" :size="16" />
-          <span>Students</span>
-        </button>
-        <button
-          type="button"
           class="btn-action btn-analytics"
           @click="$emit('view-analytics', classroom.code_id || classroom.id || classroom.code_value)"
         >
           <AppIcon name="analytics" :size="16" />
           <span>Analytics</span>
+        </button>
+        <button
+          type="button"
+          class="btn-action btn-roster"
+          @click="$emit('view-settings', classroom.code_id || classroom.id || classroom.code_value)"
+        >
+          <AppIcon name="settings" :size="16" />
+          <span>Settings</span>
         </button>
       </div>
 

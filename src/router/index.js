@@ -78,7 +78,23 @@ const routes = [
   {
     path: '/classroom/students/:code_id',
     name: 'classroom-students',
-    component: () => import('../views/ClassroomStudentsView.vue'),
+    redirect: (to) => {
+      const nextQuery = { ...to.query }
+      const rawPage = Array.isArray(nextQuery.page) ? nextQuery.page[0] : nextQuery.page
+      const parsedPage = Number.parseInt(String(rawPage ?? ''), 10)
+      delete nextQuery.page
+      if (Number.isFinite(parsedPage) && parsedPage > 1) {
+        nextQuery.table_page = String(parsedPage)
+      } else if (parsedPage === 1) {
+        delete nextQuery.table_page
+      }
+      return {
+        name: 'educator-analytics',
+        params: { code_id: to.params.code_id },
+        query: nextQuery,
+        hash: '#students-roster',
+      }
+    },
     meta: { requiresAuth: true, roles: ['educator'] },
   },
   {
@@ -176,8 +192,11 @@ const router = createRouter({
       return savedPosition
     }
     const behavior = isReducedMotionActive() ? 'auto' : 'smooth'
-    if (to.hash) {
+    if (to.hash && (to.path !== from.path || to.hash !== from.hash)) {
       return { el: to.hash, behavior }
+    }
+    if (to.path === from.path) {
+      return false
     }
     return { top: 0, behavior }
   },

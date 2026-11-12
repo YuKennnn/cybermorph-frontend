@@ -18,8 +18,8 @@ const props = defineProps({
   },
   activeTab: {
     type: String,
-    default: 'students',
-    validator: (val) => ['students', 'analytics', 'settings'].includes(val),
+    default: 'analytics',
+    validator: (val) => ['analytics', 'settings'].includes(val),
   },
   studentCount: {
     type: Number,
@@ -166,24 +166,17 @@ const handleRetry = async () => {
 }
 
 // Navigation links
-const studentsRoute = computed(() => {
-  return {
-    path: `/classroom/students/${props.codeId}`,
-    query: props.originatingRosterPage > 1 ? { page: props.originatingRosterPage } : {},
-  }
-})
-
 const analyticsRoute = computed(() => {
   return {
     path: `/analytics/${props.codeId}`,
-    query: props.originatingRosterPage > 1 ? { roster_page: props.originatingRosterPage } : {},
+    query: props.originatingRosterPage > 1 ? { table_page: props.originatingRosterPage } : {},
   }
 })
 
 const settingsRoute = computed(() => {
   return {
     path: `/classroom/settings/${props.codeId}`,
-    query: props.originatingRosterPage > 1 ? { roster_page: props.originatingRosterPage } : {},
+    query: props.originatingRosterPage > 1 ? { table_page: props.originatingRosterPage } : {},
   }
 })
 
@@ -318,16 +311,6 @@ onUnmounted(() => {
     <!-- Workspace Navigation Links (Not Tablist) -->
     <nav class="workspace-nav" aria-label="Classroom navigation">
       <router-link
-        :to="studentsRoute"
-        class="nav-link"
-        :class="{ active: activeTab === 'students' }"
-        :aria-current="activeTab === 'students' ? 'page' : undefined"
-      >
-        <AppIcon name="users" :size="16" />
-        <span>Students</span>
-      </router-link>
-
-      <router-link
         :to="analyticsRoute"
         class="nav-link"
         :class="{ active: activeTab === 'analytics' }"
@@ -356,8 +339,8 @@ onUnmounted(() => {
   background-color: var(--color-card, #ffffff);
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 12px;
-  padding: 1.5rem 1.75rem 0 1.75rem;
-  margin-bottom: 2rem;
+  padding: 1.5rem 1.5rem 0 1.5rem;
+  margin-bottom: 1.5rem;
   box-shadow: var(--shadow-card, 0 1px 3px 0 rgba(15, 23, 42, 0.06));
   min-width: 0;
   max-width: 100%;
@@ -625,6 +608,12 @@ onUnmounted(() => {
 
 .nav-link:hover:not(.nav-link-disabled) {
   color: var(--color-primary, #7c3aed);
+}
+
+.nav-link:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .nav-link.active {

@@ -43,6 +43,26 @@ const formattedFinishingCredits = computed(() => {
   return formatFinishingCredits(props.session?.credits_left)
 })
 
+const normalizedResult = computed(() => {
+  const raw = props.session?.result ?? props.sessionTelemetry?.result
+  if (typeof raw !== 'string') return ''
+  return raw.trim().toLowerCase()
+})
+
+const formatCardDifficulty = (difficulty) => {
+  if (typeof difficulty !== 'string') return '—'
+  const trimmed = difficulty.trim()
+  if (!trimmed) return '—'
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase()
+}
+
+const formatResponseTimeMs = (ms) => {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '—'
+  return `${Math.round(ms)} ms`
+}
+
+const hasValidNumber = (val) => typeof val === 'number' && Number.isFinite(val)
+
 const handleClose = () => {
   emit('close')
   emit('backToStudent')
@@ -176,10 +196,10 @@ onUnmounted(() => {
           <div class="summary-col">
             <span class="summary-label">Outcome</span>
             <span
-              v-if="session?.result || sessionTelemetry?.result"
-              :class="['result-pill', session?.result || sessionTelemetry?.result]"
+              v-if="normalizedResult"
+              :class="['result-pill', normalizedResult]"
             >
-              {{ (session?.result || sessionTelemetry?.result)?.toUpperCase() }}
+              {{ normalizedResult.toUpperCase() }}
             </span>
             <span v-else class="summary-val">—</span>
           </div>
@@ -210,39 +230,59 @@ onUnmounted(() => {
               <thead>
                 <tr>
                   <th>Type of threat</th>
+                  <th>Card difficulty</th>
                   <th>Action taken</th>
                   <th>Assessment</th>
                   <th>Legitimate?</th>
+                  <th>Response time</th>
                   <th>Credits</th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="(event, idx) in sessionTelemetry.threat_events"
-                  :key="idx"
+                  v-for="event in sessionTelemetry.threat_events"
+                  :key="event.attack_log_id"
                 >
                   <td>
-                    <span class="event-threat">{{ event.threat_type }}</span>
+                    <span class="event-threat">{{ event.threat_type || '—' }}</span>
                   </td>
                   <td>
-                    <span class="event-action">{{ event.player_action }}</span>
+                    <span :class="{ 'missing-cell': !event.scenario_difficulty }">
+                      {{ formatCardDifficulty(event.scenario_difficulty) }}
+                    </span>
+                  </td>
+                  <td>
+                    <span v-if="event.player_action" class="event-action">{{ event.player_action }}</span>
+                    <span v-else class="missing-cell">—</span>
                   </td>
                   <td>
                     <span
+                      v-if="typeof event.is_correct === 'boolean'"
                       :class="['assessment-tag', event.is_correct ? 'correct' : 'incorrect']"
                     >
                       {{ event.is_correct ? 'Correct' : 'Incorrect' }}
                     </span>
+                    <span v-else class="missing-cell">—</span>
                   </td>
                   <td>
-                    {{ event.is_legitimate_item ? 'Yes (Benign)' : 'No (Attack)' }}
+                    <span v-if="typeof event.is_legitimate_item === 'boolean'">
+                      {{ event.is_legitimate_item ? 'Yes (Benign)' : 'No (Attack)' }}
+                    </span>
+                    <span v-else class="missing-cell">—</span>
                   </td>
-                  <td>
+                  <td class="num-cell">
+                    <span :class="{ 'missing-cell': formatResponseTimeMs(event.response_time_ms) === '—' }">
+                      {{ formatResponseTimeMs(event.response_time_ms) }}
+                    </span>
+                  </td>
+                  <td class="num-cell">
                     <span
+                      v-if="hasValidNumber(event.credits_affected)"
                       :class="['credit-val', event.credits_affected >= 0 ? 'gain' : 'loss']"
                     >
                       {{ event.credits_affected >= 0 ? `+${event.credits_affected}` : event.credits_affected }}
                     </span>
+                    <span v-else class="missing-cell">—</span>
                   </td>
                 </tr>
               </tbody>
@@ -295,7 +335,7 @@ onUnmounted(() => {
 }
 
 .modal-md {
-  max-width: 680px;
+  max-width: 820px;
 }
 
 .modal-header {
@@ -457,6 +497,15 @@ onUnmounted(() => {
 .assessment-tag.incorrect {
   background-color: var(--color-danger-bg);
   color: var(--color-danger);
+}
+
+.missing-cell {
+  color: var(--color-text-muted);
+}
+
+.num-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .credit-val.gain {

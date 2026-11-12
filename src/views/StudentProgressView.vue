@@ -7,22 +7,27 @@ import AppIcon from '../components/common/AppIcon.vue'
 import { fetchClassroomStudents } from '../api/classroom.js'
 import { fetchPlayerAnalytics, fetchSessionAnalytics } from '../api/analytics.js'
 import { useClassroomStore } from '../stores/classroomStore.js'
+import { useAuthStore } from '../stores/authStore.js'
 import { useApiCacheStore } from '../stores/apiCacheStore.js'
+import { classifyApiError } from '../api/client.js'
 import {
   CANONICAL_THREAT_CATEGORIES,
   validateThreatIndexResponse,
 } from '../stores/threatIndexStore.js'
+import { isValidErrorRate, classifyCategoryBreakdown } from '../utils/analyticsValidation.js'
 import { parseBackendUtcTimestamp, formatLastSyncedDate } from '../utils/datetime.js'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const classroomStore = useClassroomStore()
 const cacheStore = useApiCacheStore()
 const STUDENT_ANALYTICS_TTL = 60000 // 60s
 const TELEMETRY_TTL = 60000 // 60s
+const ROSTER_TTL = 60000 // 60s
 
 const syncClassroomMetadata = (force = false) => {
-  if (codeId.value) {
+  if (codeId.value && authStore.isAuthenticated && authStore.isEducator) {
     classroomStore.setCurrentClassroomId(codeId.value)
     classroomStore.fetchClassrooms(force).catch(() => {})
   }
@@ -38,29 +43,44 @@ const CANONICAL_MAPS = [
 
 const CANONICAL_THREATS = CANONICAL_THREAT_CATEGORIES
 
-// Request ID Generation Guards (Condition 5: prevent stale updates)
+// Request ID & mount lifecycle guards (prevent stale updates and cross-session cache pollution)
 let identityRequestId = 0
 let analyticsRequestId = 0
 let sessionRequestId = 0
+let isComponentMounted = true
 
 // Route Parameters
 const codeId = computed(() => String(route.params.code_id || ''))
 const profileId = computed(() => String(route.params.profile_id || ''))
 
-// Roster Return Destination & Pagination
+const parsePositivePage = (val) => {
+  const normalized = Array.isArray(val) ? val[0] : val
+  const p = Number.parseInt(String(normalized ?? ''), 10)
+  return Number.isFinite(p) && p > 0 ? p : null
+}
+
+// Roster return destination and analytics roster pagination
 const originatingRosterPage = computed(() => {
-  const p = parseInt(route.query.roster_page || route.query.page, 10)
-  return !isNaN(p) && p > 0 ? p : 1
+  return (
+    parsePositivePage(route.query.table_page) ??
+    parsePositivePage(route.query.roster_page) ??
+    parsePositivePage(route.query.page) ??
+    1
+  )
 })
+
+// Student identity lookup start page preserves table_page, then legacy roster_page/page params.
+const identityLookupStartPage = computed(() => originatingRosterPage.value)
 
 const rosterReturnRoute = computed(() => {
   const query = {}
   if (originatingRosterPage.value > 1) {
-    query.page = originatingRosterPage.value
+    query.table_page = originatingRosterPage.value
   }
   return {
-    path: `/classroom/students/${codeId.value}`,
+    path: `/analytics/${codeId.value}`,
     query,
+    hash: '#students-roster',
   }
 })
 
@@ -88,13 +108,17 @@ const formattedStudentSyncDate = computed(() => {
     return 'Loading...'
   }
   if (identityStatus.value !== 'found') {
-    return 'Sync date unavailable'
+    return 'Sync status unavailable'
   }
   return formatLastSyncedDate(studentIdentity.value.last_synced_at)
 })
 
-const fetchRosterPageCached = async (targetPage, force = false) => {
-  const cacheKey = `educator::roster::page::code_id=${codeId.value}&page=${targetPage}&page_size=10`
+const fetchRosterPageCached = async (targetPage, force = false, requestContext = null) => {
+  const targetCodeId = requestContext?.expectedCodeId ?? codeId.value
+  const reqAuthEpoch = requestContext?.reqAuthEpoch ?? authStore.activeSessionEpoch
+  const cacheKey = `educator::roster::page::code_id=${targetCodeId}&page=${targetPage}&page_size=10`
+  const reqKeyVersion = cacheStore.getKeyVersion(cacheKey)
+
   if (!force) {
     const cached = cacheStore.get(cacheKey)
     if (cached && !cached.isExpired) {
@@ -102,27 +126,67 @@ const fetchRosterPageCached = async (targetPage, force = false) => {
     }
   }
 
-  const data = await fetchClassroomStudents(codeId.value, {
+  const data = await fetchClassroomStudents(targetCodeId, {
     page: targetPage,
     page_size: 10,
   })
-  cacheStore.set(cacheKey, data, 60000)
+
+  const stillAuthorized = authStore.isAuthenticated && authStore.isEducator
+  const stillSameAuthEpoch = authStore.activeSessionEpoch === reqAuthEpoch
+  const stillSameKeyVersion = cacheStore.getKeyVersion(cacheKey) === reqKeyVersion
+  const stillSameContext = !requestContext?.isCurrent || requestContext.isCurrent()
+
+  if (
+    !isComponentMounted ||
+    !stillAuthorized ||
+    !stillSameAuthEpoch ||
+    !stillSameKeyVersion ||
+    codeId.value !== targetCodeId ||
+    !stillSameContext
+  ) {
+    return null
+  }
+
+  cacheStore.set(cacheKey, data, ROSTER_TTL)
   return data
 }
 
 const resolveStudentIdentity = async (force = false) => {
   const reqId = ++identityRequestId
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const expectedCodeId = codeId.value
+  const expectedProfileId = profileId.value
+
+  if (!expectedCodeId || !expectedProfileId || !authStore.isAuthenticated || !authStore.isEducator) {
+    return
+  }
+
   identityStatus.value = 'loading'
   identityError.value = ''
 
-  try {
-    const startPage = originatingRosterPage.value
-    const firstRes = await fetchRosterPageCached(startPage, force)
+  const isCurrentIdentityReq = () =>
+    isComponentMounted &&
+    reqId === identityRequestId &&
+    authStore.isAuthenticated &&
+    authStore.isEducator &&
+    authStore.activeSessionEpoch === reqAuthEpoch &&
+    codeId.value === expectedCodeId &&
+    profileId.value === expectedProfileId
 
-    if (reqId !== identityRequestId) return
+  const requestContext = {
+    expectedCodeId,
+    reqAuthEpoch,
+    isCurrent: isCurrentIdentityReq,
+  }
+
+  try {
+    const startPage = identityLookupStartPage.value
+    const firstRes = await fetchRosterPageCached(startPage, force, requestContext)
+
+    if (!isCurrentIdentityReq() || !firstRes) return
 
     const items = firstRes?.items || firstRes?.students || (Array.isArray(firstRes) ? firstRes : [])
-    const foundOnStart = items.find((s) => String(s.profile_id) === profileId.value)
+    const foundOnStart = items.find((s) => String(s.profile_id) === expectedProfileId)
 
     if (foundOnStart) {
       studentIdentity.value = {
@@ -150,19 +214,19 @@ const resolveStudentIdentity = async (force = false) => {
 
     for (let p = 1; p <= Math.min(totalPages, MAX_SEARCH_PAGES); p++) {
       if (p === startPage) continue
-      const pageRes = await fetchRosterPageCached(p, force)
+      const pageRes = await fetchRosterPageCached(p, force, requestContext)
 
-      if (reqId !== identityRequestId) return
+      if (!isCurrentIdentityReq() || !pageRes) return
 
       const pageItems = pageRes?.items || pageRes?.students || (Array.isArray(pageRes) ? pageRes : [])
-      const found = pageItems.find((s) => String(s.profile_id) === profileId.value)
+      const found = pageItems.find((s) => String(s.profile_id) === expectedProfileId)
       if (found) {
         matchedStudent = found
         break
       }
     }
 
-    if (reqId !== identityRequestId) return
+    if (!isCurrentIdentityReq()) return
 
     if (matchedStudent) {
       studentIdentity.value = {
@@ -177,16 +241,27 @@ const resolveStudentIdentity = async (force = false) => {
       identityStatus.value = 'no_match'
     }
   } catch (err) {
-    if (reqId === identityRequestId) {
-      if (err?.response?.status === 403 || err?.response?.status === 404) {
-        cacheStore.invalidatePrefix(`educator::roster::page::code_id=${codeId.value}`)
-        studentIdentity.value = {
-          username: '',
-          map_progress: null,
-          last_synced_at: undefined,
-        }
+    if (!isCurrentIdentityReq()) return
+    const status = err?.response?.status
+    const errType = classifyApiError(err)
+
+    if (status === 403 || status === 404) {
+      cacheStore.invalidatePrefix(`educator::roster::page::code_id=${expectedCodeId}`)
+      studentIdentity.value = {
+        username: '',
+        map_progress: null,
+        last_synced_at: undefined,
       }
-      identityStatus.value = 'error'
+    }
+
+    identityStatus.value = 'error'
+    if (status === 403) {
+      identityError.value = 'You do not have access to view this classroom.'
+    } else if (status === 404) {
+      identityError.value = 'Classroom not found or no longer exists.'
+    } else if (errType === 'timeout') {
+      identityError.value = 'Request timed out while verifying student identity from classroom roster.'
+    } else {
       identityError.value = 'Unable to verify student identity from classroom roster.'
     }
   }
@@ -207,11 +282,32 @@ const isAnalyticsLoading = ref(true)
 const analyticsError = ref('')
 
 const loadPlayerAnalytics = async (force = false) => {
-  if (!profileId.value) return
-  const cacheKey = `educator::analytics::student::profile_id=${profileId.value}`
+  const reqId = ++analyticsRequestId
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const expectedCodeId = codeId.value
+  const expectedProfileId = profileId.value
+
+  if (!expectedProfileId || !authStore.isAuthenticated || !authStore.isEducator) {
+    isAnalyticsLoading.value = false
+    return
+  }
+
+  const isCurrentAnalyticsReq = () =>
+    isComponentMounted &&
+    reqId === analyticsRequestId &&
+    authStore.isAuthenticated &&
+    authStore.isEducator &&
+    authStore.activeSessionEpoch === reqAuthEpoch &&
+    codeId.value === expectedCodeId &&
+    profileId.value === expectedProfileId
+
+  const cacheKey = `educator::analytics::student::profile_id=${expectedProfileId}`
+  const reqKeyVersion = cacheStore.getKeyVersion(cacheKey)
+
   if (!force) {
     const cached = cacheStore.get(cacheKey)
     if (cached && !cached.isExpired) {
+      if (!isCurrentAnalyticsReq()) return
       analyticsData.value = cached.data
       if (selectedSession.value?.session_id) {
         const match = cached.data?.recent_sessions?.find(
@@ -225,14 +321,15 @@ const loadPlayerAnalytics = async (force = false) => {
     }
   }
 
-  const reqId = ++analyticsRequestId
   isAnalyticsLoading.value = true
   analyticsError.value = ''
 
   try {
-    const data = await fetchPlayerAnalytics(profileId.value)
-    if (reqId !== analyticsRequestId) return
-    cacheStore.set(cacheKey, data, STUDENT_ANALYTICS_TTL)
+    const data = await fetchPlayerAnalytics(expectedProfileId)
+    if (!isCurrentAnalyticsReq()) return
+    if (cacheStore.getKeyVersion(cacheKey) === reqKeyVersion) {
+      cacheStore.set(cacheKey, data, STUDENT_ANALYTICS_TTL)
+    }
     analyticsData.value = data
     if (selectedSession.value?.session_id) {
       const match = data.recent_sessions?.find(
@@ -243,44 +340,64 @@ const loadPlayerAnalytics = async (force = false) => {
       }
     }
   } catch (err) {
-    if (reqId !== analyticsRequestId) return
-    if (err?.response?.status === 403 || err?.response?.status === 404) {
+    if (!isCurrentAnalyticsReq()) return
+    const status = err?.response?.status
+    const errType = classifyApiError(err)
+
+    if (status === 403 || status === 404) {
       analyticsData.value = null
+      sessionRequestId++
+      isSessionModalOpen.value = false
+      selectedSession.value = null
+      sessionTelemetry.value = null
+      isSessionLoading.value = false
+      sessionErrorMessage.value = ''
       cacheStore.invalidateKey(cacheKey)
       cacheStore.invalidatePrefix('educator::telemetry::')
     }
-    analyticsError.value =
-      err?.response?.data?.detail ||
-      'Could not load student performance data. Please try again.'
+
+    if (status === 403) {
+      analyticsError.value = 'You do not have access to view analytics for this student.'
+    } else if (status === 404) {
+      analyticsError.value = 'Student record not found or no longer exists.'
+    } else if (errType === 'timeout') {
+      analyticsError.value = 'Request timed out while loading student performance data. Please try again.'
+    } else {
+      analyticsError.value = 'Could not load student performance data. Please try again.'
+    }
   } finally {
-    if (reqId === analyticsRequestId) {
+    if (
+      isComponentMounted &&
+      reqId === analyticsRequestId &&
+      authStore.activeSessionEpoch === reqAuthEpoch
+    ) {
       isAnalyticsLoading.value = false
     }
   }
 }
 
-// Win rate & completed sessions computation
-const totalGamesPlayed = computed(() => {
-  if (!analyticsData.value) return 0
-  const w = Number(analyticsData.value.wins) || 0
-  const l = Number(analyticsData.value.losses) || 0
-  return w + l
+// Uploaded session result buckets (wins + losses; win rate removed per API contract)
+const reportedWins = computed(() => {
+  const val = analyticsData.value?.wins
+  return typeof val === 'number' && Number.isFinite(val) && val >= 0 ? val : 0
 })
 
-const calculatedWinRate = computed(() => {
-  if (!analyticsData.value) return 'No results yet'
-  const w = Number(analyticsData.value.wins) || 0
-  const l = Number(analyticsData.value.losses) || 0
-  const total = w + l
-  if (total === 0) return 'No results yet'
-  return `${Math.round((w / total) * 100)}%`
+const otherResultsCount = computed(() => {
+  const val = analyticsData.value?.losses
+  return typeof val === 'number' && Number.isFinite(val) && val >= 0 ? val : 0
+})
+
+const uploadedSessionsCount = computed(() => {
+  return reportedWins.value + otherResultsCount.value
 })
 
 const formatDuration = (seconds) => {
-  if (typeof seconds !== 'number' || isNaN(seconds) || seconds <= 0) return '0s'
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '—'
+  if (seconds === 0) return '0s'
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
   if (mins === 0) return `${secs}s`
+  if (secs === 60) return `${mins + 1}m 0s`
   return `${mins}m ${secs}s`
 }
 
@@ -296,13 +413,19 @@ const formatSessionDate = (isoString) => {
   })
 }
 
-// Format error rate percentage (Condition 1: Category breakdown as Error rate, null as No data yet)
+const hasValidErrorRate = isValidErrorRate
+
+const categoryBreakdownState = computed(() => {
+  return classifyCategoryBreakdown(analyticsData.value?.category_breakdown)
+})
+
+// Format error rate percentage (null as No data yet; preserve measured 0 as 0%)
 const formatErrorRate = (rate) => {
-  if (rate === null || rate === undefined) return 'No data yet'
-  if (typeof rate === 'number') {
+  if (rate === null) return 'No data yet'
+  if (hasValidErrorRate(rate)) {
     return `${Math.round(rate * 100)}%`
   }
-  return String(rate)
+  return 'Unavailable'
 }
 
 // ==========================================
@@ -333,7 +456,11 @@ const validatedThreatIndex = computed(() => {
 })
 
 const isStudentNeverSynced = computed(() => {
-  return studentIdentity.value?.last_synced_at === null
+  return identityStatus.value === 'found' && studentIdentity.value?.last_synced_at === null
+})
+
+const isSyncStatusUnknown = computed(() => {
+  return identityStatus.value !== 'loading' && identityStatus.value !== 'found'
 })
 
 const studentThreatUnlockedText = computed(() => {
@@ -347,6 +474,11 @@ const studentThreatUnlockedText = computed(() => {
   return `${count} of 8 unlocked`
 })
 
+const recentSessionsList = computed(() => {
+  const list = analyticsData.value?.recent_sessions
+  return Array.isArray(list) ? list.slice(0, 10) : []
+})
+
 // ==========================================
 // 3. Session Telemetry Modal State
 // ==========================================
@@ -357,7 +489,20 @@ const isSessionLoading = ref(false)
 const sessionErrorMessage = ref('')
 
 const openSession = async (sessionItem, force = false) => {
-  if (!sessionItem?.session_id) return
+  const reqId = ++sessionRequestId
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const expectedCodeId = codeId.value
+  const expectedProfileId = profileId.value
+
+  if (
+    !sessionItem?.session_id ||
+    !expectedProfileId ||
+    !authStore.isAuthenticated ||
+    !authStore.isEducator
+  ) {
+    return
+  }
+
   const sessionId = String(sessionItem.session_id)
   const fullSession = analyticsData.value?.recent_sessions?.find(
     (s) => String(s.session_id) === sessionId,
@@ -366,16 +511,32 @@ const openSession = async (sessionItem, force = false) => {
   isSessionModalOpen.value = true
 
   // Reflect session ID in URL query without wiping existing query params
-  router.push({
-    query: { ...route.query, session: sessionId },
-  })
+  if (String(route.query.session || '') !== sessionId) {
+    router.push({
+      query: { ...route.query, session: sessionId },
+    })
+  }
+
+  const isCurrentSessionReq = () =>
+    isComponentMounted &&
+    reqId === sessionRequestId &&
+    isSessionModalOpen.value &&
+    authStore.isAuthenticated &&
+    authStore.isEducator &&
+    authStore.activeSessionEpoch === reqAuthEpoch &&
+    codeId.value === expectedCodeId &&
+    profileId.value === expectedProfileId
 
   const telemetryKey = `educator::telemetry::session_id=${sessionId}`
+  const reqKeyVersion = cacheStore.getKeyVersion(telemetryKey)
+
   if (!force) {
     const cached = cacheStore.get(telemetryKey)
     if (cached && !cached.isExpired) {
+      if (!isCurrentSessionReq()) return
       const data = cached.data
-      if (!data?.profile_id || String(data.profile_id) !== profileId.value) {
+      if (!data?.profile_id || String(data.profile_id) !== expectedProfileId) {
+        cacheStore.invalidateKey(telemetryKey)
         sessionErrorMessage.value = 'Session details do not belong to this student.'
         sessionTelemetry.value = null
         selectedSession.value = null
@@ -389,33 +550,51 @@ const openSession = async (sessionItem, force = false) => {
     }
   }
 
-  const reqId = ++sessionRequestId
   isSessionLoading.value = true
   sessionErrorMessage.value = ''
   sessionTelemetry.value = null
 
   try {
     const data = await fetchSessionAnalytics(sessionId)
-    if (reqId !== sessionRequestId) return
+    if (!isCurrentSessionReq()) return
 
-    // Requirement 4: Require returned session profile_id to match the page student.
-    // Missing or mismatched profile_id must not display session details.
-    if (!data?.profile_id || String(data.profile_id) !== profileId.value) {
+    // Require returned session profile_id to match the page student.
+    if (!data?.profile_id || String(data.profile_id) !== expectedProfileId) {
       sessionErrorMessage.value = 'Session details do not belong to this student.'
       sessionTelemetry.value = null
       selectedSession.value = null
       return
     }
 
-    cacheStore.set(telemetryKey, data, TELEMETRY_TTL)
+    if (cacheStore.getKeyVersion(telemetryKey) === reqKeyVersion) {
+      cacheStore.set(telemetryKey, data, TELEMETRY_TTL)
+    }
     sessionTelemetry.value = data
   } catch (err) {
-    if (reqId !== sessionRequestId) return
-    sessionErrorMessage.value =
-      err?.response?.data?.detail ||
-      'Failed to load session details. Please try again.'
+    if (!isCurrentSessionReq()) return
+    const status = err?.response?.status
+    const errType = classifyApiError(err)
+
+    if (status === 403 || status === 404) {
+      cacheStore.invalidateKey(telemetryKey)
+      sessionTelemetry.value = null
+    }
+
+    if (status === 403) {
+      sessionErrorMessage.value = 'You do not have access to view details for this session.'
+    } else if (status === 404) {
+      sessionErrorMessage.value = 'Session not found or no longer exists.'
+    } else if (errType === 'timeout') {
+      sessionErrorMessage.value = 'Request timed out while loading session details. Please try again.'
+    } else {
+      sessionErrorMessage.value = 'Failed to load session details. Please try again.'
+    }
   } finally {
-    if (reqId === sessionRequestId) {
+    if (
+      isComponentMounted &&
+      reqId === sessionRequestId &&
+      authStore.activeSessionEpoch === reqAuthEpoch
+    ) {
       isSessionLoading.value = false
     }
   }
@@ -456,10 +635,6 @@ watch(
 
 // Watch profileId or codeId changes to refresh data
 watch([codeId, profileId], ([newCode, newProfile], [oldCode]) => {
-  if (newCode && newCode !== oldCode) {
-    syncClassroomMetadata()
-  }
-
   // Immediately invalidate pending requests
   identityRequestId++
   analyticsRequestId++
@@ -486,7 +661,11 @@ watch([codeId, profileId], ([newCode, newProfile], [oldCode]) => {
   isSessionLoading.value = false
   sessionErrorMessage.value = ''
 
-  if (newCode && newProfile) {
+  if (newCode && newCode !== oldCode) {
+    syncClassroomMetadata()
+  }
+
+  if (newCode && newProfile && authStore.isAuthenticated && authStore.isEducator) {
     resolveStudentIdentity()
     loadPlayerAnalytics()
 
@@ -494,10 +673,57 @@ watch([codeId, profileId], ([newCode, newProfile], [oldCode]) => {
     if (route.query.session) {
       openSession({ session_id: String(route.query.session) })
     }
+  } else {
+    isAnalyticsLoading.value = false
   }
 })
 
+// Clear private state and invalidate in-flight requests on logout or account switch
+watch(
+  [() => authStore.activeSessionEpoch, () => authStore.isAuthenticated, () => authStore.isEducator],
+  ([, isAuth, isEd]) => {
+    identityRequestId++
+    analyticsRequestId++
+    sessionRequestId++
+
+    studentIdentity.value = {
+      username: '',
+      map_progress: null,
+      last_synced_at: undefined,
+    }
+    identityError.value = ''
+
+    analyticsData.value = null
+    analyticsError.value = ''
+
+    isSessionModalOpen.value = false
+    selectedSession.value = null
+    sessionTelemetry.value = null
+    isSessionLoading.value = false
+    sessionErrorMessage.value = ''
+
+    if (!isComponentMounted || !isAuth || !isEd || !codeId.value || !profileId.value) {
+      identityStatus.value = 'error'
+      isAnalyticsLoading.value = false
+      return
+    }
+
+    syncClassroomMetadata()
+    resolveStudentIdentity()
+    loadPlayerAnalytics()
+
+    if (route.query.session) {
+      openSession({ session_id: String(route.query.session) })
+    }
+  },
+)
+
 onMounted(() => {
+  isComponentMounted = true
+  if (!authStore.isAuthenticated || !authStore.isEducator) {
+    isAnalyticsLoading.value = false
+    return
+  }
   syncClassroomMetadata()
   resolveStudentIdentity()
   loadPlayerAnalytics()
@@ -508,6 +734,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isComponentMounted = false
   identityRequestId++
   analyticsRequestId++
   sessionRequestId++
@@ -519,7 +746,7 @@ onUnmounted(() => {
     <ClassroomWorkspaceHeader
       page-title="Student progress"
       :code-id="codeId"
-      active-tab="students"
+      active-tab="analytics"
       :return-to="rosterReturnRoute"
       return-label="Return to classroom roster"
       :originating-roster-page="originatingRosterPage"
@@ -537,7 +764,7 @@ onUnmounted(() => {
             <div class="identity-meta-row">
               <span class="meta-item">
                 <AppIcon name="gameplay" :size="14" class="meta-icon" />
-                Map progress: <strong>{{ formatMapProgress(studentIdentity.map_progress) }}</strong>
+                Map progress: <strong>{{ formatMapProgress(studentMapProgress) }}</strong>
               </span>
               <span class="meta-divider">•</span>
               <span class="meta-item">
@@ -548,7 +775,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- Identity Search Notes (Condition 2: Distinguish lookup failure, no match, limit reached) -->
+        <!-- Identity Search Notes (Distinguish lookup failure, no match, limit reached) -->
         <div v-if="identityStatus === 'no_match'" class="identity-note note-info" role="status">
           <AppIcon name="alert" :size="14" />
           <span>Student was not found in this classroom's active roster.</span>
@@ -560,7 +787,7 @@ onUnmounted(() => {
         <div v-else-if="identityStatus === 'error'" class="identity-note note-error" role="alert">
           <AppIcon name="alert" :size="14" />
           <span>{{ identityError }}</span>
-          <button type="button" class="btn-retry-sm" @click="resolveStudentIdentity">
+          <button type="button" class="btn-retry-sm" @click="resolveStudentIdentity(true)">
             Retry roster search
           </button>
         </div>
@@ -590,26 +817,26 @@ onUnmounted(() => {
 
           <div class="kpi-grid">
             <div class="kpi-card">
-              <span class="kpi-label">Win rate</span>
-              <span class="kpi-value win-rate">{{ calculatedWinRate }}</span>
+              <span class="kpi-label">Uploaded sessions</span>
+              <span class="kpi-value">{{ uploadedSessionsCount }}</span>
             </div>
             <div class="kpi-card">
-              <span class="kpi-label">Wins</span>
-              <span class="kpi-value win-count">{{ analyticsData.wins }}</span>
+              <span class="kpi-label">Reported wins</span>
+              <span class="kpi-value win-count">{{ reportedWins }}</span>
             </div>
             <div class="kpi-card">
-              <span class="kpi-label">Losses</span>
-              <span class="kpi-value loss-count">{{ analyticsData.losses }}</span>
-            </div>
-            <div class="kpi-card">
-              <span class="kpi-label">Total completed sessions</span>
-              <span class="kpi-value">{{ totalGamesPlayed }}</span>
+              <span class="kpi-label">Other results</span>
+              <span class="kpi-value loss-count">{{ otherResultsCount }}</span>
             </div>
             <div class="kpi-card">
               <span class="kpi-label">Average duration</span>
               <span class="kpi-value">{{ formatDuration(analyticsData.avg_duration_seconds) }}</span>
             </div>
           </div>
+
+          <p class="kpi-note">
+            Uploaded sessions = Reported wins + Other results. Other results includes timeouts, missing outcomes, and some goal-met runs that did not unlock the next map.
+          </p>
 
           <!-- Best Score by Map (Documented canonical maps) -->
           <div class="map-scores-container">
@@ -622,7 +849,11 @@ onUnmounted(() => {
               >
                 <span class="map-pill-name">{{ m.name }}:</span>
                 <span
-                  v-if="analyticsData.best_score_by_map?.[m.name] !== undefined"
+                  v-if="
+                    typeof analyticsData.best_score_by_map?.[m.name] === 'number' &&
+                    Number.isFinite(analyticsData.best_score_by_map[m.name]) &&
+                    analyticsData.best_score_by_map[m.name] >= 0
+                  "
                   class="map-pill-value"
                 >
                   {{ Math.round(analyticsData.best_score_by_map[m.name]) }} pts
@@ -697,9 +928,15 @@ onUnmounted(() => {
             <span>Student has not synced gameplay progress yet. Threat categories will show as unlocked once progress is uploaded from the game.</span>
           </div>
 
+          <!-- Unknown Sync Status Notice -->
+          <div v-else-if="isSyncStatusUnknown" class="threat-sync-note" role="status">
+            <AppIcon name="info" :size="16" class="note-icon" />
+            <span>Sync status unavailable from classroom roster. Threat index entries below reflect the current analytics data.</span>
+          </div>
+
           <!-- Malformed / Incomplete / Unavailable Threat Index Banner -->
           <div
-            v-else-if="validatedThreatIndex.status !== 'ready'"
+            v-if="!isStudentNeverSynced && validatedThreatIndex.status !== 'ready'"
             class="scoped-unavailable-banner"
             role="alert"
           >
@@ -741,14 +978,32 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 4. Types of Threats & Error Rates (Condition 1) -->
+        <!-- 4. Types of Threats & Error Rates -->
         <section class="section-card" aria-label="Types of threats">
           <div class="section-header">
             <h3>Types of threats</h3>
-            <span class="section-hint">Vulnerability evaluation across simulated threat encounters</span>
+            <span class="section-hint">Share of wrong answers across uploaded decisions for each type of threat</span>
           </div>
 
-          <div class="table-container">
+          <div
+            v-if="categoryBreakdownState.status === 'unavailable'"
+            class="scoped-unavailable-banner"
+            role="alert"
+          >
+            <AppIcon name="alert" :size="16" class="banner-icon" />
+            <span>Decision error rate data is unavailable or incomplete.</span>
+          </div>
+
+          <div
+            v-else-if="categoryBreakdownState.status === 'empty'"
+            class="breakdown-empty-note"
+            role="status"
+          >
+            <AppIcon name="info" :size="16" class="note-icon" />
+            <span>No decision data yet. Error rates appear after the game uploads decisions.</span>
+          </div>
+
+          <div v-else class="table-container">
             <table class="data-table threats-table">
               <thead>
                 <tr>
@@ -764,7 +1019,7 @@ onUnmounted(() => {
                   <td class="text-right">
                     <span
                       class="error-rate-badge"
-                      :class="{ 'no-data': analyticsData.category_breakdown?.[threat.name] === null }"
+                      :class="{ 'no-data': !hasValidErrorRate(analyticsData.category_breakdown?.[threat.name]) }"
                     >
                       {{ formatErrorRate(analyticsData.category_breakdown?.[threat.name]) }}
                     </span>
@@ -775,7 +1030,7 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 3. Recent Sessions Table (Condition 4) -->
+        <!-- 5. Recent Sessions Table -->
         <section class="section-card" aria-label="Recent sessions">
           <div class="section-header">
             <h3>Recent sessions</h3>
@@ -783,7 +1038,7 @@ onUnmounted(() => {
           </div>
 
           <div
-            v-if="analyticsData.recent_sessions && analyticsData.recent_sessions.length > 0"
+            v-if="recentSessionsList.length > 0"
             class="table-container"
           >
             <table class="data-table sessions-table">
@@ -797,14 +1052,15 @@ onUnmounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="s in analyticsData.recent_sessions" :key="s.session_id">
+                <tr v-for="s in recentSessionsList" :key="s.session_id">
                   <td class="map-cell">
-                    {{ s.map_name }}
+                    {{ s.map_name || '—' }}
                   </td>
                   <td>
-                    <span :class="['result-pill', s.result]">
-                      {{ s.result?.toUpperCase() }}
+                    <span v-if="s.result" :class="['result-pill', String(s.result).toLowerCase()]">
+                      {{ String(s.result).toUpperCase() }}
                     </span>
+                    <span v-else class="result-pill missing">—</span>
                   </td>
                   <td>{{ formatDuration(s.duration_seconds) }}</td>
                   <td class="date-cell">{{ formatSessionDate(s.played_at) }}</td>
@@ -850,9 +1106,8 @@ onUnmounted(() => {
 }
 
 .page-body {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  width: 100%;
+  padding: 0 0 2rem 0;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -862,8 +1117,9 @@ onUnmounted(() => {
 .identity-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -970,11 +1226,12 @@ onUnmounted(() => {
 .section-card {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .section-header {
@@ -1031,16 +1288,19 @@ onUnmounted(() => {
   color: var(--color-text-main, #0f172a);
 }
 
-.kpi-value.win-rate {
-  color: var(--color-primary, #7c3aed);
-}
-
 .kpi-value.win-count {
   color: var(--color-success, #16a34a);
 }
 
 .kpi-value.loss-count {
   color: var(--color-danger, #dc2626);
+}
+
+.kpi-note {
+  margin: 0.75rem 0 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-muted, #475569);
 }
 
 /* Map Scores */
@@ -1124,7 +1384,7 @@ onUnmounted(() => {
 }
 
 .error-rate-badge.no-data {
-  color: var(--color-text-dim, #94a3b8);
+  color: var(--color-text-muted, #475569);
   font-weight: normal;
   font-style: italic;
 }
@@ -1147,6 +1407,9 @@ onUnmounted(() => {
   border-radius: 4px;
   line-height: 1;
   text-transform: uppercase;
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .result-pill.win {
@@ -1165,6 +1428,11 @@ onUnmounted(() => {
   background-color: var(--color-warning-bg);
   color: var(--color-warning);
   border: 1px solid var(--color-warning-border);
+}
+
+.result-pill.missing {
+  text-transform: none;
+  font-weight: 600;
 }
 
 .btn-inspect {
@@ -1465,7 +1733,8 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.threat-sync-note {
+.threat-sync-note,
+.breakdown-empty-note {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
@@ -1478,9 +1747,17 @@ onUnmounted(() => {
   line-height: 1.45;
 }
 
-.threat-sync-note .note-icon {
+.threat-sync-note .note-icon,
+.breakdown-empty-note .note-icon {
   color: var(--color-primary);
   margin-top: 0.15rem;
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .identity-card,
+  .section-card {
+    padding: 1.25rem 1rem;
+  }
 }
 </style>
