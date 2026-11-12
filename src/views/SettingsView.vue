@@ -965,41 +965,52 @@ const webUserEmail = computed(() => {
 
 /* Tabs Navigation */
 .settings-tabs {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--color-border);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
   margin-bottom: 1.75rem;
+  max-width: 100%;
 }
 
 .tab-btn {
-  padding: 0.75rem 1.25rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
+  padding: 0.45rem 1.05rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
-  min-height: 44px;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+  min-height: 40px;
 }
 
-.tab-btn:hover {
-  color: var(--color-text-main);
-  background-color: var(--color-bg-subtle);
+.tab-btn:hover:not([aria-selected="true"]) {
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
 }
 
 .tab-btn[aria-selected="true"] {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  font-weight: 600;
+  background: var(--btn-gradient);
+  border-color: var(--nav-pill-border);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--btn-rim-shadow);
 }
 
 .tab-btn:focus-visible {
   outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-  border-radius: 4px 4px 0 0;
+  outline-offset: 2px;
 }
 
 .tab-panel:focus {
@@ -1604,9 +1615,9 @@ const webUserEmail = computed(() => {
 }
 
 :root[data-theme="dark"] .role-badge.educator {
-  background-color: #2e1065;
-  border-color: #7c3aed;
-  color: #c4b5fd;
+  background-color: var(--color-purple-light);
+  border-color: var(--color-violet-border);
+  color: var(--color-primary);
 }
 
 :root[data-theme="dark"] .role-badge.admin {
@@ -1623,9 +1634,9 @@ const webUserEmail = computed(() => {
   }
 
   :root:not([data-theme="light"]):not([data-theme="dark"]) .role-badge.educator {
-    background-color: #2e1065;
-    border-color: #7c3aed;
-    color: #c4b5fd;
+    background-color: var(--color-purple-light);
+    border-color: var(--color-violet-border);
+    color: var(--color-primary);
   }
 
   :root:not([data-theme="light"]):not([data-theme="dark"]) .role-badge.admin {

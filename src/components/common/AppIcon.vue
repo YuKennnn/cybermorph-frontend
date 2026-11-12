@@ -257,6 +257,38 @@ const sizePixels = computed(() => {
     <template v-else-if="name === 'chevron-right'">
       <polyline points="9 18 15 12 9 6" />
     </template>
+
+    <!-- Arrow Left -->
+    <template v-else-if="name === 'arrow-left'">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </template>
+
+    <!-- Zoom In -->
+    <template v-else-if="name === 'zoom-in'">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="11" y1="8" x2="11" y2="14" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </template>
+
+    <!-- Unlock -->
+    <template v-else-if="name === 'unlock'">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </template>
+
+    <!-- Warning Triangle -->
+    <template v-else-if="name === 'warning' || name === 'alert-triangle'">
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </template>
+
+    <!-- Quick Action / Zap -->
+    <template v-else-if="name === 'zap'">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </template>
   </svg>
 </template>
 

@@ -1,0 +1,50 @@
+[
+  {
+    "file": "credential-theft.json",
+    "scenario_count": 18,
+    "referenced_scenarios": 18,
+    "sha256": "9B5A5E657F6B7196C36630742FDA6083E37B8700ED79FB43C7697407AB69B1AB"
+  },
+  {
+    "file": "malware-infection.json",
+    "scenario_count": 29,
+    "referenced_scenarios": 29,
+    "sha256": "346E12280167C8765F7BD456B9E9F6B312BF0E3620F7D7AACED67AC04D7DC0D3"
+  },
+  {
+    "file": "phishing.json",
+    "scenario_count": 42,
+    "referenced_scenarios": 38,
+    "sha256": "837268E506F114C2066996E37A07F01E8C7F98BB3FABCDAFFA4DB433601B4510"
+  },
+  {
+    "file": "public-wi-fi-attack.json",
+    "scenario_count": 16,
+    "referenced_scenarios": 16,
+    "sha256": "DD79CD432F4868786B76112A3C4EDD7840BB5EB8E2D8C78D009F1841C096DF9B"
+  },
+  {
+    "file": "ransomware.json",
+    "scenario_count": 21,
+    "referenced_scenarios": 21,
+    "sha256": "1E17A988826BE955FEED8B2FAF065CE1D89282C01ECEF40CC1DF323ABA1D2C4E"
+  },
+  {
+    "file": "smishing.json",
+    "scenario_count": 42,
+    "referenced_scenarios": 38,
+    "sha256": "0A978494B4DFD18D07B84C84A3A73E85FC4F0D415E094BBCEA08D5086E91D215"
+  },
+  {
+    "file": "social-engineering.json",
+    "scenario_count": 16,
+    "referenced_scenarios": 16,
+    "sha256": "061A0C09E17E0E178825B2F48871E0167326649187AE5AE898EB56ABE1236443"
+  },
+  {
+    "file": "vishing.json",
+    "scenario_count": 16,
+    "referenced_scenarios": 16,
+    "sha256": "399E5F4CD6709E68444443A8D3944F4B2E01B365BEE367A8F507BE612EA10B64"
+  }
+]

@@ -540,7 +540,8 @@ const formatRole = (role) => {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: var(--color-primary);
+  background: var(--btn-gradient);
+  border: 1px solid var(--nav-pill-border);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -549,7 +550,7 @@ const formatRole = (role) => {
   font-weight: 700;
   font-size: 1.05rem;
   flex-shrink: 0;
-  box-shadow: var(--shadow-purple-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--shadow-purple-sm);
 }
 
 .user-details {
@@ -626,8 +627,8 @@ const formatRole = (role) => {
 }
 
 .nav-item:hover:not(.router-link-active) {
-  background-color: var(--color-bg);
-  color: var(--color-text-main);
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
 }
 
 .nav-item:hover:not(.router-link-active) .nav-icon {
@@ -640,7 +641,7 @@ const formatRole = (role) => {
   }
 
   .nav-item:hover:not(.router-link-active) .nav-icon {
-    transform: scale(1.06);
+    transform: scale(1.08);
   }
 }
 
@@ -650,10 +651,11 @@ const formatRole = (role) => {
 }
 
 .nav-item.router-link-active {
-  background: var(--color-primary);
+  background: var(--btn-gradient);
+  border: 1px solid var(--nav-pill-border);
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.28);
+  box-shadow: var(--btn-rim-shadow);
 }
 
 .nav-item.router-link-active .nav-icon {
@@ -661,8 +663,8 @@ const formatRole = (role) => {
 }
 
 .nav-item.router-link-active:hover {
-  background: var(--color-primary);
-  filter: brightness(0.96);
+  background: var(--btn-gradient-hover);
+  box-shadow: var(--btn-rim-shadow-hover);
   color: #ffffff;
 }
 

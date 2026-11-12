@@ -8,18 +8,23 @@
 :root {
   color-scheme: light;
 
-  /* Brand Palette (Purple / Violet) */
-  --color-primary: #7c3aed;
-  --color-primary-hover: #6d28d9;
-  --color-secondary: #8b5cf6;
-  --color-accent: #a855f7;
-  --color-purple: #7c3aed;
-  --color-purple-hover: #6d28d9;
-  --color-purple-light: #f5f3ff;
-  --color-violet: #7c3aed;
-  --color-violet-hover: #6d28d9;
-  --color-violet-subtle: #f5f3ff;
-  --color-violet-border: #ddd6fe;
+  /* Brand Palette (CyberMorph Royal Game Violet) */
+  --color-primary: #653096;
+  --color-primary-hover: #532380;
+  --color-secondary: #7e44b5;
+  --color-accent: #9357c9;
+  --color-purple: #653096;
+  --color-purple-hover: #532380;
+  --color-purple-light: #f4ecfb;
+  --color-violet: #653096;
+  --color-violet-hover: #532380;
+  --color-violet-subtle: #f5eefc;
+  --color-violet-border: #d7bef0;
+
+  /* Tactile Game Nav Pill & Button Rim Tokens */
+  --nav-pill-border: #481c71;
+  --btn-rim-shadow: 0 3px 10px rgba(74, 30, 114, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --btn-rim-shadow-hover: 0 6px 16px rgba(74, 30, 114, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 
   /* Surfaces & Backgrounds (Neutral Slate / Gray) */
   --color-bg: #f8fafc;
@@ -81,13 +86,13 @@
   --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
 
   /* Legacy shadow tokens for backward compatibility */
-  --shadow-purple: var(--shadow-card);
-  --shadow-purple-hover: var(--shadow-card-hover);
-  --shadow-purple-sm: var(--shadow-sm);
+  --shadow-purple: 0 2px 8px -2px rgba(74, 30, 114, 0.1), 0 1px 3px rgba(74, 30, 114, 0.06);
+  --shadow-purple-hover: 0 8px 18px -4px rgba(92, 40, 141, 0.22), 0 2px 6px rgba(74, 30, 114, 0.1);
+  --shadow-purple-sm: 0 1px 4px rgba(74, 30, 114, 0.14);
 
   /* Gradients */
-  --btn-gradient: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
-  --btn-gradient-hover: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+  --btn-gradient: linear-gradient(180deg, #763bae 0%, #5c288d 100%);
+  --btn-gradient-hover: linear-gradient(180deg, #8548be 0%, #682f9d 100%);
 
   /* Typography Families */
   --font-brand: 'Pixelify Sans', system-ui, sans-serif;
@@ -107,27 +112,31 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --color-primary: #a78bfa;
-  --color-primary-hover: #c4b5fd;
-  --color-secondary: #8b5cf6;
-  --color-accent: #c084fc;
-  --color-purple: #a78bfa;
-  --color-purple-hover: #c4b5fd;
-  --color-purple-light: #2e1065;
-  --color-violet: #a78bfa;
-  --color-violet-hover: #c4b5fd;
-  --color-violet-subtle: #1e1b4b;
-  --color-violet-border: #4c1d95;
+  --color-primary: #b482e8;
+  --color-primary-hover: #caa1f2;
+  --color-secondary: #9b64d3;
+  --color-accent: #c08ff0;
+  --color-purple: #b482e8;
+  --color-purple-hover: #caa1f2;
+  --color-purple-light: #281942;
+  --color-violet: #b482e8;
+  --color-violet-hover: #caa1f2;
+  --color-violet-subtle: #23173a;
+  --color-violet-border: #5b2f88;
 
-  --color-bg: #0b0f19;
-  --color-bg-subtle: #111827;
-  --color-bg-muted: #1f2937;
-  --color-card: #131b2e;
-  --color-card-hover: #172033;
+  --nav-pill-border: #8b52c4;
+  --btn-rim-shadow: 0 4px 14px rgba(10, 5, 20, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --btn-rim-shadow-hover: 0 6px 18px rgba(91, 47, 136, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 
-  --color-border: #334155;
-  --color-border-subtle: #1e293b;
-  --color-border-hover: #475569;
+  --color-bg: #0c0f1d;
+  --color-bg-subtle: #131629;
+  --color-bg-muted: #1e243e;
+  --color-card: #181e34;
+  --color-card-hover: #1e2540;
+
+  --color-border: #2f3959;
+  --color-border-subtle: #222943;
+  --color-border-hover: #47537d;
   --color-border-control: #64748b;
 
   --color-text-main: #f8fafc;
@@ -169,36 +178,43 @@
   --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
   --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --shadow-purple: 0 2px 10px rgba(10, 5, 20, 0.45);
+  --shadow-purple-hover: 0 10px 22px -4px rgba(91, 47, 136, 0.4);
+  --shadow-purple-sm: 0 1px 4px rgba(10, 5, 20, 0.45);
 
-  --btn-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-  --btn-gradient-hover: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --btn-gradient: linear-gradient(180deg, #793eb3 0%, #5c288d 100%);
+  --btn-gradient-hover: linear-gradient(180deg, #8a4cc6 0%, #6a2fa1 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
     color-scheme: dark;
 
-    --color-primary: #a78bfa;
-    --color-primary-hover: #c4b5fd;
-    --color-secondary: #8b5cf6;
-    --color-accent: #c084fc;
-    --color-purple: #a78bfa;
-    --color-purple-hover: #c4b5fd;
-    --color-purple-light: #2e1065;
-    --color-violet: #a78bfa;
-    --color-violet-hover: #c4b5fd;
-    --color-violet-subtle: #1e1b4b;
-    --color-violet-border: #4c1d95;
+    --color-primary: #b482e8;
+    --color-primary-hover: #caa1f2;
+    --color-secondary: #9b64d3;
+    --color-accent: #c08ff0;
+    --color-purple: #b482e8;
+    --color-purple-hover: #caa1f2;
+    --color-purple-light: #281942;
+    --color-violet: #b482e8;
+    --color-violet-hover: #caa1f2;
+    --color-violet-subtle: #23173a;
+    --color-violet-border: #5b2f88;
 
-    --color-bg: #0b0f19;
-    --color-bg-subtle: #111827;
-    --color-bg-muted: #1f2937;
-    --color-card: #131b2e;
-    --color-card-hover: #172033;
+    --nav-pill-border: #8b52c4;
+    --btn-rim-shadow: 0 4px 14px rgba(10, 5, 20, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    --btn-rim-shadow-hover: 0 6px 18px rgba(91, 47, 136, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 
-    --color-border: #334155;
-    --color-border-subtle: #1e293b;
-    --color-border-hover: #475569;
+    --color-bg: #0c0f1d;
+    --color-bg-subtle: #131629;
+    --color-bg-muted: #1e243e;
+    --color-card: #181e34;
+    --color-card-hover: #1e2540;
+
+    --color-border: #2f3959;
+    --color-border-subtle: #222943;
+    --color-border-hover: #47537d;
     --color-border-control: #64748b;
 
     --color-text-main: #f8fafc;
@@ -240,9 +256,12 @@
     --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5);
     --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+    --shadow-purple: 0 2px 10px rgba(10, 5, 20, 0.45);
+    --shadow-purple-hover: 0 10px 22px -4px rgba(91, 47, 136, 0.4);
+    --shadow-purple-sm: 0 1px 4px rgba(10, 5, 20, 0.45);
 
-    --btn-gradient: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-    --btn-gradient-hover: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    --btn-gradient: linear-gradient(180deg, #793eb3 0%, #5c288d 100%);
+    --btn-gradient-hover: linear-gradient(180deg, #8a4cc6 0%, #6a2fa1 100%);
   }
 }
 
@@ -334,21 +353,24 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 40px;
   background: var(--btn-gradient);
   color: #ffffff;
-  border: none;
+  border: 1px solid var(--nav-pill-border);
   border-radius: 8px;
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 0.88rem;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.25);
-  transition: all 0.15s ease-in-out;
+  box-shadow: var(--btn-rim-shadow);
+  transition:
+    background 0.16s ease,
+    box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
   text-decoration: none;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--btn-gradient-hover);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+  box-shadow: var(--btn-rim-shadow-hover);
   transform: translateY(-1px);
 }
 

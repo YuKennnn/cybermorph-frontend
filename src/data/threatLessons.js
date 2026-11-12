@@ -418,10 +418,137 @@ export const THREAT_LESSON_LIST = [
   },
 ]
 
-const LESSONS_BY_SLUG = new Map(THREAT_LESSON_LIST.map((lesson) => [lesson.slug, lesson]))
+const LESSON_CODEX_BY_SLUG = {
+  phishing: {
+    cardHook: 'Fake Google alert pushing a spoofed link.',
+    coreRule: 'Check the sender domain and link bar before clicking any login button.',
+    spotSignals: [
+      { title: 'Spoofed sender', note: 'Comes from security-google.com, not google.com.' },
+      { title: 'Fake link URL', note: 'Points to account-verification-service.net.' },
+      { title: '24-hour scare', note: 'Pressures you to act before verifying.' },
+    ],
+    clueTokens: ['security@security-google.com', 'http://account-verification-service.net/login'],
+    gameMove: { badge: 'Block / Report', note: 'Flag the email before clicking the button.' },
+    realMove: { badge: 'Sign in directly', note: 'Open the official site in a new tab.' },
+  },
+  smishing: {
+    cardHook: 'Fake wallet SMS rushing you to tap a link.',
+    coreRule: 'Banks and wallets never ask you to unlock your account over an SMS link.',
+    spotSignals: [
+      { title: 'Random phone number', note: 'Sent from 0917-123-4567 instead of an official ID.' },
+      { title: 'External web link', note: 'Routes to gcash-verification-portal.net.' },
+      { title: 'Account lock threat', note: 'Claims 24-hour deactivation to cause panic.' },
+    ],
+    clueTokens: ['0917-123-4567', 'https://gcash-verification-portal.net'],
+    gameMove: { badge: 'Block / Report', note: 'Reject the text instead of tapping Accept.' },
+    realMove: { badge: 'Open official app', note: 'Check alerts directly inside your wallet app.' },
+  },
+  vishing: {
+    cardHook: 'Hidden caller asking you to tap Approve.',
+    coreRule: 'Never approve a sign-in prompt or share an OTP for an unexpected call.',
+    spotSignals: [
+      { title: 'Hidden caller ID', note: 'Shows UNKNOWN while claiming to be IT.' },
+      { title: 'Login prompt trap', note: 'Wants you to approve a sign-in you never started.' },
+      { title: 'False panic', note: 'Claims a foreign login needs an instant reset.' },
+    ],
+    clueTokens: ['UNKNOWN (Hidden number)', 'Reyes Logistics IT'],
+    gameMove: { badge: 'Hang up / Report', note: 'End the call and reject the request.' },
+    realMove: { badge: 'Deny & verify', note: 'Deny the prompt and call official IT.' },
+  },
+  'social-engineering': {
+    cardHook: 'Fake IT notice asking for your password.',
+    coreRule: 'Real IT teams never need or ask for your password to run updates or backups.',
+    spotSignals: [
+      { title: 'Asks for password', note: 'Tells you to reply with username and password.' },
+      { title: 'Routine update excuse', note: 'Poses as an overnight IT laptop backup.' },
+      { title: '6 PM deadline', note: 'Threatens lost files if you hesitate.' },
+    ],
+    clueTokens: ['helpdesk@reyeslogistics.ph', 'reply with your username and current password'],
+    gameMove: { badge: 'Block / Report', note: 'Reject any request asking for credentials.' },
+    realMove: { badge: 'Verify via IT', note: 'Confirm unusual notices on an official channel.' },
+  },
+  'credential-theft': {
+    cardHook: 'Fake school IT alert harvesting mailbox logins.',
+    coreRule: 'Schools never use free Gmail accounts or HTTP links to collect passwords.',
+    spotSignals: [
+      { title: 'Free Gmail sender', note: 'Uses @gmail.com instead of a school domain.' },
+      { title: 'Unencrypted link', note: 'KEEP MY ACCOUNT points to an HTTP .work site.' },
+      { title: 'Mailbox 98% scare', note: 'Warns password expires today to steal your login.' },
+    ],
+    clueTokens: ['it.helpdesk.support@gmail.com', 'http://school-mail-upgrade.work/webmail'],
+    gameMove: { badge: 'Block / Report', note: 'Reject the fake mailbox expiration alert.' },
+    realMove: { badge: 'Use official portal', note: 'Update passwords only inside your school portal.' },
+  },
+  'public-wi-fi-attack': {
+    cardHook: 'Unsecured open guest Wi-Fi beside member login.',
+    coreRule: 'Skip open password-free Wi-Fi when an encrypted network or mobile data exists.',
+    spotSignals: [
+      { title: 'Open guest Wi-Fi', note: 'Cowork_Members_Guest has zero encryption.' },
+      { title: 'Venue name clone', note: 'Copies official names with _Guest or _Free.' },
+      { title: 'Enterprise option', note: 'Cowork_Members uses WPA2-Enterprise login.' },
+    ],
+    clueTokens: ['Cowork_Members_Guest (Open)', 'Cowork_Members (WPA2-Enterprise)'],
+    gameMove: { badge: 'Pick Cowork_Members', note: 'Choose WPA2-Enterprise and click Continue.' },
+    realMove: { badge: 'Avoid open Wi-Fi', note: 'Use encrypted Wi-Fi, mobile data, or a VPN.' },
+  },
+  'malware-infection': {
+    cardHook: 'Untrusted unlocked game mod shared in chat.',
+    coreRule: 'Delete unverified mods or installers from chats, even if a friend shared the link.',
+    spotSignals: [
+      { title: 'Third-party file host', note: 'Downloaded from modshare-ph.net, not an official store.' },
+      { title: 'Unknown publisher', note: 'Archive lists Publisher: Unknown.' },
+      { title: 'Free unlock lure', note: 'Promises every car unlocked for free.' },
+    ],
+    clueTokens: ['SuperRacer_Mod_Unlocked.zip', 'https://modshare-ph.net/dl/superracer'],
+    gameMove: { badge: 'Delete file', note: 'Remove the archive instead of opening it.' },
+    realMove: { badge: 'Official stores only', note: 'Never disable security to run cracked apps.' },
+  },
+  ransomware: {
+    cardHook: 'Verifying a signed backup installer before running.',
+    coreRule: 'Keep offline backups and verify official HTTPS sources and publishers before running .exe files.',
+    spotSignals: [
+      { title: 'Official HTTPS URL', note: 'Served directly from safebackup.com/download.' },
+      { title: 'Verified publisher', note: 'Shows SafeBackup Inc (verified) signature.' },
+      { title: 'Offline backups', note: 'Lets you recover encrypted files without paying.' },
+    ],
+    clueTokens: ['SafeBackup_Setup.exe', 'https://www.safebackup.com/download'],
+    gameMove: { badge: 'Keep and open', note: 'Only after confirming official source and signature.' },
+    realMove: { badge: 'Keep offline backups', note: 'Store backups disconnected so ransomware stays locked out.' },
+  },
+}
+
+function enrichThreatLesson(lesson) {
+  if (!lesson) return null
+  const codex = LESSON_CODEX_BY_SLUG[lesson.slug]
+  return {
+    ...lesson,
+    briefSummary: codex?.cardHook || lesson.summary,
+    coreRule: codex?.coreRule || lesson.keyTakeaway,
+    spotSignals: (codex?.spotSignals || []).map((sig, idx) => ({
+      id: `${lesson.slug}-sig-${idx + 1}`,
+      index: idx + 1,
+      ...sig,
+    })),
+    clueTokens: codex?.clueTokens || lesson.gameScenario?.suspiciousExamples || [],
+    gameMove: codex?.gameMove || { badge: 'Inspect & verify', note: lesson.recommendedAction?.inGameAction },
+    realMove: codex?.realMove || { badge: 'Stay safe', note: lesson.recommendedAction?.realWorldAction },
+  }
+}
+
+const ENRICHED_THREAT_LESSONS = THREAT_LESSON_LIST.map(enrichThreatLesson)
+const LESSONS_BY_SLUG = new Map(ENRICHED_THREAT_LESSONS.map((lesson) => [lesson.slug, lesson]))
 const LESSONS_BY_THREAT_NAME = new Map(
-  THREAT_LESSON_LIST.map((lesson) => [lesson.threatName, lesson]),
+  ENRICHED_THREAT_LESSONS.map((lesson) => [lesson.threatName, lesson]),
 )
+
+/**
+ * Return all 8 canonical threat lesson objects in curriculum order.
+ *
+ * @returns {Array<object>}
+ */
+export function getAllThreatLessons() {
+  return ENRICHED_THREAT_LESSONS
+}
 
 /**
  * Look up a threat lesson by its URL route slug (e.g. `'phishing'`).

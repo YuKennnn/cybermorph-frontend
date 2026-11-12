@@ -1,0 +1,1507 @@
+{
+  "schema_version": "1.0",
+  "assessment_id": "cybermorph-post-test-v1",
+  "content_version": "1.0.0",
+  "answers": [
+    {
+      "question_id": "CM-POST-001",
+      "correct_choice_id": "B",
+      "explanation": "The unrelated sign-in address is the strongest evidence that the request is unsafe."
+    },
+    {
+      "question_id": "CM-POST-002",
+      "correct_choice_id": "C",
+      "explanation": "Independent access lets you check the event without trusting the email link."
+    },
+    {
+      "question_id": "CM-POST-003",
+      "correct_choice_id": "B",
+      "explanation": "Similar-looking characters can make an unrelated address resemble a trusted one."
+    },
+    {
+      "question_id": "CM-POST-004",
+      "correct_choice_id": "C",
+      "explanation": "The two domains are different; verify the order through the service you already use."
+    },
+    {
+      "question_id": "CM-POST-005",
+      "correct_choice_id": "C",
+      "explanation": "Here netflix.com is part of a subdomain under billing-update.net."
+    },
+    {
+      "question_id": "CM-POST-006",
+      "correct_choice_id": "A",
+      "explanation": "A matching record in the independently opened app provides stronger evidence than appearance."
+    },
+    {
+      "question_id": "CM-POST-007",
+      "correct_choice_id": "B",
+      "explanation": "Address length alone does not establish whether a message is genuine."
+    },
+    {
+      "question_id": "CM-POST-008",
+      "correct_choice_id": "D",
+      "explanation": "A lookalike spelling can conceal an unrelated destination."
+    },
+    {
+      "question_id": "CM-POST-009",
+      "correct_choice_id": "A",
+      "explanation": "Use the established account service to verify the issue."
+    },
+    {
+      "question_id": "CM-POST-010",
+      "correct_choice_id": "D",
+      "explanation": "Independent account records are more reliable than the sender's own assurance."
+    },
+    {
+      "question_id": "CM-POST-011",
+      "correct_choice_id": "B",
+      "explanation": "Match the event to your account rather than judging by tone alone."
+    },
+    {
+      "question_id": "CM-POST-012",
+      "correct_choice_id": "B",
+      "explanation": "The request exposes sensitive information to an unverified destination."
+    },
+    {
+      "question_id": "CM-POST-013",
+      "correct_choice_id": "D",
+      "explanation": "An unexpected prize requiring payment should be independently checked before any action."
+    },
+    {
+      "question_id": "CM-POST-014",
+      "correct_choice_id": "D",
+      "explanation": "An independent agency channel avoids giving identity information to an unverified sender."
+    },
+    {
+      "question_id": "CM-POST-015",
+      "correct_choice_id": "C",
+      "explanation": "A believable job description does not verify the recruiter or the request."
+    },
+    {
+      "question_id": "CM-POST-016",
+      "correct_choice_id": "B",
+      "explanation": "Account enforcement notices should be checked through the platform itself."
+    },
+    {
+      "question_id": "CM-POST-017",
+      "correct_choice_id": "D",
+      "explanation": "Independent app access supports the routine task without exposing credentials."
+    },
+    {
+      "question_id": "CM-POST-018",
+      "correct_choice_id": "C",
+      "explanation": "Account records help establish whether the claimed transaction occurred."
+    },
+    {
+      "question_id": "CM-POST-019",
+      "correct_choice_id": "A",
+      "explanation": "Visible button text can differ from the address it opens."
+    },
+    {
+      "question_id": "CM-POST-020",
+      "correct_choice_id": "D",
+      "explanation": "A relevant file name can be bait; verify the share through the established service."
+    },
+    {
+      "question_id": "CM-POST-021",
+      "correct_choice_id": "C",
+      "explanation": "Independent trip history confirms details that an email alone cannot prove."
+    },
+    {
+      "question_id": "CM-POST-022",
+      "correct_choice_id": "A",
+      "explanation": "Opening the established app avoids relying on the notification link."
+    },
+    {
+      "question_id": "CM-POST-023",
+      "correct_choice_id": "B",
+      "explanation": "Small punctuation changes can create a completely different domain."
+    },
+    {
+      "question_id": "CM-POST-024",
+      "correct_choice_id": "B",
+      "explanation": "A familiar-looking address does not justify sharing a sign-in code."
+    },
+    {
+      "question_id": "CM-POST-025",
+      "correct_choice_id": "B",
+      "explanation": "Verify the event itself without assuming the notification is either genuine or false."
+    },
+    {
+      "question_id": "CM-POST-026",
+      "correct_choice_id": "B",
+      "explanation": "A long path or query can be normal, while an unrelated domain remains concerning."
+    },
+    {
+      "question_id": "CM-POST-027",
+      "correct_choice_id": "A",
+      "explanation": "The request targets credentials that could give another person account access."
+    },
+    {
+      "question_id": "CM-POST-028",
+      "correct_choice_id": "C",
+      "explanation": "A deadline does not make password disclosure appropriate."
+    },
+    {
+      "question_id": "CM-POST-029",
+      "correct_choice_id": "C",
+      "explanation": "Large promises and limited-time pressure can discourage careful verification."
+    },
+    {
+      "question_id": "CM-POST-030",
+      "correct_choice_id": "A",
+      "explanation": "Independent confirmation supports this specific event without guaranteeing every related message."
+    },
+    {
+      "question_id": "CM-POST-031",
+      "correct_choice_id": "C",
+      "explanation": "The official platform can confirm a trade without trusting the email."
+    },
+    {
+      "question_id": "CM-POST-032",
+      "correct_choice_id": "A",
+      "explanation": "Verify the booking independently rather than treating a code as proof."
+    },
+    {
+      "question_id": "CM-POST-033",
+      "correct_choice_id": "D",
+      "explanation": "In this address, the text before @ is not the destination host."
+    },
+    {
+      "question_id": "CM-POST-034",
+      "correct_choice_id": "B",
+      "explanation": "Urgency can occur in real notices; verify the event and the request."
+    },
+    {
+      "question_id": "CM-POST-035",
+      "correct_choice_id": "A",
+      "explanation": "A worthwhile cause does not verify the person collecting money."
+    },
+    {
+      "question_id": "CM-POST-036",
+      "correct_choice_id": "D",
+      "explanation": "The learning platform provides an independent record of the assignment."
+    },
+    {
+      "question_id": "CM-POST-037",
+      "correct_choice_id": "C",
+      "explanation": "A similar-looking letter can disguise an unrelated domain."
+    },
+    {
+      "question_id": "CM-POST-038",
+      "correct_choice_id": "A",
+      "explanation": "Independent billing records resolve uncertainty without trusting the message."
+    },
+    {
+      "question_id": "CM-POST-039",
+      "correct_choice_id": "D",
+      "explanation": "A brand in an address does not establish that the brand controls the site."
+    },
+    {
+      "question_id": "CM-POST-040",
+      "correct_choice_id": "A",
+      "explanation": "A transaction alert should be checked against account records."
+    },
+    {
+      "question_id": "CM-POST-041",
+      "correct_choice_id": "B",
+      "explanation": "The requested login information could be used to take over the account."
+    },
+    {
+      "question_id": "CM-POST-042",
+      "correct_choice_id": "D",
+      "explanation": "An independently opened game can confirm the event without exposing credentials."
+    },
+    {
+      "question_id": "CM-POST-043",
+      "correct_choice_id": "C",
+      "explanation": "Verify the bill through the provider before making a payment."
+    },
+    {
+      "question_id": "CM-POST-044",
+      "correct_choice_id": "D",
+      "explanation": "A small charge can be used to persuade someone to disclose payment details."
+    },
+    {
+      "question_id": "CM-POST-045",
+      "correct_choice_id": "A",
+      "explanation": "Sign-in and transaction codes should remain under the account owner's control."
+    },
+    {
+      "question_id": "CM-POST-046",
+      "correct_choice_id": "C",
+      "explanation": "The app gives an independent source for billing information."
+    },
+    {
+      "question_id": "CM-POST-047",
+      "correct_choice_id": "D",
+      "explanation": "Swapped letters create an address that does not match the known domain."
+    },
+    {
+      "question_id": "CM-POST-048",
+      "correct_choice_id": "A",
+      "explanation": "A sign-in code can give someone else access even when called an identity check."
+    },
+    {
+      "question_id": "CM-POST-049",
+      "correct_choice_id": "A",
+      "explanation": "A short link's length does not establish its legitimacy."
+    },
+    {
+      "question_id": "CM-POST-050",
+      "correct_choice_id": "B",
+      "explanation": "The established app is the appropriate place to verify and respond."
+    },
+    {
+      "question_id": "CM-POST-051",
+      "correct_choice_id": "A",
+      "explanation": "Both can authorize access or transactions and should not be disclosed."
+    },
+    {
+      "question_id": "CM-POST-052",
+      "correct_choice_id": "B",
+      "explanation": "The prize claim is not a reason to disclose financial information."
+    },
+    {
+      "question_id": "CM-POST-053",
+      "correct_choice_id": "D",
+      "explanation": "Threats and deadlines can discourage independent verification."
+    },
+    {
+      "question_id": "CM-POST-054",
+      "correct_choice_id": "B",
+      "explanation": "An unsolicited approval and advance payment request require independent checking."
+    },
+    {
+      "question_id": "CM-POST-055",
+      "correct_choice_id": "A",
+      "explanation": "Codes and payment details can be used to authorize actions in your name."
+    },
+    {
+      "question_id": "CM-POST-056",
+      "correct_choice_id": "B",
+      "explanation": "An independent account record is stronger evidence than message style."
+    },
+    {
+      "question_id": "CM-POST-057",
+      "correct_choice_id": "C",
+      "explanation": "Verify the claimed payment failure before making another payment."
+    },
+    {
+      "question_id": "CM-POST-058",
+      "correct_choice_id": "B",
+      "explanation": "An obscured destination makes independent verification especially useful."
+    },
+    {
+      "question_id": "CM-POST-059",
+      "correct_choice_id": "C",
+      "explanation": "The app lets you verify the order before responding."
+    },
+    {
+      "question_id": "CM-POST-060",
+      "correct_choice_id": "B",
+      "explanation": "A believable order number does not correct a misspelled destination."
+    },
+    {
+      "question_id": "CM-POST-061",
+      "correct_choice_id": "A",
+      "explanation": "An unsolicited text should not determine where identity information is submitted."
+    },
+    {
+      "question_id": "CM-POST-062",
+      "correct_choice_id": "B",
+      "explanation": "An independently held contact number avoids relying on a number supplied by the message."
+    },
+    {
+      "question_id": "CM-POST-063",
+      "correct_choice_id": "A",
+      "explanation": "Domain and order verification are more relevant than length or timing."
+    },
+    {
+      "question_id": "CM-POST-064",
+      "correct_choice_id": "B",
+      "explanation": "Verify the claim independently before sharing information or paying."
+    },
+    {
+      "question_id": "CM-POST-065",
+      "correct_choice_id": "A",
+      "explanation": "The combined promise and pressure require verification; the medium alone is not proof."
+    },
+    {
+      "question_id": "CM-POST-066",
+      "correct_choice_id": "B",
+      "explanation": "A possible real-world event does not verify this specific demand."
+    },
+    {
+      "question_id": "CM-POST-067",
+      "correct_choice_id": "A",
+      "explanation": "Matching the active booking helps verify this specific interaction."
+    },
+    {
+      "question_id": "CM-POST-068",
+      "correct_choice_id": "C",
+      "explanation": "The bank-like text is a subdomain of secure-verify.net in this address."
+    },
+    {
+      "question_id": "CM-POST-069",
+      "correct_choice_id": "D",
+      "explanation": "Independent verification supports a legitimate collection without sending documents to an unknown sender."
+    },
+    {
+      "question_id": "CM-POST-070",
+      "correct_choice_id": "D",
+      "explanation": "Obtain contact details independently from the message being checked."
+    },
+    {
+      "question_id": "CM-POST-071",
+      "correct_choice_id": "A",
+      "explanation": "An unexpected code may indicate attempted access and should not be shared."
+    },
+    {
+      "question_id": "CM-POST-072",
+      "correct_choice_id": "B",
+      "explanation": "Verify the program before disclosing personal information."
+    },
+    {
+      "question_id": "CM-POST-073",
+      "correct_choice_id": "B",
+      "explanation": "The established app can confirm the delivery details."
+    },
+    {
+      "question_id": "CM-POST-074",
+      "correct_choice_id": "B",
+      "explanation": "Confirmation applies to the specific event, not to every future request."
+    },
+    {
+      "question_id": "CM-POST-075",
+      "correct_choice_id": "D",
+      "explanation": "Replacing a dot with a hyphen changes the domain structure."
+    },
+    {
+      "question_id": "CM-POST-076",
+      "correct_choice_id": "A",
+      "explanation": "Check the reported problem through the established app without sharing secrets."
+    },
+    {
+      "question_id": "CM-POST-077",
+      "correct_choice_id": "C",
+      "explanation": "A one-time sign-in code should not be disclosed to an incoming caller."
+    },
+    {
+      "question_id": "CM-POST-078",
+      "correct_choice_id": "C",
+      "explanation": "Ending the call breaks the pressure and allows independent verification."
+    },
+    {
+      "question_id": "CM-POST-079",
+      "correct_choice_id": "C",
+      "explanation": "Confidence and public information are not reliable proof of identity."
+    },
+    {
+      "question_id": "CM-POST-080",
+      "correct_choice_id": "B",
+      "explanation": "Authority claims should not replace independent verification of a payment demand."
+    },
+    {
+      "question_id": "CM-POST-081",
+      "correct_choice_id": "A",
+      "explanation": "Secrecy and threats should not prevent independent checking."
+    },
+    {
+      "question_id": "CM-POST-082",
+      "correct_choice_id": "A",
+      "explanation": "Isolation can make pressure more effective."
+    },
+    {
+      "question_id": "CM-POST-083",
+      "correct_choice_id": "D",
+      "explanation": "The package claim must be checked before payment or disclosure."
+    },
+    {
+      "question_id": "CM-POST-084",
+      "correct_choice_id": "D",
+      "explanation": "Pressure combined with secrecy reduces your opportunity to verify the story."
+    },
+    {
+      "question_id": "CM-POST-085",
+      "correct_choice_id": "A",
+      "explanation": "An incoming prize claim does not establish a legitimate payment obligation."
+    },
+    {
+      "question_id": "CM-POST-086",
+      "correct_choice_id": "B",
+      "explanation": "The promised benefit can distract from the unverified payment request."
+    },
+    {
+      "question_id": "CM-POST-087",
+      "correct_choice_id": "D",
+      "explanation": "Allowing independent contact is a positive sign, not absolute proof of identity."
+    },
+    {
+      "question_id": "CM-POST-088",
+      "correct_choice_id": "C",
+      "explanation": "Use contact information obtained independently of the disputed call."
+    },
+    {
+      "question_id": "CM-POST-089",
+      "correct_choice_id": "A",
+      "explanation": "Matching an active booking supports the delivery context."
+    },
+    {
+      "question_id": "CM-POST-090",
+      "correct_choice_id": "D",
+      "explanation": "A delivery location relates to the task; account secrets and remote access do not."
+    },
+    {
+      "question_id": "CM-POST-091",
+      "correct_choice_id": "A",
+      "explanation": "Verify unsolicited technical support before granting device access."
+    },
+    {
+      "question_id": "CM-POST-092",
+      "correct_choice_id": "D",
+      "explanation": "Remote-access tools can grant powerful access when used by an untrusted person."
+    },
+    {
+      "question_id": "CM-POST-093",
+      "correct_choice_id": "C",
+      "explanation": "The displayed number alone cannot authenticate a caller."
+    },
+    {
+      "question_id": "CM-POST-094",
+      "correct_choice_id": "B",
+      "explanation": "An unexpected approval may authorize someone else's access."
+    },
+    {
+      "question_id": "CM-POST-095",
+      "correct_choice_id": "A",
+      "explanation": "An approval prompt can be the final step in an unauthorized login."
+    },
+    {
+      "question_id": "CM-POST-096",
+      "correct_choice_id": "D",
+      "explanation": "The offer uses excitement and limited availability to encourage rushed decisions."
+    },
+    {
+      "question_id": "CM-POST-097",
+      "correct_choice_id": "A",
+      "explanation": "Do not let time pressure replace verification of the recipient and offer."
+    },
+    {
+      "question_id": "CM-POST-098",
+      "correct_choice_id": "A",
+      "explanation": "A matching booking and relevant request support the stated purpose."
+    },
+    {
+      "question_id": "CM-POST-099",
+      "correct_choice_id": "B",
+      "explanation": "Your appointment slip is an independent source of contact information."
+    },
+    {
+      "question_id": "CM-POST-100",
+      "correct_choice_id": "D",
+      "explanation": "A matching support record is stronger evidence than presentation."
+    },
+    {
+      "question_id": "CM-POST-101",
+      "correct_choice_id": "B",
+      "explanation": "A banking code is unrelated to arranging technical support."
+    },
+    {
+      "question_id": "CM-POST-102",
+      "correct_choice_id": "B",
+      "explanation": "An unverified safe-account instruction can redirect money to an attacker."
+    },
+    {
+      "question_id": "CM-POST-103",
+      "correct_choice_id": "C",
+      "explanation": "The requested financial action is the critical concern."
+    },
+    {
+      "question_id": "CM-POST-104",
+      "correct_choice_id": "D",
+      "explanation": "A familiar voice does not justify bypassing payment controls."
+    },
+    {
+      "question_id": "CM-POST-105",
+      "correct_choice_id": "D",
+      "explanation": "Approval controls help establish that a payment is authorized."
+    },
+    {
+      "question_id": "CM-POST-106",
+      "correct_choice_id": "D",
+      "explanation": "Sensitive identity information should not be disclosed to an unverified caller."
+    },
+    {
+      "question_id": "CM-POST-107",
+      "correct_choice_id": "A",
+      "explanation": "Personal facts may help an attacker answer identity or recovery questions."
+    },
+    {
+      "question_id": "CM-POST-108",
+      "correct_choice_id": "C",
+      "explanation": "A serious alert may be genuine; verify through the bank itself."
+    },
+    {
+      "question_id": "CM-POST-109",
+      "correct_choice_id": "D",
+      "explanation": "Credentials should remain private regardless of the caller's claimed role."
+    },
+    {
+      "question_id": "CM-POST-110",
+      "correct_choice_id": "D",
+      "explanation": "The reported context can be checked independently before visiting."
+    },
+    {
+      "question_id": "CM-POST-111",
+      "correct_choice_id": "A",
+      "explanation": "An unexpected personal payment demand does not fit the stated collection process."
+    },
+    {
+      "question_id": "CM-POST-112",
+      "correct_choice_id": "C",
+      "explanation": "Requests for secrets are more concerning than a claim of affiliation alone."
+    },
+    {
+      "question_id": "CM-POST-113",
+      "correct_choice_id": "C",
+      "explanation": "Context and the requested access matter more than voice or display details."
+    },
+    {
+      "question_id": "CM-POST-114",
+      "correct_choice_id": "D",
+      "explanation": "Independent verification protects against convincing payment impersonation."
+    },
+    {
+      "question_id": "CM-POST-115",
+      "correct_choice_id": "B",
+      "explanation": "The unusual request and secrecy are stronger evidence than the claimed authority."
+    },
+    {
+      "question_id": "CM-POST-116",
+      "correct_choice_id": "C",
+      "explanation": "Independent contact tests whether the request actually came from the boss."
+    },
+    {
+      "question_id": "CM-POST-117",
+      "correct_choice_id": "B",
+      "explanation": "Gift card codes can transfer value to whoever receives them."
+    },
+    {
+      "question_id": "CM-POST-118",
+      "correct_choice_id": "C",
+      "explanation": "Use a contact route not supplied by the questionable message."
+    },
+    {
+      "question_id": "CM-POST-119",
+      "correct_choice_id": "C",
+      "explanation": "Preventing verification can help an impersonator maintain the story."
+    },
+    {
+      "question_id": "CM-POST-120",
+      "correct_choice_id": "A",
+      "explanation": "Familiar details can be known or copied by someone else."
+    },
+    {
+      "question_id": "CM-POST-121",
+      "correct_choice_id": "A",
+      "explanation": "Do not rely on an unsolicited message as proof of a device infection."
+    },
+    {
+      "question_id": "CM-POST-122",
+      "correct_choice_id": "A",
+      "explanation": "Remote control can provide broad access to an untrusted person."
+    },
+    {
+      "question_id": "CM-POST-123",
+      "correct_choice_id": "B",
+      "explanation": "The email's claim is not evidence that it actually inspected your device."
+    },
+    {
+      "question_id": "CM-POST-124",
+      "correct_choice_id": "C",
+      "explanation": "A friendly conversation can be used to prepare a later scam request."
+    },
+    {
+      "question_id": "CM-POST-125",
+      "correct_choice_id": "C",
+      "explanation": "A claimed relationship does not verify a financial offer."
+    },
+    {
+      "question_id": "CM-POST-126",
+      "correct_choice_id": "B",
+      "explanation": "A biography supplied by the sender is not independent evidence."
+    },
+    {
+      "question_id": "CM-POST-127",
+      "correct_choice_id": "B",
+      "explanation": "A normal task verified through an established system is stronger evidence than presentation."
+    },
+    {
+      "question_id": "CM-POST-128",
+      "correct_choice_id": "C",
+      "explanation": "Use the established portal without disclosing credentials in a message."
+    },
+    {
+      "question_id": "CM-POST-129",
+      "correct_choice_id": "A",
+      "explanation": "Assess the specific request rather than granting unlimited trust to a contact name."
+    },
+    {
+      "question_id": "CM-POST-130",
+      "correct_choice_id": "C",
+      "explanation": "A sudden financial request changes the risk and should be checked independently."
+    },
+    {
+      "question_id": "CM-POST-131",
+      "correct_choice_id": "B",
+      "explanation": "An internal-looking address does not justify password disclosure."
+    },
+    {
+      "question_id": "CM-POST-132",
+      "correct_choice_id": "A",
+      "explanation": "The threat and deadline can pressure you into exposing credentials."
+    },
+    {
+      "question_id": "CM-POST-133",
+      "correct_choice_id": "D",
+      "explanation": "A sign-in code should not be used to verify an unrelated delivery claim."
+    },
+    {
+      "question_id": "CM-POST-134",
+      "correct_choice_id": "A",
+      "explanation": "The code's purpose and verified order context matter; sign-in codes must remain private."
+    },
+    {
+      "question_id": "CM-POST-135",
+      "correct_choice_id": "D",
+      "explanation": "A scholarship claim does not justify disclosing account credentials."
+    },
+    {
+      "question_id": "CM-POST-136",
+      "correct_choice_id": "C",
+      "explanation": "A password could allow access to the portal."
+    },
+    {
+      "question_id": "CM-POST-137",
+      "correct_choice_id": "B",
+      "explanation": "The active order supplies independent context for the interaction."
+    },
+    {
+      "question_id": "CM-POST-138",
+      "correct_choice_id": "B",
+      "explanation": "Share only information necessary for the verified task."
+    },
+    {
+      "question_id": "CM-POST-139",
+      "correct_choice_id": "C",
+      "explanation": "Routine context and openness to verification support the request."
+    },
+    {
+      "question_id": "CM-POST-140",
+      "correct_choice_id": "A",
+      "explanation": "Normal deadlines do not require bypassing verification or controls."
+    },
+    {
+      "question_id": "CM-POST-141",
+      "correct_choice_id": "B",
+      "explanation": "An independent contact route reduces the risk of payment redirection."
+    },
+    {
+      "question_id": "CM-POST-142",
+      "correct_choice_id": "C",
+      "explanation": "Correct details can make a fraudulent request convincing without proving authorization."
+    },
+    {
+      "question_id": "CM-POST-143",
+      "correct_choice_id": "B",
+      "explanation": "The attack targets where the payment is sent."
+    },
+    {
+      "question_id": "CM-POST-144",
+      "correct_choice_id": "B",
+      "explanation": "A known contact can be impersonated or compromised; the code still protects your account."
+    },
+    {
+      "question_id": "CM-POST-145",
+      "correct_choice_id": "D",
+      "explanation": "The request must be assessed separately from the displayed identity."
+    },
+    {
+      "question_id": "CM-POST-146",
+      "correct_choice_id": "A",
+      "explanation": "Authorized workflows preserve accountability without sharing accounts."
+    },
+    {
+      "question_id": "CM-POST-147",
+      "correct_choice_id": "D",
+      "explanation": "Shared credentials undermine individual accountability."
+    },
+    {
+      "question_id": "CM-POST-148",
+      "correct_choice_id": "C",
+      "explanation": "The portal can confirm the need for action without disclosing a password in messages."
+    },
+    {
+      "question_id": "CM-POST-149",
+      "correct_choice_id": "D",
+      "explanation": "A routine change process should not require sending a current password to another person."
+    },
+    {
+      "question_id": "CM-POST-150",
+      "correct_choice_id": "D",
+      "explanation": "Evaluate the requested action and verify through an established contact route."
+    },
+    {
+      "question_id": "CM-POST-151",
+      "correct_choice_id": "C",
+      "explanation": "Authority can be imitated, so the action itself must be assessed."
+    },
+    {
+      "question_id": "CM-POST-152",
+      "correct_choice_id": "B",
+      "explanation": "Changing a payment destination has direct financial consequences and needs independent confirmation."
+    },
+    {
+      "question_id": "CM-POST-153",
+      "correct_choice_id": "A",
+      "explanation": "Personal details make a password more predictable."
+    },
+    {
+      "question_id": "CM-POST-154",
+      "correct_choice_id": "B",
+      "explanation": "Common decorations do not remove the underlying predictable pattern."
+    },
+    {
+      "question_id": "CM-POST-155",
+      "correct_choice_id": "B",
+      "explanation": "Common passwords remain guessable even when they satisfy simple character rules."
+    },
+    {
+      "question_id": "CM-POST-156",
+      "correct_choice_id": "B",
+      "explanation": "A unique generated password reduces predictable choices and reuse."
+    },
+    {
+      "question_id": "CM-POST-157",
+      "correct_choice_id": "D",
+      "explanation": "Unrelated randomly chosen words can create a less predictable long password."
+    },
+    {
+      "question_id": "CM-POST-158",
+      "correct_choice_id": "B",
+      "explanation": "An attacker can include common word-and-year combinations in guesses."
+    },
+    {
+      "question_id": "CM-POST-159",
+      "correct_choice_id": "A",
+      "explanation": "Familiar substitutions can be included in password guesses."
+    },
+    {
+      "question_id": "CM-POST-160",
+      "correct_choice_id": "B",
+      "explanation": "Visual complexity alone does not establish resistance to guessing or reuse attacks."
+    },
+    {
+      "question_id": "CM-POST-161",
+      "correct_choice_id": "D",
+      "explanation": "Separate unrelated passwords limit the impact of one account's exposure."
+    },
+    {
+      "question_id": "CM-POST-162",
+      "correct_choice_id": "C",
+      "explanation": "Attackers may try exposed credentials at other services."
+    },
+    {
+      "question_id": "CM-POST-163",
+      "correct_choice_id": "C",
+      "explanation": "A password should not depend on publicly known details."
+    },
+    {
+      "question_id": "CM-POST-164",
+      "correct_choice_id": "B",
+      "explanation": "Signing out and avoiding saved credentials reduce access by later users."
+    },
+    {
+      "question_id": "CM-POST-165",
+      "correct_choice_id": "B",
+      "explanation": "Length and unpredictability help against guessing, but do not prevent every form of theft."
+    },
+    {
+      "question_id": "CM-POST-166",
+      "correct_choice_id": "D",
+      "explanation": "Short length limits the number of possible passwords."
+    },
+    {
+      "question_id": "CM-POST-167",
+      "correct_choice_id": "D",
+      "explanation": "Service names and dates are predictable ingredients."
+    },
+    {
+      "question_id": "CM-POST-168",
+      "correct_choice_id": "B",
+      "explanation": "A new unrelated password avoids obvious patterns and cross-account reuse."
+    },
+    {
+      "question_id": "CM-POST-169",
+      "correct_choice_id": "A",
+      "explanation": "Public contact information is not a suitable secret."
+    },
+    {
+      "question_id": "CM-POST-170",
+      "correct_choice_id": "D",
+      "explanation": "Generated unique passwords avoid common personal and phrase-based choices."
+    },
+    {
+      "question_id": "CM-POST-171",
+      "correct_choice_id": "C",
+      "explanation": "Keyboard walks are known patterns and can be guessed."
+    },
+    {
+      "question_id": "CM-POST-172",
+      "correct_choice_id": "A",
+      "explanation": "Character variety does not overcome a predictable construction."
+    },
+    {
+      "question_id": "CM-POST-173",
+      "correct_choice_id": "C",
+      "explanation": "A nickname and birth year are guessable personal details."
+    },
+    {
+      "question_id": "CM-POST-174",
+      "correct_choice_id": "D",
+      "explanation": "Access to email can expose account-recovery messages for other services."
+    },
+    {
+      "question_id": "CM-POST-175",
+      "correct_choice_id": "A",
+      "explanation": "Length built from repetition does not provide the same unpredictability as random choices."
+    },
+    {
+      "question_id": "CM-POST-176",
+      "correct_choice_id": "B",
+      "explanation": "Password quality depends on construction as well as length."
+    },
+    {
+      "question_id": "CM-POST-177",
+      "correct_choice_id": "C",
+      "explanation": "Decorating a known phrase does not make its selection random."
+    },
+    {
+      "question_id": "CM-POST-178",
+      "correct_choice_id": "A",
+      "explanation": "Replacing the predictable construction is stronger than minor decoration."
+    },
+    {
+      "question_id": "CM-POST-179",
+      "correct_choice_id": "B",
+      "explanation": "Information shared in an application should not also be treated as a secret."
+    },
+    {
+      "question_id": "CM-POST-180",
+      "correct_choice_id": "D",
+      "explanation": "Separate authentication secrets from information supplied elsewhere."
+    },
+    {
+      "question_id": "CM-POST-181",
+      "correct_choice_id": "A",
+      "explanation": "Random selection avoids well-known phrases that can be guessed as a unit."
+    },
+    {
+      "question_id": "CM-POST-182",
+      "correct_choice_id": "C",
+      "explanation": "Appearance alone cannot determine relative strength."
+    },
+    {
+      "question_id": "CM-POST-183",
+      "correct_choice_id": "C",
+      "explanation": "Guessing resistance does not remove the danger of reuse."
+    },
+    {
+      "question_id": "CM-POST-184",
+      "correct_choice_id": "C",
+      "explanation": "Every account using the exposed password needs a separate replacement."
+    },
+    {
+      "question_id": "CM-POST-185",
+      "correct_choice_id": "A",
+      "explanation": "Public details make targeted guesses easier."
+    },
+    {
+      "question_id": "CM-POST-186",
+      "correct_choice_id": "B",
+      "explanation": "An unrelated secret is less dependent on facts visible to others."
+    },
+    {
+      "question_id": "CM-POST-187",
+      "correct_choice_id": "D",
+      "explanation": "Within a restrictive limit, maximize allowed length and unpredictability without reuse."
+    },
+    {
+      "question_id": "CM-POST-188",
+      "correct_choice_id": "B",
+      "explanation": "Real outcomes depend on attack conditions and exposure, not a single displayed estimate."
+    },
+    {
+      "question_id": "CM-POST-189",
+      "correct_choice_id": "A",
+      "explanation": "Published examples are known to readers and should not become real secrets."
+    },
+    {
+      "question_id": "CM-POST-190",
+      "correct_choice_id": "A",
+      "explanation": "Network names and signal strength are not reliable authentication."
+    },
+    {
+      "question_id": "CM-POST-191",
+      "correct_choice_id": "D",
+      "explanation": "Use institutional instructions rather than guessing from names."
+    },
+    {
+      "question_id": "CM-POST-192",
+      "correct_choice_id": "A",
+      "explanation": "Use a network you are authorized to access."
+    },
+    {
+      "question_id": "CM-POST-193",
+      "correct_choice_id": "A",
+      "explanation": "An attacker can imitate prompts, so the network itself must be verified."
+    },
+    {
+      "question_id": "CM-POST-194",
+      "correct_choice_id": "C",
+      "explanation": "Verified venue information is more useful than attractive network names."
+    },
+    {
+      "question_id": "CM-POST-195",
+      "correct_choice_id": "B",
+      "explanation": "Network protection does not establish the legitimacy of websites."
+    },
+    {
+      "question_id": "CM-POST-196",
+      "correct_choice_id": "C",
+      "explanation": "This avoids depending on an unverified hotspot for a sensitive task."
+    },
+    {
+      "question_id": "CM-POST-197",
+      "correct_choice_id": "C",
+      "explanation": "Network risk and website encryption are separate considerations."
+    },
+    {
+      "question_id": "CM-POST-198",
+      "correct_choice_id": "D",
+      "explanation": "Match both identity information and the expected connection method."
+    },
+    {
+      "question_id": "CM-POST-199",
+      "correct_choice_id": "A",
+      "explanation": "Names alone do not identify who operates a hotspot."
+    },
+    {
+      "question_id": "CM-POST-200",
+      "correct_choice_id": "C",
+      "explanation": "Venue confirmation helps identify the service but is not a guarantee of all activity."
+    },
+    {
+      "question_id": "CM-POST-201",
+      "correct_choice_id": "D",
+      "explanation": "Mobile data avoids that unverified hotspot, though normal website checks still apply."
+    },
+    {
+      "question_id": "CM-POST-202",
+      "correct_choice_id": "D",
+      "explanation": "A name and security mismatch may indicate an imitation network."
+    },
+    {
+      "question_id": "CM-POST-203",
+      "correct_choice_id": "B",
+      "explanation": "The source helps verify which service the venue operates."
+    },
+    {
+      "question_id": "CM-POST-204",
+      "correct_choice_id": "C",
+      "explanation": "Do not infer ownership from a minor name variation."
+    },
+    {
+      "question_id": "CM-POST-205",
+      "correct_choice_id": "D",
+      "explanation": "An imitation hotspot can exploit users' trust in a familiar name."
+    },
+    {
+      "question_id": "CM-POST-206",
+      "correct_choice_id": "C",
+      "explanation": "Small spelling differences can distinguish an imitation from the verified network."
+    },
+    {
+      "question_id": "CM-POST-207",
+      "correct_choice_id": "B",
+      "explanation": "A strong signal does not establish who operates the network."
+    },
+    {
+      "question_id": "CM-POST-208",
+      "correct_choice_id": "C",
+      "explanation": "An added character can identify a different hotspot."
+    },
+    {
+      "question_id": "CM-POST-209",
+      "correct_choice_id": "D",
+      "explanation": "Unrelated account passwords should not be surrendered to a Wi-Fi portal."
+    },
+    {
+      "question_id": "CM-POST-210",
+      "correct_choice_id": "D",
+      "explanation": "An unverified hotspot should not receive credentials for another service."
+    },
+    {
+      "question_id": "CM-POST-211",
+      "correct_choice_id": "D",
+      "explanation": "A fake portal can persuade users to submit account secrets."
+    },
+    {
+      "question_id": "CM-POST-212",
+      "correct_choice_id": "C",
+      "explanation": "A default-looking router name does not establish ownership or trust."
+    },
+    {
+      "question_id": "CM-POST-213",
+      "correct_choice_id": "D",
+      "explanation": "Use the venue's confirmed instructions."
+    },
+    {
+      "question_id": "CM-POST-214",
+      "correct_choice_id": "D",
+      "explanation": "Individual authentication supports access management, but is not universal protection."
+    },
+    {
+      "question_id": "CM-POST-215",
+      "correct_choice_id": "A",
+      "explanation": "Follow the verified network setup for your membership."
+    },
+    {
+      "question_id": "CM-POST-216",
+      "correct_choice_id": "B",
+      "explanation": "The mismatches justify checking rather than trusting the stronger signal."
+    },
+    {
+      "question_id": "CM-POST-217",
+      "correct_choice_id": "C",
+      "explanation": "Choose authorized access and verify the guest network."
+    },
+    {
+      "question_id": "CM-POST-218",
+      "correct_choice_id": "B",
+      "explanation": "Names can be duplicated; verify the full connection information."
+    },
+    {
+      "question_id": "CM-POST-219",
+      "correct_choice_id": "B",
+      "explanation": "Wi-Fi link security is distinct from encryption used by websites and apps."
+    },
+    {
+      "question_id": "CM-POST-220",
+      "correct_choice_id": "A",
+      "explanation": "A password alone does not make an unknown operator trustworthy."
+    },
+    {
+      "question_id": "CM-POST-221",
+      "correct_choice_id": "A",
+      "explanation": "Registration details and codes should not be provided without understanding the verified process."
+    },
+    {
+      "question_id": "CM-POST-222",
+      "correct_choice_id": "A",
+      "explanation": "HTTPS protects transport; a deceptive site can still ask for and receive your information."
+    },
+    {
+      "question_id": "CM-POST-223",
+      "correct_choice_id": "B",
+      "explanation": "A certificate warning should not be bypassed to send credentials to an uncertain service."
+    },
+    {
+      "question_id": "CM-POST-224",
+      "correct_choice_id": "D",
+      "explanation": "Application encryption remains relevant even on a shared network."
+    },
+    {
+      "question_id": "CM-POST-225",
+      "correct_choice_id": "A",
+      "explanation": "Avoiding an unknown hotspot does not make a deceptive website trustworthy."
+    },
+    {
+      "question_id": "CM-POST-226",
+      "correct_choice_id": "D",
+      "explanation": "Signal strength shows radio reception, not ownership."
+    },
+    {
+      "question_id": "CM-POST-227",
+      "correct_choice_id": "B",
+      "explanation": "Broad permissions unrelated to the intended task can expose private information."
+    },
+    {
+      "question_id": "CM-POST-228",
+      "correct_choice_id": "C",
+      "explanation": "A promised benefit does not justify unnecessary device access."
+    },
+    {
+      "question_id": "CM-POST-229",
+      "correct_choice_id": "D",
+      "explanation": "An unsolicited download is not a trusted update source."
+    },
+    {
+      "question_id": "CM-POST-230",
+      "correct_choice_id": "D",
+      "explanation": "Recognizing an installation package helps avoid treating it as harmless content."
+    },
+    {
+      "question_id": "CM-POST-231",
+      "correct_choice_id": "C",
+      "explanation": "The combination of an unverified source, unrealistic promise, and powerful permissions is concerning."
+    },
+    {
+      "question_id": "CM-POST-232",
+      "correct_choice_id": "A",
+      "explanation": "A trusted contact may share an unsafe file unknowingly."
+    },
+    {
+      "question_id": "CM-POST-233",
+      "correct_choice_id": "C",
+      "explanation": "Permissions should be evaluated against the function you intend to use."
+    },
+    {
+      "question_id": "CM-POST-234",
+      "correct_choice_id": "B",
+      "explanation": "File size can prompt questions but does not establish whether software is malicious."
+    },
+    {
+      "question_id": "CM-POST-235",
+      "correct_choice_id": "B",
+      "explanation": "A permission can be appropriate when tied to a clear function in a verified app."
+    },
+    {
+      "question_id": "CM-POST-236",
+      "correct_choice_id": "C",
+      "explanation": "A web pop-up is not a reliable source for software updates."
+    },
+    {
+      "question_id": "CM-POST-237",
+      "correct_choice_id": "A",
+      "explanation": "Expected content from a verified source provides stronger evidence than appearance."
+    },
+    {
+      "question_id": "CM-POST-238",
+      "correct_choice_id": "C",
+      "explanation": "Use an established publisher source and review installation details."
+    },
+    {
+      "question_id": "CM-POST-239",
+      "correct_choice_id": "B",
+      "explanation": "A browser advertisement is not proof of infection."
+    },
+    {
+      "question_id": "CM-POST-240",
+      "correct_choice_id": "D",
+      "explanation": "Use independent trusted tools instead of the warning's proposed remedy."
+    },
+    {
+      "question_id": "CM-POST-241",
+      "correct_choice_id": "A",
+      "explanation": "Relevant permissions and a verified source support, but do not guarantee, trust."
+    },
+    {
+      "question_id": "CM-POST-242",
+      "correct_choice_id": "C",
+      "explanation": "A reward claim is not a reliable basis for installing software."
+    },
+    {
+      "question_id": "CM-POST-243",
+      "correct_choice_id": "A",
+      "explanation": "The verified publisher and distribution route matter more than branding."
+    },
+    {
+      "question_id": "CM-POST-244",
+      "correct_choice_id": "B",
+      "explanation": "Expected context and a verified source support the specific download."
+    },
+    {
+      "question_id": "CM-POST-245",
+      "correct_choice_id": "A",
+      "explanation": "Names and icons can be copied by unrelated publishers."
+    },
+    {
+      "question_id": "CM-POST-246",
+      "correct_choice_id": "D",
+      "explanation": "Overlay capability is powerful and should have a clear justified purpose."
+    },
+    {
+      "question_id": "CM-POST-247",
+      "correct_choice_id": "A",
+      "explanation": "Unexplained access beyond the intended function should not be accepted automatically."
+    },
+    {
+      "question_id": "CM-POST-248",
+      "correct_choice_id": "A",
+      "explanation": "Limit access to the information needed for the feature."
+    },
+    {
+      "question_id": "CM-POST-249",
+      "correct_choice_id": "C",
+      "explanation": "A physical poster does not verify an app or justify excessive permissions."
+    },
+    {
+      "question_id": "CM-POST-250",
+      "correct_choice_id": "B",
+      "explanation": "Verify unexpected downloads through the original organization."
+    },
+    {
+      "question_id": "CM-POST-251",
+      "correct_choice_id": "C",
+      "explanation": "A known transaction supports the context without eliminating every file risk."
+    },
+    {
+      "question_id": "CM-POST-252",
+      "correct_choice_id": "B",
+      "explanation": "The institution's established channel can confirm whether results are available."
+    },
+    {
+      "question_id": "CM-POST-253",
+      "correct_choice_id": "D",
+      "explanation": "Powerful permissions need a clear functional justification even when presentation looks normal."
+    },
+    {
+      "question_id": "CM-POST-254",
+      "correct_choice_id": "A",
+      "explanation": "Permission purpose and scope matter alongside source verification."
+    },
+    {
+      "question_id": "CM-POST-255",
+      "correct_choice_id": "A",
+      "explanation": "A convincing appearance does not verify a texted installer."
+    },
+    {
+      "question_id": "CM-POST-256",
+      "correct_choice_id": "B",
+      "explanation": "The same powerful permission can be justified by one function but not another."
+    },
+    {
+      "question_id": "CM-POST-257",
+      "correct_choice_id": "C",
+      "explanation": "A company name embedded in a different domain does not establish company ownership."
+    },
+    {
+      "question_id": "CM-POST-258",
+      "correct_choice_id": "B",
+      "explanation": "Archive format alone does not determine trust; inspect source, purpose, and contents."
+    },
+    {
+      "question_id": "CM-POST-259",
+      "correct_choice_id": "A",
+      "explanation": "A general file-type warning requires assessment rather than automatic acceptance or rejection."
+    },
+    {
+      "question_id": "CM-POST-260",
+      "correct_choice_id": "D",
+      "explanation": "A lookalike school address can host a deceptive download."
+    },
+    {
+      "question_id": "CM-POST-261",
+      "correct_choice_id": "D",
+      "explanation": "An established app and publisher route provides better context for an update."
+    },
+    {
+      "question_id": "CM-POST-262",
+      "correct_choice_id": "C",
+      "explanation": "Permission decisions should reflect function, source, and scope."
+    },
+    {
+      "question_id": "CM-POST-263",
+      "correct_choice_id": "A",
+      "explanation": "Extensions are useful clues but not guarantees."
+    },
+    {
+      "question_id": "CM-POST-264",
+      "correct_choice_id": "D",
+      "explanation": "Macro-enabled spreadsheets can execute instructions when permitted."
+    },
+    {
+      "question_id": "CM-POST-265",
+      "correct_choice_id": "C",
+      "explanation": "An attachment password does not authenticate its sender or contents."
+    },
+    {
+      "question_id": "CM-POST-266",
+      "correct_choice_id": "C",
+      "explanation": "The established portal lets you complete the task without trusting an unexpected file."
+    },
+    {
+      "question_id": "CM-POST-267",
+      "correct_choice_id": "D",
+      "explanation": "The final .exe extension indicates a program despite the earlier .pdf text."
+    },
+    {
+      "question_id": "CM-POST-268",
+      "correct_choice_id": "B",
+      "explanation": "Urgency does not justify running an unexpected executable."
+    },
+    {
+      "question_id": "CM-POST-269",
+      "correct_choice_id": "D",
+      "explanation": "An expected verified source supports the document without making the format risk-free."
+    },
+    {
+      "question_id": "CM-POST-270",
+      "correct_choice_id": "A",
+      "explanation": "Unverified cracked software can contain malicious code."
+    },
+    {
+      "question_id": "CM-POST-271",
+      "correct_choice_id": "D",
+      "explanation": "The risk is executing untrusted software, not price or size alone."
+    },
+    {
+      "question_id": "CM-POST-272",
+      "correct_choice_id": "A",
+      "explanation": "An unknown drive should not be connected simply to satisfy curiosity."
+    },
+    {
+      "question_id": "CM-POST-273",
+      "correct_choice_id": "D",
+      "explanation": "The filename disguises an executable as a spreadsheet."
+    },
+    {
+      "question_id": "CM-POST-274",
+      "correct_choice_id": "D",
+      "explanation": "Unexpected active-content requests conflict with the stated purpose and need checking."
+    },
+    {
+      "question_id": "CM-POST-275",
+      "correct_choice_id": "A",
+      "explanation": "Format capabilities matter, but a filename alone does not guarantee safety."
+    },
+    {
+      "question_id": "CM-POST-276",
+      "correct_choice_id": "C",
+      "explanation": "A friend's recommendation does not verify an unofficial download."
+    },
+    {
+      "question_id": "CM-POST-277",
+      "correct_choice_id": "B",
+      "explanation": "Security tools and warnings do not identify every unsafe file."
+    },
+    {
+      "question_id": "CM-POST-278",
+      "correct_choice_id": "D",
+      "explanation": "Known provenance reduces uncertainty but does not eliminate normal checks."
+    },
+    {
+      "question_id": "CM-POST-279",
+      "correct_choice_id": "C",
+      "explanation": "A device's history can change when connected to another computer."
+    },
+    {
+      "question_id": "CM-POST-280",
+      "correct_choice_id": "C",
+      "explanation": "An unexpected file type is a reason to verify the message rather than execute its content."
+    },
+    {
+      "question_id": "CM-POST-281",
+      "correct_choice_id": "D",
+      "explanation": "Changing the extension does not establish or change the file's true contents."
+    },
+    {
+      "question_id": "CM-POST-282",
+      "correct_choice_id": "C",
+      "explanation": "A matching product name does not make a different domain the official source."
+    },
+    {
+      "question_id": "CM-POST-283",
+      "correct_choice_id": "A",
+      "explanation": "A verified destination reduces the risk of a lookalike download site."
+    },
+    {
+      "question_id": "CM-POST-284",
+      "correct_choice_id": "D",
+      "explanation": "Warnings are evidence to evaluate, not a reason to abandon source verification."
+    },
+    {
+      "question_id": "CM-POST-285",
+      "correct_choice_id": "A",
+      "explanation": "Expected format is one supporting clue, not absolute proof."
+    },
+    {
+      "question_id": "CM-POST-286",
+      "correct_choice_id": "A",
+      "explanation": "An established game distribution channel provides a more trustworthy source."
+    },
+    {
+      "question_id": "CM-POST-287",
+      "correct_choice_id": "C",
+      "explanation": "Macro-enabled documents can run instructions and should not be enabled casually."
+    },
+    {
+      "question_id": "CM-POST-288",
+      "correct_choice_id": "C",
+      "explanation": "Do not run active content to determine whether an unverified document is trustworthy."
+    },
+    {
+      "question_id": "CM-POST-289",
+      "correct_choice_id": "B",
+      "explanation": "Several consistent facts support the context without making any one detail conclusive."
+    },
+    {
+      "question_id": "CM-POST-290",
+      "correct_choice_id": "C",
+      "explanation": "Archive encryption is not a guarantee that the enclosed files are safe."
+    },
+    {
+      "question_id": "CM-POST-291",
+      "correct_choice_id": "C",
+      "explanation": "Verify the shipment independently instead of following the attachment's instructions."
+    },
+    {
+      "question_id": "CM-POST-292",
+      "correct_choice_id": "B",
+      "explanation": "An unverified recovery program can add further harm."
+    },
+    {
+      "question_id": "CM-POST-293",
+      "correct_choice_id": "C",
+      "explanation": "Ransomware uses denied access to pressure the victim for payment."
+    },
+    {
+      "question_id": "CM-POST-294",
+      "correct_choice_id": "A",
+      "explanation": "Backups support recovery but do not undo every consequence of an incident."
+    },
+    {
+      "question_id": "CM-POST-295",
+      "correct_choice_id": "D",
+      "explanation": "A security-related name does not replace source verification."
+    },
+    {
+      "question_id": "CM-POST-296",
+      "correct_choice_id": "D",
+      "explanation": "Separation helps prevent the same incident from damaging both working files and backups."
+    },
+    {
+      "question_id": "CM-POST-297",
+      "correct_choice_id": "D",
+      "explanation": "The format mismatch is a reason to verify, not proof that execution already occurred."
+    },
+    {
+      "question_id": "CM-POST-298",
+      "correct_choice_id": "B",
+      "explanation": "The requested action needs checking even when the sender looks normal."
+    },
+    {
+      "question_id": "CM-POST-299",
+      "correct_choice_id": "C",
+      "explanation": "Verify the source and inspect expected contents rather than judging by archive format alone."
+    },
+    {
+      "question_id": "CM-POST-300",
+      "correct_choice_id": "D",
+      "explanation": "Containment and trusted support reduce further exposure before recovery begins."
+    }
+  ]
+}

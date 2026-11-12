@@ -758,6 +758,35 @@ onUnmounted(() => {
             </div>
             <div class="stat-label">Threat index progress</div>
             <div
+              v-if="threatIndexStore.entries && threatIndexStore.entries.length"
+              class="threat-matrix-mini"
+              role="list"
+              aria-label="Unlocked threat categories quick links"
+            >
+              <template v-for="entry in threatIndexStore.entries" :key="entry.slug">
+                <router-link
+                  v-if="entry.is_unlocked"
+                  :to="`/threat-index/${entry.slug}`"
+                  class="threat-mini-pip is-unlocked"
+                  role="listitem"
+                  :title="`${entry.threat_name} — Unlocked`"
+                  :aria-label="`Open ${entry.threat_name} dossier`"
+                >
+                  {{ entry.number }}
+                </router-link>
+                <span
+                  v-else
+                  class="threat-mini-pip is-locked"
+                  role="listitem"
+                  :title="`${entry.threat_name} — Locked`"
+                  :aria-label="`${entry.threat_name}: locked`"
+                >
+                  {{ entry.number }}
+                </span>
+              </template>
+            </div>
+            <div
+              v-else
               class="stat-progress-track"
               role="progressbar"
               :aria-valuenow="threatIndexStore.progressPercentage"
@@ -771,8 +800,9 @@ onUnmounted(() => {
               ></div>
             </div>
             <div class="stat-card-actions">
-              <router-link to="/threat-index" class="stat-link">
-                View threat index
+              <router-link to="/threat-index" class="stat-link stat-link-pill">
+                <span>View threat index</span>
+                <AppIcon name="arrow-right" :size="13" class="stat-link-arrow" />
               </router-link>
             </div>
           </template>
@@ -1125,7 +1155,7 @@ onUnmounted(() => {
 }
 
 .map-segment.is-active {
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.22);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
 
 .map-progression-status {
@@ -1186,7 +1216,7 @@ onUnmounted(() => {
 
 .map-progression-card.is-current-stage {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.14), var(--shadow-purple-sm);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 16%, transparent), var(--shadow-purple-sm);
 }
 
 .map-progression-card.is-locked {
@@ -1548,12 +1578,12 @@ onUnmounted(() => {
 
 .scoring-disclosure-summary:hover {
   text-decoration: underline;
-  color: #6d28d9;
+  color: var(--color-primary-hover);
 }
 
 .scoring-disclosure-summary:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
 .scoring-disclosure-text {
@@ -1614,7 +1644,7 @@ onUnmounted(() => {
 .map-select:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .map-filter-note {
@@ -1810,7 +1840,7 @@ onUnmounted(() => {
 .btn-history-link:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .loading-state {
@@ -1903,6 +1933,9 @@ onUnmounted(() => {
   .map-segment,
   .stat-card,
   .stat-progress-fill,
+  .threat-mini-pip,
+  .stat-link-pill,
+  .stat-link-arrow,
   .bar-fill,
   .btn-outline,
   .btn-history-link,
@@ -1912,6 +1945,8 @@ onUnmounted(() => {
   .map-progression-card.is-unlocked:hover,
   .map-progression-card.is-unlocked:hover .map-card-thumb,
   .stat-card:hover,
+  .threat-mini-pip.is-unlocked:hover,
+  .stat-link-pill:hover .stat-link-arrow,
   .btn-outline:hover,
   .btn-history-link:hover :deep(.app-icon) {
     transform: none !important;
@@ -1929,6 +1964,9 @@ onUnmounted(() => {
 :root[data-reduced-motion='true'] .map-segment,
 :root[data-reduced-motion='true'] .stat-card,
 :root[data-reduced-motion='true'] .stat-progress-fill,
+:root[data-reduced-motion='true'] .threat-mini-pip,
+:root[data-reduced-motion='true'] .stat-link-pill,
+:root[data-reduced-motion='true'] .stat-link-arrow,
 :root[data-reduced-motion='true'] .bar-fill,
 :root[data-reduced-motion='true'] .btn-outline,
 :root[data-reduced-motion='true'] .btn-history-link,
@@ -1939,6 +1977,8 @@ onUnmounted(() => {
 :root[data-reduced-motion='true'] .map-progression-card.is-unlocked:hover,
 :root[data-reduced-motion='true'] .map-progression-card.is-unlocked:hover .map-card-thumb,
 :root[data-reduced-motion='true'] .stat-card:hover,
+:root[data-reduced-motion='true'] .threat-mini-pip.is-unlocked:hover,
+:root[data-reduced-motion='true'] .stat-link-pill:hover .stat-link-arrow,
 :root[data-reduced-motion='true'] .btn-outline:hover,
 :root[data-reduced-motion='true'] .btn-history-link:hover :deep(.app-icon) {
   transform: none !important;
@@ -2026,6 +2066,84 @@ onUnmounted(() => {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+.threat-matrix-mini {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.25rem;
+  max-width: 216px;
+  margin: 0.65rem auto 0;
+}
+
+.threat-mini-pip {
+  height: 22px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition:
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.16s ease;
+}
+
+.threat-mini-pip.is-unlocked {
+  background: var(--btn-gradient);
+  color: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.threat-mini-pip.is-unlocked:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.threat-mini-pip.is-unlocked:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.threat-mini-pip.is-locked {
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-dim);
+  border: 1px dashed var(--color-border);
+  cursor: default;
+}
+
+.stat-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.72rem;
+  border-radius: 999px;
+  background-color: var(--color-violet-subtle);
+  border: 1px solid var(--color-violet-border);
+  color: var(--color-primary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.stat-link-pill:hover {
+  text-decoration: none;
+  border-color: var(--color-primary);
+}
+
+.stat-link-arrow {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stat-link-pill:hover .stat-link-arrow {
+  transform: translateX(3px);
 }
 
 .btn-stat-retry {

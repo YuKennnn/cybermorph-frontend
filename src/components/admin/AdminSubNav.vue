@@ -23,10 +23,14 @@ defineProps({
 
 <style scoped>
 .admin-subnav {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--color-border);
+  gap: 0.35rem;
+  padding: 0.3rem;
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
   margin-bottom: 1.75rem;
   overflow-x: auto;
   max-width: 100%;
@@ -37,28 +41,40 @@ defineProps({
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.15rem;
+  min-height: 38px;
+  padding: 0.45rem 1.05rem;
   color: var(--color-text-muted);
   text-decoration: none;
   font-family: var(--font-sans);
-  font-size: 0.92rem;
-  font-weight: 500;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
-  margin-bottom: -1px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.subnav-tab:hover {
-  color: var(--color-text-main);
-  border-bottom-color: var(--color-border-hover);
+.subnav-tab:hover:not(.router-link-active) {
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
 }
 
 .subnav-tab.router-link-active {
-  color: var(--color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--color-primary);
+  background: var(--btn-gradient);
+  border-color: var(--nav-pill-border);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--btn-rim-shadow);
+}
+
+.subnav-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .subnav-badge {
@@ -68,10 +84,16 @@ defineProps({
   background-color: var(--color-warning-bg);
   color: var(--color-warning);
   border: 1px solid var(--color-warning-border);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.1rem 0.45rem;
+  padding: 0.12rem 0.48rem;
   border-radius: 9999px;
   line-height: 1;
+}
+
+.subnav-tab.router-link-active .subnav-badge {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 </style>

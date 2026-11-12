@@ -582,12 +582,19 @@ onUnmounted(() => {
 
 /* Workspace Navigation Links */
 .workspace-nav {
-  display: flex;
-  gap: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-top: 0.35rem;
+  margin-bottom: 0.85rem;
+  padding: 0.28rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   overflow-x: auto;
   max-width: 100%;
   min-width: 0;
+  width: fit-content;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -595,30 +602,39 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.75rem 0.25rem;
-  font-size: 0.9375rem;
+  min-height: 38px;
+  padding: 0.42rem 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-text-muted, #475569);
+  color: var(--color-text-muted);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  transition: all 0.15s ease;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.nav-link:hover:not(.nav-link-disabled) {
-  color: var(--color-primary, #7c3aed);
+.nav-link:hover:not(.nav-link-disabled):not(.active) {
+  background-color: var(--color-violet-subtle);
+  color: var(--color-primary);
 }
 
 .nav-link:focus-visible {
-  outline: 2px solid var(--color-primary, #7c3aed);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 .nav-link.active {
-  color: var(--color-primary, #7c3aed);
-  border-bottom-color: var(--color-primary, #7c3aed);
+  background: var(--btn-gradient);
+  border-color: var(--nav-pill-border);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--btn-rim-shadow);
 }
 
 .nav-link.nav-link-disabled {
