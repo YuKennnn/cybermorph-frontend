@@ -1,0 +1,20 @@
+Use case: infographic-diagram
+Create a precise publication-quality CyberMorph system architecture diagram for an academic paper, portrait 3:4 composition, high resolution, white background, flat technical diagram, no illustration, subtle pale blue/gray fills and dark navy text. Large readable sans-serif text, generous spacing, orthogonal connectors, no crossings through boxes. Title "CyberMorph System Architecture". One combined diagram with 3 clearly titled regions.
+
+RUNTIME region top 60%:
+Left box "Godot game" / "Android • offline gameplay" / "On-device AI inference". Within its boundary two clearly separate storage boxes: solid "JSON files" / "Current local storage"; dashed "SQLite" / "Planned design". Show local read/write link from game logic to current JSON storage; planned SQLite should not look like a currently active second database.
+Right box "Vue 3 web portal" with three lines "Player progress and leaderboard", "Educator classrooms and analytics", "Admin approvals and logs".
+Beneath clients centered box "FastAPI backend" / "Render • /v1" / "Authentication • Authorization • Validation".
+Both clients separately connect bidirectionally to backend using solid arrows labeled "HTTPS / JSON / Bearer JWT"; game arrow additionally "When online". No direct links from clients to PostgreSQL.
+Beneath backend a cylinder "PostgreSQL" / "Cloud data", bidirectional solid connector labeled "SQLAlchemy / asyncpg / SSL".
+Small runtime note "Independent play • Optional classroom features".
+
+RESEARCH region below runtime:
+One box "Manual data export" connected FROM FastAPI backend, label on connector "Admin API". Another box "AI training on developer PC" / "PPO / DQN / A2C" / "Compare with baselines". One directional connector from Manual data export TO AI training box labeled "Research play data". It is essential export is from backend API, NOT direct database access. Research takes uploaded gameplay data stored in PostgreSQL via backend.
+
+DELIVERY region bottom:
+Box "Godot build" / "Bundle frozen JSON weights", arrow to box "Signed APK", arrow routed back to Godot game labeled "Install next release". Dashed arrow from AI training to Godot build labeled "Export weights". Another small separate pipeline "Backend code" → "Render deployment" with endpoint arrow to FastAPI, and below it text "Alembic migrations update PostgreSQL schema".
+Small bottom legend "Solid arrows: runtime or delivery flow    Dashed arrow: model export". Dashed SQLite border means planned storage; do not use dashed borders for implemented boxes. No internet AI service, no MySQL, no Neon, no table counts, no invented infrastructure. All labels spelled exactly. Keep the graph comprehensible and readable at a 6.9-inch print width; prioritize correct arrows over decorative detail.
+
+CORRECTION PROMPT
+Edit this diagram, preserve design and all correctly spelled labels. Correct three connections precisely: (1) Remove the horizontal double arrow between JSON files and SQLite and its floating Game logic / Read Write labels. Replace with simple text within Godot under On-device AI inference: "Local read/write uses JSON files". Keep both storage boxes, JSON current and SQLite dashed Planned design, with NO connector between them. (2) Installation line currently originates at Godot build left edge. Remove that origin and route a line from bottom of Signed APK, left along bottom of DELIVERY region, then up the far-left margin to Godot game, ending in arrowhead at Godot. This must make Signed APK the source of Install next release. Preserve Godot build → Signed APK arrow. (3) Add arrowhead at web portal end of web portal-to-backend line so it is bidirectional, retaining backend arrowhead. Everything else unchanged.

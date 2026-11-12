@@ -134,6 +134,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['player'] },
   },
   {
+    path: '/post-test',
+    name: 'post-test',
+    component: () => import('../views/PostTestView.vue'),
+    meta: { requiresAuth: true, roles: ['player'] },
+  },
+  {
     path: '/session-history',
     name: 'session-history',
     component: () => import('../views/SessionHistoryView.vue'),

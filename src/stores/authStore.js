@@ -12,6 +12,7 @@ import { setUnauthorizedSessionHandler } from '../api/client.js'
 import { useClassroomStore } from './classroomStore.js'
 import { useThreatIndexStore } from './threatIndexStore.js'
 import { usePlayerClassroomStore } from './playerClassroomStore.js'
+import { usePostTestStore } from './postTestStore.js'
 import { useApiCacheStore } from './apiCacheStore.js'
 import { stopNarration } from '../utils/speech.js'
 import { stripDisplayNameWhitespace, validateDisplayName } from '../utils/displayName.js'
@@ -362,6 +363,11 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // Store may not be active yet
     }
+    try {
+      usePostTestStore().reset()
+    } catch {
+      // Store may not be active yet
+    }
 
     const loginEpoch = sessionEpoch.value
     const data = await loginUser(credentials)
@@ -465,6 +471,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
     try {
       usePlayerClassroomStore().reset()
+    } catch {
+      // In case store is not yet active
+    }
+    try {
+      usePostTestStore().reset()
     } catch {
       // In case store is not yet active
     }

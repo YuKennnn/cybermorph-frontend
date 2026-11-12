@@ -156,6 +156,13 @@ const sizePixels = computed(() => {
       <path d="M12 18h.01" />
     </template>
 
+    <!-- Clipboard Check / Post-test -->
+    <template v-else-if="name === 'clipboard-check'">
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="m9 14 2 2 4-4" />
+    </template>
+
     <!-- Shield / Security -->
     <template v-else-if="name === 'shield'">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />

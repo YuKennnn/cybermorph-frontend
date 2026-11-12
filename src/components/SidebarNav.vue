@@ -302,6 +302,16 @@ const formatRole = (role) => {
           <span class="nav-label">Threat index</span>
         </router-link>
 
+        <router-link
+          v-if="authStore.isPlayer"
+          to="/post-test"
+          class="nav-item"
+          @click="closeMobileMenu"
+        >
+          <AppIcon name="clipboard-check" :size="18" class="nav-icon" />
+          <span class="nav-label">Post-test</span>
+        </router-link>
+
         <div v-if="authStore.isPlayer" class="nav-item-group">
           <router-link
             :to="playerClassroomStore.navRoute"
