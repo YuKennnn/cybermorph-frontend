@@ -61,7 +61,26 @@ const sidebarRef = ref(null)
 const logoutBtnRef = ref(null)
 const isLogoutModalOpen = ref(false)
 const isLoggingOut = ref(false)
+const sidebarViewportHeight = ref('')
 let previousActiveElement = null
+
+const sidebarViewportStyle = computed(() =>
+  sidebarViewportHeight.value ? { '--sidebar-viewport-height': sidebarViewportHeight.value } : undefined,
+)
+
+const syncSidebarViewportHeight = () => {
+  if (typeof window === 'undefined' || !window.visualViewport) {
+    sidebarViewportHeight.value = ''
+    return
+  }
+  const vv = window.visualViewport
+  const isUnzoomed = Math.abs(vv.width - window.innerWidth) <= 2 && vv.offsetTop <= 1
+  if (isUnzoomed && vv.height > 0 && vv.height < window.innerHeight - 1) {
+    sidebarViewportHeight.value = `${Math.floor(vv.height)}px`
+  } else {
+    sidebarViewportHeight.value = ''
+  }
+}
 
 const toggleMobileMenu = () => {
   isMobileOpen.value = !isMobileOpen.value
@@ -153,6 +172,9 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', syncSidebarViewportHeight)
+  window.visualViewport?.addEventListener('resize', syncSidebarViewportHeight)
+  syncSidebarViewportHeight()
   ensurePlayerMembershipLoaded()
 })
 
@@ -165,6 +187,8 @@ watch(
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', syncSidebarViewportHeight)
+  window.visualViewport?.removeEventListener('resize', syncSidebarViewportHeight)
   document.body.style.overflow = ''
 })
 
@@ -237,6 +261,7 @@ const formatRole = (role) => {
     <aside
       ref="sidebarRef"
       :class="['sidebar-nav', { 'mobile-open': isMobileOpen }]"
+      :style="sidebarViewportStyle"
       aria-label="Sidebar navigation"
     >
       <div class="sidebar-header">
@@ -487,8 +512,11 @@ const formatRole = (role) => {
 
 /* Sidebar Styling */
 .sidebar-nav {
+  box-sizing: border-box;
   width: 250px;
   height: 100vh;
+  height: 100dvh;
+  max-height: var(--sidebar-viewport-height, 100%);
   position: fixed;
   top: 0;
   left: 0;
@@ -702,7 +730,7 @@ const formatRole = (role) => {
 
 /* Sidebar Footer */
 .sidebar-footer {
-  padding: 1rem 0.75rem;
+  padding: 1rem 0.75rem calc(1rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--color-border-subtle);
   flex-shrink: 0;
 }
@@ -809,19 +837,11 @@ const formatRole = (role) => {
   }
 
   .sidebar-nav {
-    box-sizing: border-box;
-    height: 100vh;
-    height: 100dvh;
-    max-height: 100%;
     transform: translateX(-100%);
   }
 
   .sidebar-nav.mobile-open {
     transform: translateX(0);
-  }
-
-  .sidebar-footer {
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
