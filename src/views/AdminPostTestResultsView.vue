@@ -24,20 +24,28 @@ const filterMode = ref('all')
 const isLoading = ref(false)
 const errorMessage = ref('')
 
-// Attempt history drawer state
+// Attempt history modal state
 const selectedProfileId = ref(null)
 const selectedUsername = ref('')
 const historyDetail = ref(null)
 const isHistoryLoading = ref(false)
 const historyError = ref('')
-const drawerCloseBtnRef = ref(null)
+const expandedAttemptIds = ref({})
+const modalDialogRef = ref(null)
+const modalCloseBtnRef = ref(null)
+
 let lastTriggerEl = null
+let lastOpenedProfileId = ''
+let previousBodyOverflow = ''
+let hasLockedBodyScroll = false
 
 let currentSessionEpoch = 0
 let latestListReqId = 0
 let latestHistoryReqId = 0
 let listAbortController = null
 let historyAbortController = null
+
+const isModalOpen = computed(() => Boolean(selectedProfileId.value))
 
 const totalPages = computed(() => {
   if (totalCount.value <= 0) return 1
@@ -49,8 +57,22 @@ const activePassedParam = computed(() => {
   return match ? match.passed : null
 })
 
-const hasLaterFailedRetake = computed(() => {
+// Defense in depth: only render detail belonging to the currently selected player
+const activeHistoryDetail = computed(() => {
   const detail = historyDetail.value
+  if (!detail || !selectedProfileId.value) return null
+  if (
+    detail.profile_id !== undefined &&
+    detail.profile_id !== null &&
+    String(detail.profile_id) !== String(selectedProfileId.value)
+  ) {
+    return null
+  }
+  return detail
+})
+
+const hasLaterFailedRetake = computed(() => {
+  const detail = activeHistoryDetail.value
   if (!detail || !detail.passed) return false
   if (!Array.isArray(detail.attempts) || detail.attempts.length === 0) return false
   return detail.attempts[0].passed === false
@@ -87,6 +109,54 @@ const formatScore = (correctCount, questionCount, scorePercent) => {
   return `${correctCount}/${questionCount}${pctText}`
 }
 
+const isAttemptExpanded = (attemptId) => Boolean(expandedAttemptIds.value[attemptId])
+
+const toggleAttemptTopics = (attemptId) => {
+  expandedAttemptIds.value = {
+    ...expandedAttemptIds.value,
+    [attemptId]: !expandedAttemptIds.value[attemptId],
+  }
+}
+
+const lockBodyScroll = () => {
+  if (hasLockedBodyScroll || typeof document === 'undefined') return
+  previousBodyOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
+  hasLockedBodyScroll = true
+}
+
+const unlockBodyScroll = () => {
+  if (!hasLockedBodyScroll || typeof document === 'undefined') return
+  document.body.style.overflow = previousBodyOverflow
+  previousBodyOverflow = ''
+  hasLockedBodyScroll = false
+}
+
+const getFocusableElements = () => {
+  if (!modalDialogRef.value) return []
+  return Array.from(
+    modalDialogRef.value.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((el) => el instanceof HTMLElement && el.offsetParent !== null)
+}
+
+const restoreTriggerFocus = () => {
+  if (typeof document === 'undefined') return
+  if (lastOpenedProfileId) {
+    const buttons = document.querySelectorAll('[data-post-test-profile-id]')
+    for (const btn of buttons) {
+      if (btn instanceof HTMLElement && btn.dataset.postTestProfileId === lastOpenedProfileId) {
+        btn.focus({ preventScroll: true })
+        return
+      }
+    }
+  }
+  if (lastTriggerEl instanceof HTMLElement && document.body.contains(lastTriggerEl)) {
+    lastTriggerEl.focus({ preventScroll: true })
+  }
+}
+
 const resetState = () => {
   latestListReqId++
   latestHistoryReqId++
@@ -98,6 +168,7 @@ const resetState = () => {
     historyAbortController.abort()
     historyAbortController = null
   }
+  unlockBodyScroll()
   players.value = []
   totalCount.value = 0
   page.value = 1
@@ -109,7 +180,9 @@ const resetState = () => {
   historyDetail.value = null
   isHistoryLoading.value = false
   historyError.value = ''
+  expandedAttemptIds.value = {}
   lastTriggerEl = null
+  lastOpenedProfileId = ''
 }
 
 const loadResults = async () => {
@@ -187,6 +260,7 @@ const openPlayerHistory = async (row, event) => {
   if (event?.currentTarget instanceof HTMLElement) {
     lastTriggerEl = event.currentTarget
   }
+  lastOpenedProfileId = String(row.profile_id)
 
   if (historyAbortController) {
     historyAbortController.abort()
@@ -200,15 +274,20 @@ const openPlayerHistory = async (row, event) => {
   }
   historyDetail.value = null
   historyError.value = ''
+  expandedAttemptIds.value = {}
   isHistoryLoading.value = true
+  lockBodyScroll()
 
+  const targetProfileId = String(row.profile_id)
   const reqId = ++latestHistoryReqId
   const reqSession = currentSessionEpoch
   const reqAuthEpoch = authStore.activeSessionEpoch
 
-  nextTick(() => {
-    drawerCloseBtnRef.value?.focus()
-  })
+  await nextTick()
+  if (selectedProfileId.value === targetProfileId) {
+    const focusTarget = modalCloseBtnRef.value || modalDialogRef.value
+    focusTarget?.focus({ preventScroll: true })
+  }
 
   try {
     const detail = await fetchAdminPostTestPlayerResult(row.profile_id, {
@@ -219,6 +298,7 @@ const openPlayerHistory = async (row, event) => {
       reqSession !== currentSessionEpoch ||
       reqId !== latestHistoryReqId ||
       reqAuthEpoch !== authStore.activeSessionEpoch ||
+      String(selectedProfileId.value || '') !== targetProfileId ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -236,6 +316,7 @@ const openPlayerHistory = async (row, event) => {
       reqSession !== currentSessionEpoch ||
       reqId !== latestHistoryReqId ||
       reqAuthEpoch !== authStore.activeSessionEpoch ||
+      String(selectedProfileId.value || '') !== targetProfileId ||
       !authStore.isAuthenticated ||
       !authStore.isAdmin
     ) {
@@ -255,7 +336,7 @@ const openPlayerHistory = async (row, event) => {
   }
 }
 
-const closeHistoryDrawer = () => {
+const closeHistoryModal = () => {
   latestHistoryReqId++
   if (historyAbortController) {
     historyAbortController.abort()
@@ -265,18 +346,49 @@ const closeHistoryDrawer = () => {
   selectedUsername.value = ''
   historyDetail.value = null
   historyError.value = ''
+  expandedAttemptIds.value = {}
   isHistoryLoading.value = false
+  unlockBodyScroll()
   nextTick(() => {
-    if (lastTriggerEl && document.body.contains(lastTriggerEl)) {
-      lastTriggerEl.focus()
-    }
+    restoreTriggerFocus()
     lastTriggerEl = null
+    lastOpenedProfileId = ''
   })
 }
 
 const handleKeyDown = (event) => {
-  if (event.key === 'Escape' && selectedProfileId.value) {
-    closeHistoryDrawer()
+  if (!isModalOpen.value) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeHistoryModal()
+    return
+  }
+
+  if (event.key !== 'Tab') return
+
+  const focusables = getFocusableElements()
+  if (focusables.length === 0) {
+    event.preventDefault()
+    modalDialogRef.value?.focus({ preventScroll: true })
+    return
+  }
+
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  const active = document.activeElement
+
+  if (event.shiftKey) {
+    if (active === first || !modalDialogRef.value?.contains(active)) {
+      event.preventDefault()
+      last.focus({ preventScroll: true })
+    }
+    return
+  }
+
+  if (active === last || !modalDialogRef.value?.contains(active)) {
+    event.preventDefault()
+    first.focus({ preventScroll: true })
   }
 }
 
@@ -328,6 +440,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  unlockBodyScroll()
   currentSessionEpoch++
   latestListReqId++
   latestHistoryReqId++
@@ -376,7 +489,7 @@ onUnmounted(() => {
           aria-label="Refresh post-test results"
           @click="loadResults"
         >
-          <AppIcon name="refresh" :size="16" aria-hidden="true" />
+          <AppIcon name="refresh" :size="15" aria-hidden="true" />
           <span>Refresh</span>
         </button>
       </div>
@@ -394,7 +507,7 @@ onUnmounted(() => {
       <p>Loading post-test results...</p>
     </div>
 
-    <!-- Results Table -->
+    <!-- Results Table (Desktop table, stacked summary cards on narrow screens) -->
     <div v-else-if="players.length > 0" class="table-card">
       <div class="table-scroll">
         <table class="results-table">
@@ -414,23 +527,29 @@ onUnmounted(() => {
                 <span class="player-name">{{ row.username }}</span>
               </td>
 
-              <td>
+              <td class="status-cell">
                 <span :class="['status-pill', row.passed ? 'status-passed' : 'status-failed']">
-                  {{ row.passed ? 'Passed' : 'Not passed' }}
+                  <AppIcon
+                    :name="row.passed ? 'check' : 'x'"
+                    :size="12"
+                    class="status-icon"
+                    aria-hidden="true"
+                  />
+                  <span>{{ row.passed ? 'Passed' : 'Not passed' }}</span>
                 </span>
               </td>
 
-              <td class="num-col tabular-num">
+              <td class="num-col tabular-num attempts-cell" data-label="Attempts">
                 {{ row.attempts }}
               </td>
 
-              <td class="num-col tabular-num">
+              <td class="num-col tabular-num best-score-cell" data-label="Best score">
                 <span :class="['score-text', row.passed ? 'pass' : 'fail']">
                   {{ formatScore(row.best_correct_count, row.question_count, row.best_score_percent) }}
                 </span>
               </td>
 
-              <td class="date-cell tabular-num">
+              <td class="date-cell tabular-num" data-label="Submitted">
                 {{ formatDateTime(row.last_submitted_at) }}
               </td>
 
@@ -438,6 +557,7 @@ onUnmounted(() => {
                 <button
                   type="button"
                   class="btn-history"
+                  :data-post-test-profile-id="row.profile_id"
                   :aria-label="`View post-test attempt history for ${row.username}`"
                   @click="openPlayerHistory(row, $event)"
                 >
@@ -450,14 +570,19 @@ onUnmounted(() => {
         </table>
       </div>
 
-      <!-- Pagination Bar -->
+      <!-- Results Count & Conditional Pagination Controls -->
       <div v-if="totalCount > 0" class="pagination-bar">
         <div class="pagination-info tabular-num">
-          Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
-          <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
-          <strong>{{ totalCount }}</strong> players
+          <template v-if="totalPages > 1">
+            Showing <strong>{{ (page - 1) * pageSize + 1 }}</strong> to
+            <strong>{{ Math.min(page * pageSize, totalCount) }}</strong> of
+            <strong>{{ totalCount }}</strong> {{ totalCount === 1 ? 'player' : 'players' }}
+          </template>
+          <template v-else>
+            Showing <strong>{{ totalCount }}</strong> {{ totalCount === 1 ? 'player' : 'players' }}
+          </template>
         </div>
-        <div class="pagination-actions">
+        <div v-if="totalPages > 1" class="pagination-actions">
           <button
             type="button"
             class="page-btn"
@@ -505,194 +630,255 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <!-- Player Attempt History Drawer -->
-    <div
-      v-if="selectedProfileId"
-      class="drawer-backdrop"
-      @click.self="closeHistoryDrawer"
-    >
-      <aside
-        class="history-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="history-drawer-title"
-      >
-        <div class="drawer-header">
-          <div class="drawer-title-group">
-            <h3 id="history-drawer-title" class="drawer-title">
-              {{ historyDetail?.username || selectedUsername || 'Attempt history' }}
-            </h3>
-            <div v-if="historyDetail" class="drawer-status-row">
-              <span
-                :class="[
-                  'status-pill',
-                  historyDetail.passed ? 'status-passed' : 'status-failed',
-                ]"
-              >
-                {{ historyDetail.passed ? 'Overall passed' : 'Not passed' }}
-              </span>
-            </div>
-          </div>
-          <button
-            ref="drawerCloseBtnRef"
-            type="button"
-            class="drawer-close-btn"
-            aria-label="Close attempt history"
-            @click="closeHistoryDrawer"
+    <!-- Centered Player Attempt History Modal -->
+    <Teleport to="body">
+      <Transition name="post-test-modal-fade">
+        <div
+          v-if="isModalOpen"
+          class="post-test-modal-backdrop"
+          @click.self="closeHistoryModal"
+        >
+          <div
+            ref="modalDialogRef"
+            class="post-test-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-modal-title"
+            tabindex="-1"
           >
-            <AppIcon name="x" :size="18" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div class="drawer-body">
-          <div v-if="isHistoryLoading" class="drawer-loading" role="status">
-            <div class="spinner" aria-hidden="true"></div>
-            <p>Loading attempt history...</p>
-          </div>
-
-          <div v-else-if="historyError" class="error-banner" role="alert">
-            <span>{{ historyError }}</span>
-            <button
-              type="button"
-              class="btn-retry"
-              @click="openPlayerHistory({ profile_id: selectedProfileId, username: selectedUsername })"
-            >
-              Retry
-            </button>
-          </div>
-
-          <template v-else-if="historyDetail">
-            <!-- Summary Strip -->
-            <div class="summary-strip">
-              <div class="summary-metric">
-                <span class="metric-label">Overall status</span>
-                <strong class="metric-value">
-                  {{ historyDetail.passed ? 'Passed' : 'Not passed' }}
-                </strong>
-              </div>
-              <div class="summary-metric">
-                <span class="metric-label">Submitted attempts</span>
-                <strong class="metric-value tabular-num">
-                  {{ historyDetail.attempts.length }}
-                </strong>
-              </div>
-              <div class="summary-metric">
-                <span class="metric-label">Best score</span>
-                <strong class="metric-value tabular-num">
-                  {{
-                    historyDetail.best
-                      ? formatScore(
-                          historyDetail.best.correct_count,
-                          historyDetail.best.question_count,
-                          historyDetail.best.score_percent,
-                        )
-                      : '—'
-                  }}
-                </strong>
-              </div>
-            </div>
-
-            <!-- Distinction between overall pass and a later failed retake -->
-            <div v-if="hasLaterFailedRetake" class="mixed-outcome-callout" role="note">
-              <AppIcon name="warning" :size="17" class="callout-icon" aria-hidden="true" />
-              <div>
-                <strong>Overall passed — latest retake below {{ historyDetail.attempts[0].pass_mark_percent }}%</strong>
-                <p>
-                  This player’s overall pass stands from their best attempt ({{
-                    formatScore(
-                      historyDetail.best?.correct_count,
-                      historyDetail.best?.question_count,
-                      historyDetail.best?.score_percent,
-                    )
-                  }}), while their most recent retake ({{
-                    formatScore(
-                      historyDetail.attempts[0].correct_count,
-                      historyDetail.attempts[0].question_count,
-                      historyDetail.attempts[0].score_percent,
-                    )
-                  }}) did not meet the pass mark.
-                </p>
-              </div>
-            </div>
-
-            <!-- Attempt List (Newest First) -->
-            <div v-if="historyDetail.attempts.length > 0" class="attempts-section">
-              <div class="attempts-heading-row">
-                <h4>Submitted attempts</h4>
-                <span class="pass-rule">
-                  Pass mark: {{ historyDetail.attempts[0].pass_mark_percent }}%
-                </span>
-              </div>
-
-              <ul class="attempts-list">
-                <li
-                  v-for="(attempt, index) in historyDetail.attempts"
-                  :key="attempt.attempt_id"
-                  class="attempt-item"
-                >
-                  <div class="attempt-header-row">
-                    <div class="attempt-main">
-                      <div class="attempt-title-row">
-                        <span class="attempt-number">
-                          {{ index === 0 ? 'Latest submission' : 'Earlier submission' }}
-                        </span>
-                        <span
-                          :class="[
-                            'status-pill',
-                            attempt.passed ? 'status-passed' : 'status-failed',
-                          ]"
-                        >
-                          {{ attempt.passed ? 'Passed' : 'Failed' }}
-                        </span>
-                      </div>
-                      <div class="attempt-date tabular-num">
-                        Submitted {{ formatDateTime(attempt.submitted_at) }}
-                      </div>
-                    </div>
-                    <div class="attempt-score-block tabular-num">
-                      <span class="attempt-score">
-                        {{ attempt.correct_count }}/{{ attempt.question_count }}
-                      </span>
-                      <span class="attempt-percent">{{ attempt.score_percent }}%</span>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="Array.isArray(attempt.topics) && attempt.topics.length > 0"
-                    class="attempt-topics"
-                    aria-label="Topic breakdown"
+            <header class="modal-header">
+              <div class="modal-title-group">
+                <h3 id="history-modal-title" class="modal-title">
+                  {{ activeHistoryDetail?.username || selectedUsername || 'Attempt history' }}
+                </h3>
+                <div v-if="activeHistoryDetail" class="modal-status-row">
+                  <span
+                    :class="[
+                      'status-pill',
+                      activeHistoryDetail.passed ? 'status-passed' : 'status-failed',
+                    ]"
                   >
-                    <div
-                      v-for="topicItem in attempt.topics"
-                      :key="topicItem.topic"
-                      class="topic-chip"
-                    >
-                      <span class="topic-name">{{ topicItem.topic }}</span>
-                      <span class="topic-score tabular-num">
-                        {{ topicItem.correct }}/{{ topicItem.total }}
-                      </span>
-                    </div>
+                    <AppIcon
+                      :name="activeHistoryDetail.passed ? 'check' : 'x'"
+                      :size="12"
+                      class="status-icon"
+                      aria-hidden="true"
+                    />
+                    <span>{{ activeHistoryDetail.passed ? 'Overall passed' : 'Not passed' }}</span>
+                  </span>
+                </div>
+              </div>
+              <button
+                ref="modalCloseBtnRef"
+                type="button"
+                class="modal-close-btn"
+                aria-label="Close attempt history"
+                @click="closeHistoryModal"
+              >
+                <AppIcon name="x" :size="18" aria-hidden="true" />
+              </button>
+            </header>
+
+            <div class="modal-body">
+              <div v-if="isHistoryLoading" class="modal-loading" role="status" aria-live="polite">
+                <div class="spinner" aria-hidden="true"></div>
+                <p>Loading attempt history...</p>
+              </div>
+
+              <div v-else-if="historyError" class="error-banner" role="alert">
+                <span>{{ historyError }}</span>
+                <button
+                  type="button"
+                  class="btn-retry"
+                  @click="
+                    openPlayerHistory({
+                      profile_id: selectedProfileId,
+                      username: selectedUsername,
+                    })
+                  "
+                >
+                  Retry
+                </button>
+              </div>
+
+              <template v-else-if="activeHistoryDetail">
+                <!-- Summary Strip -->
+                <div class="summary-strip">
+                  <div class="summary-metric">
+                    <span class="metric-label">Overall status</span>
+                    <strong class="metric-value">
+                      {{ activeHistoryDetail.passed ? 'Passed' : 'Not passed' }}
+                    </strong>
                   </div>
-                </li>
-              </ul>
+                  <div class="summary-metric">
+                    <span class="metric-label">Submitted attempts</span>
+                    <strong class="metric-value tabular-num">
+                      {{ activeHistoryDetail.attempts.length }}
+                    </strong>
+                  </div>
+                  <div class="summary-metric">
+                    <span class="metric-label">Best score</span>
+                    <strong class="metric-value tabular-num">
+                      {{
+                        activeHistoryDetail.best
+                          ? formatScore(
+                              activeHistoryDetail.best.correct_count,
+                              activeHistoryDetail.best.question_count,
+                              activeHistoryDetail.best.score_percent,
+                            )
+                          : '—'
+                      }}
+                    </strong>
+                  </div>
+                </div>
 
-              <p class="privacy-note">
-                Individual question choices and answer keys are excluded from admin reporting.
-              </p>
+                <!-- Distinction between overall pass and a later failed retake -->
+                <div v-if="hasLaterFailedRetake" class="mixed-outcome-callout" role="note">
+                  <AppIcon name="warning" :size="17" class="callout-icon" aria-hidden="true" />
+                  <div>
+                    <strong>
+                      Overall passed — latest retake below
+                      {{ activeHistoryDetail.attempts[0].pass_mark_percent }}%
+                    </strong>
+                    <p>
+                      This player’s overall pass stands from their best attempt ({{
+                        formatScore(
+                          activeHistoryDetail.best?.correct_count,
+                          activeHistoryDetail.best?.question_count,
+                          activeHistoryDetail.best?.score_percent,
+                        )
+                      }}), while their most recent retake ({{
+                        formatScore(
+                          activeHistoryDetail.attempts[0].correct_count,
+                          activeHistoryDetail.attempts[0].question_count,
+                          activeHistoryDetail.attempts[0].score_percent,
+                        )
+                      }}) did not meet the pass mark.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Attempt List (Newest First) -->
+                <div v-if="activeHistoryDetail.attempts.length > 0" class="attempts-section">
+                  <div class="attempts-heading-row">
+                    <h4>Submitted attempts</h4>
+                    <span class="pass-rule">
+                      Pass mark: {{ activeHistoryDetail.attempts[0].pass_mark_percent }}%
+                    </span>
+                  </div>
+
+                  <ul class="attempts-list">
+                    <li
+                      v-for="(attempt, index) in activeHistoryDetail.attempts"
+                      :key="attempt.attempt_id"
+                      class="attempt-item"
+                    >
+                      <div class="attempt-header-row">
+                        <div class="attempt-main">
+                          <div class="attempt-title-row">
+                            <span class="attempt-number">
+                              {{ index === 0 ? 'Latest submission' : 'Earlier submission' }}
+                            </span>
+                            <span
+                              :class="[
+                                'status-pill',
+                                attempt.passed ? 'status-passed' : 'status-failed',
+                              ]"
+                            >
+                              <AppIcon
+                                :name="attempt.passed ? 'check' : 'x'"
+                                :size="12"
+                                class="status-icon"
+                                aria-hidden="true"
+                              />
+                              <span>{{ attempt.passed ? 'Passed' : 'Failed' }}</span>
+                            </span>
+                          </div>
+                          <div class="attempt-date tabular-num">
+                            Submitted {{ formatDateTime(attempt.submitted_at) }}
+                          </div>
+                        </div>
+                        <div class="attempt-score-block tabular-num">
+                          <span class="attempt-score">
+                            {{ attempt.correct_count }}/{{ attempt.question_count }}
+                          </span>
+                          <span class="attempt-percent">{{ attempt.score_percent }}%</span>
+                        </div>
+                      </div>
+
+                      <div
+                        v-if="Array.isArray(attempt.topics) && attempt.topics.length > 0"
+                        class="attempt-topics-wrap"
+                      >
+                        <button
+                          type="button"
+                          class="topic-toggle-btn"
+                          :aria-expanded="isAttemptExpanded(attempt.attempt_id)"
+                          :aria-controls="`attempt-topics-${attempt.attempt_id}`"
+                          @click="toggleAttemptTopics(attempt.attempt_id)"
+                        >
+                          <span>
+                            {{
+                              isAttemptExpanded(attempt.attempt_id)
+                                ? 'Hide topic breakdown'
+                                : 'Topic breakdown'
+                            }}
+                          </span>
+                          <AppIcon
+                            :name="
+                              isAttemptExpanded(attempt.attempt_id) ? 'chevron-up' : 'chevron-down'
+                            "
+                            :size="15"
+                            aria-hidden="true"
+                          />
+                        </button>
+
+                        <div
+                          v-if="isAttemptExpanded(attempt.attempt_id)"
+                          :id="`attempt-topics-${attempt.attempt_id}`"
+                          class="attempt-topics"
+                          aria-label="Topic breakdown"
+                        >
+                          <div
+                            v-for="topicItem in attempt.topics"
+                            :key="topicItem.topic"
+                            class="topic-chip"
+                          >
+                            <span class="topic-name">{{ topicItem.topic }}</span>
+                            <span class="topic-score tabular-num">
+                              {{ topicItem.correct }}/{{ topicItem.total }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <p class="privacy-note">
+                    Individual question choices and answer keys are excluded from admin reporting.
+                  </p>
+                </div>
+
+                <!-- Empty Attempt List -->
+                <div v-else class="modal-empty">
+                  <AppIcon name="clipboard-check" :size="24" class="empty-icon" aria-hidden="true" />
+                  <h4>No submitted attempts.</h4>
+                  <p>
+                    A score of 0/{{ activeHistoryDetail.best?.question_count || 40 }} appears only when an attempt is actually submitted.
+                  </p>
+                </div>
+              </template>
             </div>
 
-            <!-- Empty Attempt List -->
-            <div v-else class="drawer-empty">
-              <AppIcon name="clipboard-check" :size="24" class="empty-icon" aria-hidden="true" />
-              <h4>No submitted attempts.</h4>
-              <p>
-                A score of 0/{{ historyDetail.best?.question_count || 40 }} appears only when an attempt is actually submitted.
-              </p>
-            </div>
-          </template>
+            <footer class="modal-footer">
+              <button type="button" class="btn-close-footer" @click="closeHistoryModal">
+                Close
+              </button>
+            </footer>
+          </div>
         </div>
-      </aside>
-    </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -702,7 +888,7 @@ onUnmounted(() => {
 }
 
 .view-header {
-  margin-bottom: 1.35rem;
+  margin-bottom: 1.25rem;
 }
 
 .title {
@@ -724,20 +910,20 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* Filter Bar */
+/* Compact Toolbar */
 .filter-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.85rem;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
 }
 
 .filter-tabs {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.25rem;
   padding: 0.25rem;
   background-color: var(--color-bg-subtle);
   border: 1px solid var(--color-border);
@@ -746,13 +932,13 @@ onUnmounted(() => {
 
 .filter-tab {
   min-height: 36px;
-  padding: 0.38rem 0.9rem;
-  border-radius: 8px;
+  padding: 0.36rem 0.9rem;
+  border-radius: 7px;
   border: 1px solid transparent;
   background-color: transparent;
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: 0.86rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -778,7 +964,9 @@ onUnmounted(() => {
 .btn-refresh:focus-visible,
 .btn-history:focus-visible,
 .page-btn:focus-visible,
-.drawer-close-btn:focus-visible,
+.modal-close-btn:focus-visible,
+.btn-close-footer:focus-visible,
+.topic-toggle-btn:focus-visible,
 .btn-clear:focus-visible,
 .btn-retry:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -788,29 +976,29 @@ onUnmounted(() => {
 .filter-controls {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
 }
 
 .btn-refresh {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-height: 40px;
-  padding: 0.5rem 0.95rem;
+  gap: 0.4rem;
+  min-height: 38px;
+  padding: 0.4rem 0.85rem;
   border-radius: 8px;
   border: 1px solid var(--color-border);
-  background-color: var(--color-card);
-  color: var(--color-text-main);
+  background-color: transparent;
+  color: var(--color-text-muted);
   font-family: var(--font-sans);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
 .btn-refresh:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: var(--color-border-hover);
+  background-color: var(--color-card);
+  color: var(--color-text-main);
 }
 
 .btn-refresh:disabled {
@@ -876,8 +1064,8 @@ onUnmounted(() => {
 }
 
 .results-table th {
-  padding: 0.85rem 0.95rem;
-  font-size: 0.78rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.76rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -888,7 +1076,7 @@ onUnmounted(() => {
 }
 
 .results-table td {
-  padding: 0.85rem 0.95rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-text-main);
   font-size: 0.88rem;
@@ -916,17 +1104,23 @@ onUnmounted(() => {
 .player-name {
   font-weight: 600;
   color: var(--color-text-main);
+  overflow-wrap: anywhere;
 }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
+  gap: 0.3rem;
   padding: 0.22rem 0.62rem;
   border-radius: 9999px;
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
+}
+
+.status-icon {
+  flex-shrink: 0;
 }
 
 .status-pill.status-passed {
@@ -962,6 +1156,7 @@ onUnmounted(() => {
 .btn-history {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
   min-height: 36px;
   padding: 0.35rem 0.75rem;
@@ -982,14 +1177,14 @@ onUnmounted(() => {
   background-color: var(--color-violet-subtle);
 }
 
-/* Pagination */
+/* Pagination & Result Count Bar */
 .pagination-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.85rem;
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 1rem;
   border-top: 1px solid var(--color-border);
   background-color: var(--color-bg-subtle);
 }
@@ -1078,58 +1273,70 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-/* Attempt History Drawer */
-.drawer-backdrop {
+/* Centered Player Attempt History Modal */
+.post-test-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1200;
-  background-color: rgba(15, 23, 42, 0.48);
+  z-index: 250;
+  background-color: rgba(15, 23, 42, 0.56);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
-.history-drawer {
+.post-test-modal-dialog {
   width: 100%;
-  max-width: 520px;
-  height: 100%;
+  max-width: 660px;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   background-color: var(--color-card);
-  border-left: 1px solid var(--color-border);
-  box-shadow: -8px 0 28px rgba(15, 23, 42, 0.16);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  outline: none;
 }
 
-.drawer-header {
+.modal-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem 1.4rem;
-  border-bottom: 1px solid var(--color-border);
+  padding: 1.15rem 1.4rem;
   background-color: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.drawer-title-group {
+.modal-title-group {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
-.drawer-title {
+.modal-title {
   margin: 0;
   font-family: var(--font-display);
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text-main);
-  overflow-wrap: break-word;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
-.drawer-status-row {
-  margin-top: 0.45rem;
+.modal-status-row {
+  display: flex;
+  align-items: center;
 }
 
-.drawer-close-btn {
-  min-width: 40px;
-  min-height: 40px;
+.modal-close-btn {
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background-color: var(--color-card);
@@ -1139,23 +1346,26 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.drawer-close-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+.modal-close-btn:hover {
+  background-color: var(--color-bg-muted);
+  color: var(--color-text-main);
+  border-color: var(--color-border-hover);
 }
 
-.drawer-body {
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 1.25rem 1.4rem;
   overflow-y: auto;
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 1.1rem;
 }
 
-.drawer-loading {
+.modal-loading {
   padding: 2.5rem 1rem;
   text-align: center;
   color: var(--color-text-muted);
@@ -1248,7 +1458,7 @@ onUnmounted(() => {
   background-color: var(--color-card);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .attempt-header-row {
@@ -1261,6 +1471,7 @@ onUnmounted(() => {
 .attempt-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.25rem;
 }
@@ -1293,12 +1504,38 @@ onUnmounted(() => {
   color: var(--color-text-muted);
 }
 
+.attempt-topics-wrap {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 0.55rem;
+}
+
+.topic-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0.25rem 0.6rem;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.topic-toggle-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 .attempt-topics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid var(--color-border-subtle);
+  margin-top: 0.55rem;
 }
 
 .topic-chip {
@@ -1331,27 +1568,183 @@ onUnmounted(() => {
   color: var(--color-text-muted);
 }
 
-.drawer-empty {
+.modal-empty {
   padding: 2rem 1rem;
   text-align: center;
   border: 1px dashed var(--color-border);
   border-radius: 10px;
 }
 
-.drawer-empty h4 {
+.modal-empty h4 {
   margin: 0.4rem 0;
   font-size: 0.98rem;
   color: var(--color-text-main);
 }
 
-.drawer-empty p {
+.modal-empty p {
   margin: 0;
   font-size: 0.86rem;
   color: var(--color-text-muted);
   line-height: 1.5;
 }
 
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.85rem 1.4rem;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-subtle);
+  flex-shrink: 0;
+}
+
+.btn-close-footer {
+  min-height: 38px;
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-close-footer:hover {
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-muted);
+}
+
+.post-test-modal-fade-enter-active,
+.post-test-modal-fade-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.post-test-modal-fade-enter-from,
+.post-test-modal-fade-leave-to {
+  opacity: 0;
+}
+
 @media (max-width: 640px) {
+  .table-scroll {
+    overflow-x: visible;
+  }
+
+  .results-table,
+  .results-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .results-table thead {
+    display: none;
+  }
+
+  .results-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem 0.75rem;
+    padding: 0.95rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .results-table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .results-table td {
+    display: block;
+    padding: 0;
+    border-bottom: none;
+    text-align: left;
+  }
+
+  .results-table td.player-cell {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .results-table td.status-cell {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+  }
+
+  .results-table td.best-score-cell {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 0.96rem;
+    white-space: normal;
+  }
+
+  .results-table td.best-score-cell::before {
+    content: attr(data-label) ': ';
+    font-weight: 500;
+    color: var(--color-text-muted);
+    font-size: 0.84rem;
+  }
+
+  .results-table td.attempts-cell {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  .results-table td.attempts-cell::before {
+    content: attr(data-label) ': ';
+  }
+
+  .results-table td.date-cell {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    font-size: 0.82rem;
+    white-space: normal;
+  }
+
+  .results-table td.date-cell::before {
+    content: attr(data-label) ': ';
+  }
+
+  .results-table td.action-col {
+    grid-column: 1 / -1;
+    grid-row: 5;
+    margin-top: 0.35rem;
+  }
+
+  .btn-history {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .filter-tab,
+  .page-btn,
+  .btn-refresh,
+  .modal-close-btn,
+  .btn-close-footer,
+  .topic-toggle-btn {
+    min-height: 44px;
+  }
+
+  .post-test-modal-backdrop {
+    padding: 0.65rem;
+  }
+
+  .post-test-modal-dialog {
+    max-height: calc(100vh - 1.3rem);
+    max-height: calc(100dvh - 1.3rem);
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
   .summary-strip {
     grid-template-columns: 1fr;
   }
@@ -1368,13 +1761,12 @@ onUnmounted(() => {
   .pagination-actions {
     justify-content: space-between;
   }
+}
 
-  .filter-tab,
-  .page-btn,
-  .btn-refresh,
-  .btn-history,
-  .drawer-close-btn {
-    min-height: 44px;
+@media (prefers-reduced-motion: reduce) {
+  .post-test-modal-fade-enter-active,
+  .post-test-modal-fade-leave-active {
+    transition: none;
   }
 }
 </style>
