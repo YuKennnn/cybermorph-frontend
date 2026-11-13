@@ -640,6 +640,14 @@ const formatRole = (role) => {
   flex-direction: column;
   gap: 0.35rem;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-menu::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .nav-group-label {
