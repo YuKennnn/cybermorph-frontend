@@ -662,12 +662,20 @@ The backend integration guide (`API_GUIDE.md`) documents 11 active administrativ
   - `threats_detected`: Total valid threats detected across uploaded gameplay events (preserves metric meaning: threats detected, not neutralized).
   - `uptime_seconds`: Time since backend process boot (resets on free-tier spin-up).
 
+### Player Post-Test Assessment Endpoints (`/post-test/*`)
+All player post-test endpoints use the shared `/v1` base URL and require a `player` bearer token:
+- `GET /post-test/eligibility` -> `{ eligible }` (`true` after a synced Public Park `win` session).
+- `GET /post-test/attempts/me` -> `{ eligible, overall_passed, best, attempts }` (chronological submitted attempts; `attempts` items contain `attempt_id`, `correct_count`, `question_count`, `score_percent`, `pass_mark_percent`, `passed`, `submitted_at`).
+- `POST /post-test/attempts` (no payload) -> starts a new 40-question attempt (5 per topic) or resumes an open unsubmitted attempt (`{ attempt_id, question_count, pass_mark_percent, resumed, questions }` with `question_id`, `topic`, `question_text`, and `options` `[{ option_id, option_text }]`).
+- `POST /post-test/attempts/{attempt_id}/submit` -> submits `{ answers: [{ question_id, option_id }, ...] }` covering every issued question and returns the graded result with `topics` breakdown (`[{ topic, correct, total }]`). Returns `409` if already submitted and `422` if incomplete/invalid.
+- `GET /post-test/attempts/{attempt_id}` -> returns a previously submitted attempt result (`attempt_id`, `correct_count`, `question_count`, `score_percent`, `pass_mark_percent`, `passed`, `submitted_at`, `topics`).
+
 ### Explicitly Unbuilt Endpoints (Do Not Integrate)
 Per `API_GUIDE.md`, the following endpoints are **not yet built** on the backend:
 - Modifying or deleting user accounts (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
 - Deleted-records inspection and restore screens (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
 - Uploading avatars or self-service password reset
-- Post-test assessment submission, scoring, and admin results endpoints (see proposed capabilities below)
+- Admin and educator post-test results reporting endpoints (see proposed capabilities below)
 
 ### Proposed Future Backend Capabilities for Admin Post-Test Results (Not Yet Implemented)
 To replace the frontend development-only preview in `AdminPostTestResultsView.vue` with real persisted data, the FastAPI backend will need:

@@ -1,10 +1,8 @@
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/authStore.js'
 import { usePostTestStore } from '../stores/postTestStore.js'
-import { isPostTestMockEnabled } from '../api/postTest.js'
-import { CANONICAL_THREAT_CATEGORIES_ORDER, POST_TEST_CONFIG } from '../utils/postTestEngine.js'
-import { resolveHighestUnlockedMapName } from '../utils/playerSessions.js'
+import { POST_TEST_CONFIG } from '../utils/postTestEngine.js'
 import AppIcon from '../components/common/AppIcon.vue'
 
 // Compiled out completely during production `vite build` when DEV is false
@@ -15,23 +13,38 @@ const PostTestDevPreviewBar =
 
 const authStore = useAuthStore()
 const postTestStore = usePostTestStore()
-const explanationFilter = ref('all')
 
 const CHOICE_SLOT_LETTERS = Object.freeze(['A', 'B', 'C', 'D'])
 
 const activeAttempt = computed(() => postTestStore.currentAttempt)
 const activeQuestion = computed(() => postTestStore.currentQuestion)
-const result = computed(() => postTestStore.lastResult)
-const scoreSummary = computed(() => postTestStore.scoreSummary)
+const result = computed(() => postTestStore.activeResult)
+const bestAttempt = computed(() => postTestStore.bestAttempt)
 
-const selectedChoiceId = computed(() => {
+const attemptTotal = computed(
+  () => activeAttempt.value?.questionCount || POST_TEST_CONFIG.totalQuestions,
+)
+
+const passMarkPercent = computed(
+  () => result.value?.passMarkPercent ?? activeAttempt.value?.passMarkPercent ?? 75,
+)
+
+const minCorrectForPass = computed(() =>
+  Math.ceil((attemptTotal.value * passMarkPercent.value) / 100),
+)
+
+const minCorrectForResult = computed(() => {
+  if (!result.value) return minCorrectForPass.value
+  return Math.ceil((result.value.questionCount * result.value.passMarkPercent) / 100)
+})
+
+const selectedOptionId = computed(() => {
   if (!activeAttempt.value || !activeQuestion.value) return null
   return activeAttempt.value.answers?.[activeQuestion.value.id] || null
 })
 
 const quizProgressPercent = computed(() => {
-  const total = activeAttempt.value?.totalQuestions || POST_TEST_CONFIG.totalQuestions
-  return Math.min(100, Math.round((postTestStore.answeredCount / total) * 100))
+  return Math.min(100, Math.round((postTestStore.answeredCount / attemptTotal.value) * 100))
 })
 
 const isLastQuestion = computed(() => {
@@ -39,19 +52,16 @@ const isLastQuestion = computed(() => {
   return activeAttempt.value.currentIndex >= activeAttempt.value.questions.length - 1
 })
 
-const mapUnlockName = computed(() => {
-  const mp = postTestStore.eligibility?.mapProgress
-  return typeof mp === 'number' ? resolveHighestUnlockedMapName(mp) : null
-})
-
 const statusBadge = computed(() => {
   const current = postTestStore.status
-  if (current === 'unavailable') return { label: 'Unavailable on server', tone: 'neutral' }
   if (current === 'loading' || current === 'idle') return { label: 'Loading', tone: 'neutral' }
   if (current === 'error') return { label: 'Error', tone: 'danger' }
   if (current === 'locked') return { label: 'Locked', tone: 'warning' }
   if (current === 'in-progress') {
-    return { label: `In progress · ${postTestStore.answeredCount}/30`, tone: 'primary' }
+    return {
+      label: `In progress · ${postTestStore.answeredCount}/${attemptTotal.value}`,
+      tone: 'primary',
+    }
   }
   if (current === 'review') {
     return { label: 'Reviewing answers', tone: 'primary' }
@@ -61,56 +71,48 @@ const statusBadge = computed(() => {
       ? { label: 'Passed', tone: 'success' }
       : { label: 'Not passed', tone: 'danger' }
   }
+  if (current === 'available' && postTestStore.overallPassed) {
+    return { label: 'Passed', tone: 'success' }
+  }
   return { label: 'Available', tone: 'primary' }
 })
 
-const incorrectItemsCount = computed(() => {
-  if (!result.value || !Array.isArray(result.value.items)) return 0
-  return result.value.items.filter((item) => !item.isCorrect).length
-})
+const formatAttemptRatio = (entry) => {
+  if (!entry) return '—'
+  return `${entry.correctCount}/${entry.questionCount} (${entry.scorePercent}%)`
+}
 
-const filteredExplanationItems = computed(() => {
-  if (!result.value || !Array.isArray(result.value.items)) return []
-  if (explanationFilter.value === 'incorrect') {
-    return result.value.items.filter((item) => !item.isCorrect)
-  }
-  if (explanationFilter.value === 'correct') {
-    return result.value.items.filter((item) => item.isCorrect)
-  }
-  return result.value.items
-})
+const formatSubmittedDate = (isoString) => {
+  if (!isoString) return 'Recently submitted'
+  const date = new Date(isoString)
+  if (Number.isNaN(date.getTime())) return 'Recently submitted'
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
 
 const getAnswerPreviewText = (question) => {
   if (!activeAttempt.value || !question) return 'Not answered'
   const selectedId = activeAttempt.value.answers?.[question.id]
   if (!selectedId) return 'Not answered'
-  const match = question.choices.find((choice) => choice.id === selectedId)
+  const match = (question.options || []).find((opt) => opt.id === selectedId)
   return match ? match.text : 'Answered'
 }
 
-const formatScoreSummaryItem = (entry) => {
-  if (!entry) return '—'
-  return `${entry.correctCount}/${entry.totalCount} (${entry.percentage}%)`
-}
-
-const handleSelectAnswer = (questionId, choiceId) => {
-  postTestStore.selectAnswer(questionId, choiceId)
+const handleSelectAnswer = (questionId, optionId) => {
+  postTestStore.selectAnswer(questionId, optionId)
 }
 
 const handleStart = async () => {
-  if (!isPostTestMockEnabled() && !postTestStore.isBackendSupported) return
   await postTestStore.startAttempt()
 }
 
 const handleSubmit = async () => {
-  if (!isPostTestMockEnabled() && !postTestStore.isBackendSupported) return
-  explanationFilter.value = 'all'
   await postTestStore.submitAttempt()
 }
 
 const handleRetake = async () => {
-  if (!isPostTestMockEnabled() && !postTestStore.isBackendSupported) return
-  explanationFilter.value = 'all'
   await postTestStore.retakeAttempt()
 }
 
@@ -118,7 +120,6 @@ watch(
   () => `${authStore.activeSessionEpoch}::${authStore.token || ''}`,
   (nextScope, prevScope) => {
     if (nextScope === prevScope) return
-    explanationFilter.value = 'all'
     if (authStore.isAuthenticated && authStore.isPlayer) {
       postTestStore.loadOverview()
     } else {
@@ -151,7 +152,7 @@ onMounted(() => {
             </span>
           </div>
           <p class="header-subtitle">
-            30-question cybersecurity knowledge check covering all eight CyberMorph threat categories.
+            {{ attemptTotal }}-question cybersecurity knowledge check covering all eight CyberMorph threat categories.
           </p>
         </div>
       </div>
@@ -162,49 +163,16 @@ onMounted(() => {
       </router-link>
     </header>
 
-    <!-- Honest Production / Non-Mock Unavailable State -->
-    <section
-      v-if="postTestStore.status === 'unavailable' || !postTestStore.isActionSupported"
-      class="surface-panel state-panel"
-      aria-labelledby="unavailable-heading"
-    >
-      <div class="state-icon-box tone-neutral" aria-hidden="true">
-        <AppIcon name="info" :size="22" />
-      </div>
-      <h2 id="unavailable-heading" class="panel-heading">Post-test is not available yet</h2>
-      <p class="panel-copy">
-        The CyberMorph backend server does not currently provide assessment endpoints. Starting or
-        submitting web post-test attempts is disabled until backend support is connected.
-      </p>
-      <p class="panel-copy muted">
-        Your map progress, session history, and unlocked Threat index dossiers remain available while
-        you continue practicing in CyberMorph.
-      </p>
-      <div class="panel-actions">
-        <button
-          type="button"
-          class="btn-primary"
-          disabled
-          aria-disabled="true"
-        >
-          Start post-test (unavailable)
-        </button>
-        <router-link to="/threat-index" class="btn-outline">
-          Open threat index
-        </router-link>
-      </div>
-    </section>
-
     <!-- Loading State -->
     <section
-      v-else-if="postTestStore.status === 'loading' || postTestStore.status === 'idle'"
+      v-if="postTestStore.status === 'loading' || postTestStore.status === 'idle'"
       class="surface-panel state-panel"
       role="status"
       aria-live="polite"
     >
       <div class="spinner" aria-hidden="true"></div>
       <h2 class="panel-heading">Checking post-test readiness...</h2>
-      <p class="panel-copy muted">Preparing player eligibility and assessment details.</p>
+      <p class="panel-copy muted">Loading your eligibility and submitted post-test history.</p>
     </section>
 
     <!-- Error State -->
@@ -236,43 +204,31 @@ onMounted(() => {
       <div class="state-icon-box tone-warning" aria-hidden="true">
         <AppIcon name="lock" :size="22" />
       </div>
-      <h2 id="locked-heading" class="panel-heading">Complete Public Park to unlock the post-test</h2>
+      <h2 id="locked-heading" class="panel-heading">Win and sync Public Park to unlock the post-test</h2>
       <p class="panel-copy">
-        Intended eligibility requires completing the <strong>Public Park</strong> map in CyberMorph by
-        reaching its required <strong>Security Credits</strong> target.
+        Eligibility requires completing and <strong>winning a Public Park game session</strong> in CyberMorph
+        and syncing that result to the server.
       </p>
 
       <div class="info-callout" role="note">
         <AppIcon name="info" :size="16" class="callout-icon" />
         <div class="callout-text">
-          <template v-if="postTestStore.eligibility?.publicParkUnlocked">
-            Your profile currently shows <strong>map progress 3 (Public Park unlocked)</strong>. That
-            indicates you can enter Public Park, not that you have finished it. Reach the required
-            Security Credits inside Public Park to unlock the post-test.
-          </template>
-          <template v-else-if="mapUnlockName">
-            Your highest unlocked map is currently <strong>{{ mapUnlockName }}</strong>
-            (map progress {{ postTestStore.eligibility?.mapProgress }}/3). Unlock Public Park and earn
-            its required Security Credits to open the post-test.
-          </template>
-          <template v-else>
-            Play through CyberMorph maps up to Public Park and reach its required Security Credits to
-            unlock the post-test. Classroom membership is not required.
-          </template>
+          Unlocking the Public Park map alone is not enough to open the post-test. Finish a Public Park
+          session with a win while signed in (or sync your offline session) so the server records your
+          eligibility.
         </div>
       </div>
 
-      <p class="panel-copy muted">
-        Independent play is the complete experience — joining a classroom is optional and not required
-        to unlock or take the post-test.
-      </p>
-
       <div class="panel-actions">
-        <router-link to="/threat-index" class="btn-primary">
-          <AppIcon name="shield" :size="15" />
-          <span>Review threat index</span>
-        </router-link>
-        <router-link to="/dashboard" class="btn-outline">Back to overview</router-link>
+        <button
+          type="button"
+          class="btn-primary start-btn"
+          disabled
+          aria-disabled="true"
+        >
+          <span>Start post-test</span>
+          <AppIcon name="arrow-right" :size="15" />
+        </button>
       </div>
     </section>
 
@@ -290,65 +246,86 @@ onMounted(() => {
         </p>
       </div>
 
+      <div v-if="postTestStore.inlineActionError" class="inline-alert-banner" role="alert">
+        <AppIcon name="warning" :size="16" />
+        <span>{{ postTestStore.inlineActionError }}</span>
+      </div>
+
+      <div v-if="postTestStore.historyWarning" class="info-callout" role="status">
+        <AppIcon name="info" :size="16" class="callout-icon" />
+        <div class="callout-text">{{ postTestStore.historyWarning }}</div>
+      </div>
+
       <dl class="rules-grid">
         <div class="rule-item">
           <dt class="rule-label">Questions</dt>
-          <dd class="rule-value">30 multiple-choice items</dd>
+          <dd class="rule-value">{{ attemptTotal }} multiple-choice items</dd>
           <dd class="rule-detail">
-            Randomly drawn across all 8 threat categories with unique underlying scenarios where available.
+            Balanced across all 8 threat categories (5 questions per category).
           </dd>
         </div>
         <div class="rule-item">
           <dt class="rule-label">Passing requirement</dt>
-          <dd class="rule-value">75% or higher (at least 23/30)</dd>
+          <dd class="rule-value">{{ passMarkPercent }}% or higher (at least {{ minCorrectForPass }}/{{ attemptTotal }})</dd>
           <dd class="rule-detail">
-            23 or more correct answers passes. A score of 22/30 (73.3%) requires another attempt.
-          </dd>
-        </div>
-        <div class="rule-item">
-          <dt class="rule-label">Pacing & retakes</dt>
-          <dd class="rule-value">No timer · Unlimited retakes</dd>
-          <dd class="rule-detail">
-            Review or change any answer before submitting. Each retake builds a fresh 30-question draw.
-          </dd>
-        </div>
-        <div class="rule-item">
-          <dt class="rule-label">Eligibility & feedback</dt>
-          <dd class="rule-value">Unlocked · Independent play</dd>
-          <dd class="rule-detail">
-            No classroom membership needed. Answer explanations become visible right after submission.
+            {{ minCorrectForPass }} or more correct answers passes. You can retake the assessment as many times as needed.
           </dd>
         </div>
       </dl>
 
-      <div class="categories-strip">
-        <span class="strip-label">Eight threat categories included:</span>
-        <ul class="category-chips">
-          <li v-for="category in CANONICAL_THREAT_CATEGORIES_ORDER" :key="category" class="cat-chip">
-            {{ category }}
-          </li>
-        </ul>
-      </div>
-
-      <div v-if="scoreSummary.attemptCount > 0" class="previous-scores-strip">
+      <div v-if="postTestStore.attemptHistory.length > 0" class="previous-scores-strip">
         <div class="strip-heading-row">
-          <span class="strip-label">Session prototype history ({{ scoreSummary.attemptCount }} attempt{{ scoreSummary.attemptCount === 1 ? '' : 's' }})</span>
-          <span class="local-note">Stored locally in dev preview only · Not saved to backend</span>
+          <span class="strip-label">
+            Your submitted attempts ({{ postTestStore.attemptHistory.length }})
+          </span>
+          <span
+            class="status-badge"
+            :class="postTestStore.overallPassed ? 'tone-success' : 'tone-neutral'"
+          >
+            {{ postTestStore.overallPassed ? 'Overall passed' : 'Not passed yet' }}
+          </span>
         </div>
+
         <div class="score-trio">
           <div class="score-pill-box">
-            <span class="trio-label">First</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.firstScore) }}</strong>
+            <span class="trio-label">Best score</span>
+            <strong class="trio-value">{{ formatAttemptRatio(bestAttempt) }}</strong>
           </div>
           <div class="score-pill-box">
-            <span class="trio-label">Latest</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.latestScore) }}</strong>
+            <span class="trio-label">Latest attempt</span>
+            <strong class="trio-value">{{ formatAttemptRatio(postTestStore.attemptHistory[0]) }}</strong>
           </div>
           <div class="score-pill-box">
-            <span class="trio-label">Best</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.bestScore) }}</strong>
+            <span class="trio-label">Overall status</span>
+            <strong class="trio-value">{{ postTestStore.overallPassed ? 'Passed' : 'Not passed yet' }}</strong>
           </div>
         </div>
+
+        <ul class="attempt-history-list" aria-label="Submitted post-test attempts">
+          <li
+            v-for="attempt in postTestStore.attemptHistory"
+            :key="attempt.attemptId"
+            class="attempt-history-row"
+          >
+            <div class="attempt-history-meta">
+              <span class="attempt-history-date">{{ formatSubmittedDate(attempt.submittedAt) }}</span>
+              <span class="attempt-history-score">{{ formatAttemptRatio(attempt) }}</span>
+            </div>
+            <div class="attempt-history-actions">
+              <span class="result-outcome-pill" :class="attempt.passed ? 'is-pass' : 'is-fail'">
+                {{ attempt.passed ? 'Passed' : 'Not passed' }}
+              </span>
+              <button
+                type="button"
+                class="btn-outline attempt-view-btn"
+                :disabled="postTestStore.isLoadingResult"
+                @click="postTestStore.viewAttemptResult(attempt.attemptId)"
+              >
+                View result
+              </button>
+            </div>
+          </li>
+        </ul>
       </div>
 
       <div class="panel-actions">
@@ -358,7 +335,15 @@ onMounted(() => {
           :disabled="postTestStore.isStarting"
           @click="handleStart"
         >
-          <span>{{ postTestStore.isStarting ? 'Preparing questions...' : 'Start post-test' }}</span>
+          <span>
+            {{
+              postTestStore.isStarting
+                ? 'Preparing questions...'
+                : postTestStore.attemptHistory.length > 0
+                  ? 'Take it again'
+                  : 'Start post-test'
+            }}
+          </span>
           <AppIcon name="arrow-right" :size="15" />
         </button>
       </div>
@@ -370,15 +355,23 @@ onMounted(() => {
       class="quiz-workspace"
     >
       <section class="surface-panel quiz-main" aria-labelledby="quiz-question-heading">
+        <div v-if="activeAttempt.resumed" class="info-callout resume-notice-banner" role="status">
+          <AppIcon name="info" :size="16" class="callout-icon" />
+          <div class="callout-text">
+            Resumed your open attempt with the same {{ activeAttempt.questionCount }} questions. Answer
+            selections are kept in memory only, so please confirm your picks before submitting.
+          </div>
+        </div>
+
         <div class="quiz-progress-header">
           <div class="quiz-meta-left">
             <span class="question-counter">
-              Question {{ activeQuestion.displayNumber }} of {{ activeAttempt.totalQuestions }}
+              Question {{ activeQuestion.displayNumber }} of {{ activeAttempt.questionCount }}
             </span>
-            <span class="threat-pill">{{ activeQuestion.threat_name }}</span>
+            <span class="threat-pill">{{ activeQuestion.topic }}</span>
           </div>
           <span class="answered-tally">
-            {{ postTestStore.answeredCount }} of {{ activeAttempt.totalQuestions }} answered
+            {{ postTestStore.answeredCount }} of {{ activeAttempt.questionCount }} answered
           </span>
         </div>
 
@@ -391,27 +384,27 @@ onMounted(() => {
           :data-question-id="activeQuestion.id"
         >
           <legend id="quiz-question-heading" class="quiz-question-text">
-            {{ activeQuestion.question }}
+            {{ activeQuestion.questionText }}
           </legend>
 
           <div class="choices-list" role="radiogroup" :aria-labelledby="'quiz-question-heading'">
             <label
-              v-for="(choice, idx) in activeQuestion.choices"
-              :key="choice.id"
+              v-for="(option, idx) in activeQuestion.options"
+              :key="option.id"
               class="choice-option"
-              :class="{ 'is-selected': selectedChoiceId === choice.id }"
-              :data-choice-id="choice.id"
+              :class="{ 'is-selected': selectedOptionId === option.id }"
+              :data-option-id="option.id"
             >
               <input
                 type="radio"
                 class="choice-radio-input"
                 :name="`post-test-q-${activeQuestion.id}`"
-                :value="choice.id"
-                :checked="selectedChoiceId === choice.id"
-                @change="handleSelectAnswer(activeQuestion.id, choice.id)"
+                :value="option.id"
+                :checked="selectedOptionId === option.id"
+                @change="handleSelectAnswer(activeQuestion.id, option.id)"
               />
               <span class="choice-letter" aria-hidden="true">{{ CHOICE_SLOT_LETTERS[idx] || '?' }}</span>
-              <span class="choice-text">{{ choice.text }}</span>
+              <span class="choice-text">{{ option.text }}</span>
             </label>
           </div>
         </fieldset>
@@ -433,7 +426,7 @@ onMounted(() => {
               class="btn-subtle"
               @click="postTestStore.openReview"
             >
-              Review ({{ postTestStore.answeredCount }}/{{ activeAttempt.totalQuestions }})
+              Review ({{ postTestStore.answeredCount }}/{{ activeAttempt.questionCount }})
             </button>
 
             <button
@@ -463,7 +456,9 @@ onMounted(() => {
       <aside class="surface-panel navigator-panel" aria-label="Question navigator">
         <div class="navigator-header">
           <h2 class="navigator-title">Questions</h2>
-          <span class="navigator-count">{{ postTestStore.answeredCount }}/30 answered</span>
+          <span class="navigator-count">
+            {{ postTestStore.answeredCount }}/{{ activeAttempt.questionCount }} answered
+          </span>
         </div>
 
         <div class="navigator-legend" aria-hidden="true">
@@ -511,10 +506,16 @@ onMounted(() => {
         <div>
           <h2 id="review-heading" class="panel-heading">Review your answers</h2>
           <p class="panel-copy">
-            {{ postTestStore.answeredCount }} of {{ activeAttempt.totalQuestions }} answered.
-            Passing requires at least 23/30 correct answers (75%).
+            {{ postTestStore.answeredCount }} of {{ activeAttempt.questionCount }} answered.
+            Passing requires at least {{ minCorrectForPass }}/{{ activeAttempt.questionCount }} correct
+            answers ({{ activeAttempt.passMarkPercent }}%).
           </p>
         </div>
+      </div>
+
+      <div v-if="postTestStore.inlineActionError" class="inline-alert-banner" role="alert">
+        <AppIcon name="warning" :size="16" />
+        <span>{{ postTestStore.inlineActionError }}</span>
       </div>
 
       <div
@@ -531,8 +532,8 @@ onMounted(() => {
               }}
             </strong>
             <p class="warning-sub">
-              Unanswered items earn 0 points. Select a question number below to return and complete
-              it before submitting.
+              Every question must be answered before you can submit. Select a question number below
+              to return and choose an answer.
             </p>
           </div>
         </div>
@@ -551,7 +552,9 @@ onMounted(() => {
 
       <div v-else class="review-ready-banner" role="status">
         <AppIcon name="check" :size="18" />
-        <span>All 30 questions have a selected answer. Ready to submit when you are.</span>
+        <span>
+          All {{ activeAttempt.questionCount }} questions have a selected answer. Ready to submit when you are.
+        </span>
       </div>
 
       <div class="review-grid" role="list" aria-label="All post-test questions summary">
@@ -565,7 +568,7 @@ onMounted(() => {
           @click="postTestStore.goToQuestion(idx)"
         >
           <span class="review-num">Q{{ q.displayNumber }}</span>
-          <span class="review-cat">{{ q.threat_name }}</span>
+          <span class="review-cat">{{ q.topic }}</span>
           <span class="review-status-pill" :class="{ 'is-missing': !activeAttempt.answers?.[q.id] }">
             {{ activeAttempt.answers?.[q.id] ? 'Answered' : 'Unanswered' }}
           </span>
@@ -582,16 +585,16 @@ onMounted(() => {
         <button
           type="button"
           class="btn-primary submit-btn"
-          :disabled="postTestStore.isSubmitting || !postTestStore.isActionSupported"
+          :disabled="postTestStore.isSubmitting || !postTestStore.allQuestionsAnswered || !postTestStore.isActionSupported"
           @click="handleSubmit"
         >
           <AppIcon name="check" :size="15" />
           <span>
             {{
               postTestStore.isSubmitting
-                ? 'Scoring answers...'
-                : postTestStore.unansweredQuestionNumbers.length > 0
-                  ? `Submit anyway (${postTestStore.unansweredQuestionNumbers.length} unanswered)`
+                ? 'Submitting answers...'
+                : !postTestStore.allQuestionsAnswered
+                  ? `Answer all ${activeAttempt.questionCount} questions to submit`
                   : 'Submit post-test'
             }}
           </span>
@@ -601,12 +604,14 @@ onMounted(() => {
 
     <!-- Results Screen -->
     <div v-else-if="postTestStore.status === 'results' && result" class="results-layout">
-      <div class="mock-notice-banner" role="note">
-        <AppIcon name="info" :size="16" />
-        <span>
-          <strong>Prototype result only:</strong> This mock score is calculated locally in your
-          browser session and is not saved to a backend database.
-        </span>
+      <div v-if="postTestStore.inlineActionError" class="inline-alert-banner" role="alert">
+        <AppIcon name="warning" :size="16" />
+        <span>{{ postTestStore.inlineActionError }}</span>
+      </div>
+
+      <div v-if="postTestStore.historyWarning" class="info-callout" role="status">
+        <AppIcon name="info" :size="16" class="callout-icon" />
+        <div class="callout-text">{{ postTestStore.historyWarning }}</div>
       </div>
 
       <section
@@ -621,16 +626,21 @@ onMounted(() => {
               {{ result.passed ? 'Passed' : 'Not passed' }}
             </span>
             <h2 id="results-heading" class="result-score-display">
-              {{ result.correctCount }} / {{ result.totalCount }}
-              <span class="result-percent">({{ result.percentage }}%)</span>
+              {{ result.correctCount }} / {{ result.questionCount }}
+              <span class="result-percent">({{ result.scorePercent }}%)</span>
             </h2>
             <p class="panel-copy">
               <template v-if="result.passed">
-                You met the 75% passing requirement (at least 23/30 correct answers).
+                You met the {{ result.passMarkPercent }}% passing requirement (at least
+                {{ minCorrectForResult }}/{{ result.questionCount }} correct answers).
+              </template>
+              <template v-else-if="postTestStore.overallPassed">
+                This attempt scored below the {{ result.passMarkPercent }}% pass mark, but your earlier
+                passing status and best score remain preserved.
               </template>
               <template v-else>
-                Passing requires at least 23/30 correct answers (75%). Review the explanations below
-                and try a fresh retake whenever you are ready.
+                Passing requires at least {{ minCorrectForResult }}/{{ result.questionCount }} correct
+                answers ({{ result.passMarkPercent }}%). Review your topic breakdown below and retake whenever you are ready.
               </template>
             </p>
           </div>
@@ -645,125 +655,54 @@ onMounted(() => {
               <AppIcon name="refresh" :size="15" />
               <span>{{ postTestStore.isStarting ? 'Preparing retake...' : 'Retake post-test' }}</span>
             </button>
+            <button type="button" class="btn-outline" @click="postTestStore.backToOverview">
+              Attempt history
+            </button>
             <router-link to="/threat-index" class="btn-outline">Review threat index</router-link>
           </div>
         </div>
 
-        <!-- Distinct First / Latest / Best Score Trio -->
-        <div class="score-trio results-trio" aria-label="Mock attempt score summary">
+        <div class="score-trio results-trio" aria-label="Post-test summary">
           <div class="score-pill-box">
-            <span class="trio-label">First score</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.firstScore) }}</strong>
-          </div>
-          <div class="score-pill-box">
-            <span class="trio-label">Latest score</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.latestScore) }}</strong>
+            <span class="trio-label">Overall status</span>
+            <strong class="trio-value">{{ postTestStore.overallPassed ? 'Passed' : 'Not passed yet' }}</strong>
           </div>
           <div class="score-pill-box">
             <span class="trio-label">Best score</span>
-            <strong class="trio-value">{{ formatScoreSummaryItem(scoreSummary.bestScore) }}</strong>
+            <strong class="trio-value">{{ formatAttemptRatio(bestAttempt) }}</strong>
           </div>
           <div class="score-pill-box">
-            <span class="trio-label">Completed attempts</span>
-            <strong class="trio-value">{{ scoreSummary.attemptCount }}</strong>
+            <span class="trio-label">Submitted attempts</span>
+            <strong class="trio-value">{{ postTestStore.attemptHistory.length }}</strong>
+          </div>
+          <div class="score-pill-box">
+            <span class="trio-label">Submitted</span>
+            <strong class="trio-value">{{ formatSubmittedDate(result.submittedAt) }}</strong>
           </div>
         </div>
       </section>
 
-      <!-- Category Breakdown -->
+      <!-- Topic Breakdown -->
       <section class="surface-panel breakdown-panel" aria-labelledby="breakdown-heading">
         <h2 id="breakdown-heading" class="section-heading">Results by threat category</h2>
         <div class="breakdown-grid">
           <div
-            v-for="cat in result.categoryBreakdown"
-            :key="cat.threat_name"
-            class="breakdown-row"
+            v-for="cat in result.topics"
+            :key="cat.topic"
+            class="breakdown-row breakdown-row-stacked"
           >
-            <span class="breakdown-name">{{ cat.threat_name }}</span>
-            <span class="breakdown-score">
-              {{ cat.correct }}/{{ cat.asked }}
-              <span v-if="cat.percentage !== null" class="breakdown-pct">({{ cat.percentage }}%)</span>
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Answer Review & Explanations (post-submission only) -->
-      <section class="surface-panel explanations-panel" aria-labelledby="explanations-heading">
-        <div class="explanations-header">
-          <div>
-            <h2 id="explanations-heading" class="section-heading">Answer review & explanations</h2>
-            <p class="panel-copy muted">Explanations are shown for learning after submission.</p>
-          </div>
-
-          <div class="segmented-filter" role="group" aria-label="Filter answer explanations">
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ 'is-active': explanationFilter === 'all' }"
-              @click="explanationFilter = 'all'"
-            >
-              All ({{ result.items.length }})
-            </button>
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ 'is-active': explanationFilter === 'incorrect' }"
-              @click="explanationFilter = 'incorrect'"
-            >
-              Incorrect ({{ incorrectItemsCount }})
-            </button>
-            <button
-              type="button"
-              class="filter-pill"
-              :class="{ 'is-active': explanationFilter === 'correct' }"
-              @click="explanationFilter = 'correct'"
-            >
-              Correct ({{ result.correctCount }})
-            </button>
-          </div>
-        </div>
-
-        <div v-if="filteredExplanationItems.length === 0" class="empty-filter-note">
-          No questions match this filter.
-        </div>
-
-        <ol v-else class="explanations-list">
-          <li
-            v-for="item in filteredExplanationItems"
-            :key="item.id"
-            class="explanation-item"
-            :class="item.isCorrect ? 'is-item-correct' : 'is-item-incorrect'"
-          >
-            <div class="explanation-meta">
-              <div class="explanation-left-meta">
-                <span class="exp-num">Question {{ item.displayNumber }}</span>
-                <span class="threat-pill small">{{ item.threat_name }}</span>
-              </div>
-              <span class="exp-badge" :class="item.isCorrect ? 'is-pass' : 'is-fail'">
-                <AppIcon :name="item.isCorrect ? 'check' : 'x'" :size="13" />
-                {{ item.isCorrect ? 'Correct' : 'Incorrect' }}
+            <div class="breakdown-row-top">
+              <span class="breakdown-name">{{ cat.topic }}</span>
+              <span class="breakdown-score">
+                {{ cat.correct }}/{{ cat.total }}
+                <span class="breakdown-pct">({{ cat.percentage }}%)</span>
               </span>
             </div>
-
-            <p class="exp-question">{{ item.question }}</p>
-
-            <div class="exp-answers">
-              <p class="exp-answer-line">
-                <span class="exp-label">Your answer:</span>
-                <span>{{ item.selectedChoiceText || 'Unanswered (0 points)' }}</span>
-              </p>
-              <p v-if="!item.isCorrect" class="exp-answer-line is-best">
-                <span class="exp-label">Best answer:</span>
-                <span>{{ item.correctChoiceText }}</span>
-              </p>
-              <p class="exp-rationale">
-                <span class="exp-label">Why:</span>
-                <span>{{ item.explanation }}</span>
-              </p>
+            <div class="topic-bar-track" aria-hidden="true">
+              <div class="topic-bar-fill" :style="{ width: `${cat.percentage}%` }"></div>
             </div>
-          </li>
-        </ol>
+          </div>
+        </div>
       </section>
     </div>
   </div>
@@ -1898,6 +1837,105 @@ onMounted(() => {
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.inline-alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-danger-border);
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.resume-notice-banner {
+  margin-bottom: 0.25rem;
+}
+
+.attempt-history-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.attempt-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.attempt-history-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.9rem;
+  min-width: 0;
+}
+
+.attempt-history-date {
+  font-size: 0.86rem;
+  color: var(--color-text-muted);
+}
+
+.attempt-history-score {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.attempt-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.attempt-view-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  min-height: 36px;
+}
+
+.breakdown-row-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.breakdown-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.topic-bar-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background-color: var(--color-surface-muted);
+  overflow: hidden;
+}
+
+.topic-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+  transition: width 220ms ease;
 }
 
 .error-surface {

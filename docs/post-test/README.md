@@ -31,11 +31,11 @@ No passing score, time limit, retry limit, or eligibility rule has been invented
 
 ## Current project findings
 
-The Vue application already has player dashboards, Threat Index lessons, session history, and optional classroom functionality. Its inspected router has no post-test route. The backend router registry and feature search show no dedicated assessment API. The inspected player model and session submission schema do not contain a post-test result or an assessment-based completion field.
+The Vue application has player dashboards, Threat Index lessons, session history, optional classroom functionality, and a player-only `/post-test` route connected to the FastAPI `/v1/post-test/*` assessment API (`GET /post-test/eligibility`, `GET /post-test/attempts/me`, `POST /post-test/attempts`, `POST /post-test/attempts/{attempt_id}/submit`, and `GET /post-test/attempts/{attempt_id}`). The backend issues 40-question attempts (5 per topic) with a 75% pass mark and grades submissions server-side without exposing an answer key to the client.
 
-`map_progress` is the highest unlocked map index, from 0 to 3. A value of 3 means Public Park is unlocked; it does not establish that the final map was finished or that a post-test was passed. The current session progression implementation advances unlocked maps following eligible wins and caps at index 3. Do not use this value as an assessment completion flag.
+`map_progress` is the highest unlocked map index, from 0 to 3. A value of 3 means Public Park is unlocked; it does not establish that the final map was finished or that a post-test is unlocked. Eligibility is governed by `GET /post-test/eligibility` (requiring a synced Public Park `win` session).
 
-`POST /sessions` accepts game-session information, not this quiz schema. The `/sync/*` routes are for the Godot client. Do not submit quiz answers as game threat events or invent a new endpoint in the frontend. A production completion flow needs an explicitly designed backend contract for attempts, scoring, result retrieval, and completion eligibility, plus coordination with Godot. No backend files were modified.
+`POST /sessions` accepts game-session information, not this quiz schema. The `/sync/*` routes are for the Godot client. Do not submit quiz answers as game threat events. No backend files were modified.
 
 There is a documentation discrepancy relevant to the requested feature: `docs/architecture.md` currently assigns assessments to the Godot client, while this request places the post-test in the web application. This package prepares the web assessment content without silently changing that architecture. Some architecture descriptions also include planned admin restore functionality that the API guide says is not built; those descriptions were not treated as evidence of implemented features.
 

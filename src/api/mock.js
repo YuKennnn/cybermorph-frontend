@@ -4092,6 +4092,342 @@ const handleAppVersionMock = async () => {
   return [200, defaultMockAppVersion]
 }
 
+// ============================================================================
+// Post-test API Mocks (Player token required, 40 questions / 5 per topic)
+// ============================================================================
+
+const POST_TEST_TOPICS = [
+  'Phishing',
+  'Smishing',
+  'Vishing',
+  'Social Engineering',
+  'Credential Theft',
+  'Public Wi-Fi Attack',
+  'Malware Infection',
+  'Ransomware',
+]
+
+const buildMockUuid = (seed) => {
+  let h1 = 0x811c9dc5
+  let h2 = 0x9e3779b9
+  const str = String(seed)
+  for (let i = 0; i < str.length; i++) {
+    h1 ^= str.charCodeAt(i)
+    h1 = Math.imul(h1, 0x01000193) >>> 0
+    h2 ^= str.charCodeAt(i)
+    h2 = Math.imul(h2, 0x85ebca6b) >>> 0
+  }
+  const hex = (n) => n.toString(16).padStart(8, '0')
+  const a = hex(h1)
+  const b = hex(h2)
+  const c = hex((h1 ^ h2) >>> 0)
+  const d = hex((h1 + h2) >>> 0)
+  return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-8${c.slice(1, 4)}-${c.slice(4)}${d.slice(0, 4)}`
+}
+
+const MOCK_POST_TEST_STORAGE_KEY = '__CYBERMORPH_MOCK_POST_TEST_STATE__'
+const postTestStateByProfile = new Map()
+
+const loadMockPostTestStateMap = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = sessionStorage.getItem(MOCK_POST_TEST_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      for (const [profileId, entry] of Object.entries(parsed)) {
+        if (entry && typeof entry === 'object') {
+          postTestStateByProfile.set(profileId, entry)
+        }
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const persistMockPostTestStateMap = () => {
+  if (typeof window === 'undefined') return
+  try {
+    const serialized = {}
+    for (const [profileId, entry] of postTestStateByProfile.entries()) {
+      serialized[profileId] = entry
+    }
+    sessionStorage.setItem(MOCK_POST_TEST_STORAGE_KEY, JSON.stringify(serialized))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+loadMockPostTestStateMap()
+
+const getOrCreatePostTestState = (profileId) => {
+  if (!postTestStateByProfile.has(profileId)) {
+    postTestStateByProfile.set(profileId, {
+      openAttempt: null,
+      finishedAttempts: [],
+      attemptSeq: 0,
+    })
+  }
+  return postTestStateByProfile.get(profileId)
+}
+
+const authorizeMockPostTestPlayer = (config) => {
+  const authHeader =
+    config?.headers?.Authorization ||
+    config?.headers?.authorization ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('cyber_token')
+      ? `Bearer ${localStorage.getItem('cyber_token')}`
+      : '')
+
+  if (!authHeader || !/^Bearer\s+\S+/i.test(authHeader)) {
+    return { error: [401, { detail: 'Not authenticated' }] }
+  }
+  if (/educator|admin/i.test(authHeader)) {
+    return { error: [403, { detail: 'Not a player account' }] }
+  }
+  const { player } = resolveMockPlayerFromConfig(config)
+  return { player }
+}
+
+const isMockPlayerPostTestEligible = (player) => {
+  if (typeof window !== 'undefined') {
+    const override = sessionStorage.getItem('__CYBERMORPH_POST_TEST_ELIGIBLE__')
+    if (override === 'true') return true
+    if (override === 'false') return false
+  }
+  const sessions = player.profile_id === 'p99' ? mockPlayerTwoSessions : mockPlayerSessions
+  return sessions.some((s) => s.map_name === 'Public Park' && s.result === 'win')
+}
+
+const buildMock40Questions = (attemptId) => {
+  const questions = []
+  const correctOptionByQuestion = {}
+  POST_TEST_TOPICS.forEach((topic, tIdx) => {
+    for (let i = 1; i <= 5; i++) {
+      const qId = buildMockUuid(`pt-q-${attemptId}-${tIdx}-${i}`)
+      const optSeed = (tIdx * 5 + i) % 4
+      const rawOptions = [
+        {
+          option_id: buildMockUuid(`${qId}-opt-0`),
+          option_text: `Verify the sender or source using an independent trusted channel (${topic} #${i})`,
+          isCorrect: true,
+        },
+        {
+          option_id: buildMockUuid(`${qId}-opt-1`),
+          option_text: `Click the provided shortcut immediately to avoid account lock`,
+          isCorrect: false,
+        },
+        {
+          option_id: buildMockUuid(`${qId}-opt-2`),
+          option_text: `Share your one-time verification code to speed up review`,
+          isCorrect: false,
+        },
+        {
+          option_id: buildMockUuid(`${qId}-opt-3`),
+          option_text: `Disable security warnings and proceed anyway`,
+          isCorrect: false,
+        },
+      ]
+      // Rotate options deterministically per attempt/question so order is stable on resume
+      const rotated = rawOptions.map((_, idx) => rawOptions[(idx + optSeed) % 4])
+      const correctOpt = rotated.find((o) => o.isCorrect)
+      correctOptionByQuestion[qId] = correctOpt.option_id
+      questions.push({
+        question_id: qId,
+        topic,
+        question_text: `In a ${topic} scenario (#${i}), what is the safest action to protect your account and data?`,
+        options: rotated.map(({ option_id, option_text }) => ({ option_id, option_text })),
+      })
+    }
+  })
+  return { questions, correctOptionByQuestion }
+}
+
+const summarizeBestAttempt = (finishedAttempts) => {
+  if (!finishedAttempts.length) return null
+  // Most correct answers; earliest on tie
+  const chronological = [...finishedAttempts].sort(
+    (a, b) => new Date(`${a.submitted_at}Z`).getTime() - new Date(`${b.submitted_at}Z`).getTime(),
+  )
+  let best = chronological[0]
+  for (const item of chronological) {
+    if (item.correct_count > best.correct_count) {
+      best = item
+    }
+  }
+  return best
+}
+
+const stripTopics = (attempt) => {
+  const { topics: _topics, ...summary } = attempt
+  return summary
+}
+
+mock.onGet('/post-test/eligibility').reply(async (config) => {
+  const auth = authorizeMockPostTestPlayer(config)
+  if (auth.error) return auth.error
+  if (typeof window !== 'undefined' && sessionStorage.getItem('__CYBERMORPH_POST_TEST_503__') === 'true') {
+    return [503, { detail: 'The post-test is not available yet' }]
+  }
+  return [200, { eligible: isMockPlayerPostTestEligible(auth.player) }]
+})
+
+mock.onGet('/post-test/attempts/me').reply(async (config) => {
+  const auth = authorizeMockPostTestPlayer(config)
+  if (auth.error) return auth.error
+  const state = getOrCreatePostTestState(auth.player.profile_id || 'p1')
+  const newestFirst = [...state.finishedAttempts].reverse().map(stripTopics)
+  const best = summarizeBestAttempt(state.finishedAttempts)
+  return [
+    200,
+    {
+      passed: state.finishedAttempts.some((a) => a.passed),
+      best: best ? stripTopics(best) : null,
+      attempts: newestFirst,
+    },
+  ]
+})
+
+mock.onPost('/post-test/attempts').reply(async (config) => {
+  const auth = authorizeMockPostTestPlayer(config)
+  if (auth.error) return auth.error
+  if (!isMockPlayerPostTestEligible(auth.player)) {
+    return [403, { detail: 'Finish the Public Park goal to unlock the post-test' }]
+  }
+  if (typeof window !== 'undefined' && sessionStorage.getItem('__CYBERMORPH_POST_TEST_503__') === 'true') {
+    return [503, { detail: 'The post-test is not available yet' }]
+  }
+
+  const state = getOrCreatePostTestState(auth.player.profile_id || 'p1')
+  if (state.openAttempt) {
+    return [
+      200,
+      {
+        attempt_id: state.openAttempt.attempt_id,
+        question_count: state.openAttempt.question_count,
+        pass_mark_percent: state.openAttempt.pass_mark_percent,
+        resumed: true,
+        questions: state.openAttempt.questions,
+      },
+    ]
+  }
+
+  state.attemptSeq += 1
+  const attemptId = buildMockUuid(`attempt-${auth.player.profile_id || 'p1'}-${state.attemptSeq}-${Date.now()}`)
+  const { questions, correctOptionByQuestion } = buildMock40Questions(attemptId)
+  state.openAttempt = {
+    attempt_id: attemptId,
+    question_count: 40,
+    pass_mark_percent: 75,
+    questions,
+    correctOptionByQuestion,
+  }
+  persistMockPostTestStateMap()
+  return [
+    200,
+    {
+      attempt_id: attemptId,
+      question_count: 40,
+      pass_mark_percent: 75,
+      resumed: false,
+      questions,
+    },
+  ]
+})
+
+mock.onPost(new RegExp('^/post-test/attempts/([^/]+)/submit$')).reply(async (config) => {
+  if (typeof window !== 'undefined' && sessionStorage.getItem('__CYBERMORPH_POST_TEST_SUBMIT_401__') === 'true') {
+    sessionStorage.removeItem('__CYBERMORPH_POST_TEST_SUBMIT_401__')
+    return [401, { detail: 'Session expired' }]
+  }
+  const auth = authorizeMockPostTestPlayer(config)
+  if (auth.error) return auth.error
+  if (!isMockPlayerPostTestEligible(auth.player)) {
+    return [403, { detail: 'Finish the Public Park goal to unlock the post-test' }]
+  }
+
+  const match = config.url.match(new RegExp('^/post-test/attempts/([^/]+)/submit$'))
+  const attemptId = match ? decodeURIComponent(match[1]) : ''
+  const state = getOrCreatePostTestState(auth.player.profile_id || 'p1')
+
+  if (state.finishedAttempts.some((a) => a.attempt_id === attemptId)) {
+    return [409, { detail: { field: 'attempt_id', message: 'Attempt already submitted' } }]
+  }
+  if (!state.openAttempt || state.openAttempt.attempt_id !== attemptId) {
+    return [404, { detail: 'Attempt not found' }]
+  }
+
+  let body = {}
+  try {
+    body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data || {}
+  } catch {
+    return [422, { detail: 'Invalid submission payload' }]
+  }
+
+  const answers = Array.isArray(body.answers) ? body.answers : []
+  const open = state.openAttempt
+  if (answers.length !== open.question_count) {
+    return [422, { detail: 'Answer every question of this attempt, and only those' }]
+  }
+
+  const seenQ = new Set()
+  const answerByQ = new Map()
+  for (const ans of answers) {
+    const qObj = open.questions.find((q) => q.question_id === ans?.question_id)
+    if (!qObj || seenQ.has(ans.question_id)) {
+      return [422, { detail: 'Answer every question of this attempt, and only those' }]
+    }
+    if (!qObj.options.some((o) => o.option_id === ans?.option_id)) {
+      return [422, { detail: 'An answer does not match its question' }]
+    }
+    seenQ.add(ans.question_id)
+    answerByQ.set(ans.question_id, ans.option_id)
+  }
+
+  const topicCounts = new Map(POST_TEST_TOPICS.map((t) => [t, { topic: t, correct: 0, total: 0 }]))
+  let correctCount = 0
+  for (const q of open.questions) {
+    const entry = topicCounts.get(q.topic)
+    entry.total += 1
+    if (answerByQ.get(q.question_id) === open.correctOptionByQuestion?.[q.question_id]) {
+      entry.correct += 1
+      correctCount += 1
+    }
+  }
+
+  const total = open.question_count
+  const passMark = open.pass_mark_percent
+  const result = {
+    attempt_id: attemptId,
+    correct_count: correctCount,
+    question_count: total,
+    score_percent: Math.round((correctCount * 1000) / total) / 10,
+    pass_mark_percent: passMark,
+    passed: correctCount * 100 >= passMark * total,
+    submitted_at: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
+    topics: Array.from(topicCounts.values()),
+  }
+
+  state.openAttempt = null
+  state.finishedAttempts.push(result)
+  persistMockPostTestStateMap()
+  return [200, result]
+})
+
+mock.onGet(new RegExp('^/post-test/attempts/([^/?]+)$')).reply(async (config) => {
+  const auth = authorizeMockPostTestPlayer(config)
+  if (auth.error) return auth.error
+  const match = config.url.match(new RegExp('^/post-test/attempts/([^/?]+)$'))
+  const attemptId = match ? decodeURIComponent(match[1]) : ''
+  const state = getOrCreatePostTestState(auth.player.profile_id || 'p1')
+  const found = state.finishedAttempts.find((a) => a.attempt_id === attemptId)
+  if (!found) {
+    return [404, { detail: 'Attempt not found' }]
+  }
+  return [200, found]
+})
+
 publicMock.onGet(new RegExp('/app/version')).reply(handleAppVersionMock)
 mock.onGet(new RegExp('/app/version')).reply(handleAppVersionMock)
 publicMock.onAny().reply(404, { detail: 'Endpoint not found in public mock adapter' })

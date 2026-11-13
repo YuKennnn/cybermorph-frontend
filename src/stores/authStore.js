@@ -81,6 +81,15 @@ export const useAuthStore = defineStore('auth', () => {
   const isWebProfileVerified = ref(false)
   const isSessionReconciling = ref(false)
   const verificationError = ref(null)
+  const dashboardNotice = ref('')
+
+  const setDashboardNotice = (message) => {
+    dashboardNotice.value = typeof message === 'string' ? message : ''
+  }
+
+  const clearDashboardNotice = () => {
+    dashboardNotice.value = ''
+  }
 
   // Concurrency & account isolation guards
   const sessionEpoch = ref(0)
@@ -441,6 +450,7 @@ export const useAuthStore = defineStore('auth', () => {
     activeProfilePromise = null
     isProfileLoading.value = false
     isWebProfileVerified.value = false
+    dashboardNotice.value = ''
     stopNarration()
     const currentToken = token.value
     token.value = null
@@ -616,6 +626,7 @@ export const useAuthStore = defineStore('auth', () => {
     isWebProfileVerified,
     isSessionReconciling,
     verificationError,
+    dashboardNotice,
     // Getters
     isAuthenticated,
     isEducator,
@@ -636,5 +647,7 @@ export const useAuthStore = defineStore('auth', () => {
     handleAdminForbidden,
     verifySessionOnStartup,
     retryStartupVerification,
+    setDashboardNotice,
+    clearDashboardNotice,
   }
 })

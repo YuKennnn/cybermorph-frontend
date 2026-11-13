@@ -10,12 +10,12 @@ export const CANONICAL_THREAT_CATEGORIES_ORDER = Object.freeze([
 ])
 
 export const POST_TEST_CONFIG = Object.freeze({
-  totalQuestions: 30,
-  basePerCategory: 3,
-  extraCategoryCount: 6,
+  totalQuestions: 40,
+  basePerCategory: 5,
+  extraCategoryCount: 0,
   categoryCount: CANONICAL_THREAT_CATEGORIES_ORDER.length,
   passPercentRequired: 75,
-  minCorrectToPass: 23,
+  minCorrectToPass: 30,
   timeLimitMinutes: null,
   unlimitedRetakes: true,
 })
@@ -107,7 +107,7 @@ export const toPlayerQuestion = (rawQuestion, displayIndex, rng = Math.random) =
  */
 export const selectPostTestQuestions = (questionBank, rng = Math.random) => {
   if (!Array.isArray(questionBank) || questionBank.length < POST_TEST_CONFIG.totalQuestions) {
-    throw new Error('Question bank does not contain enough items to build a 30-question test.')
+    throw new Error('Question bank does not contain enough items to build a 40-question test.')
   }
 
   const byCategory = new Map()

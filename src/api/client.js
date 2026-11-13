@@ -108,7 +108,11 @@ apiClient.interceptors.response.use(
                 }
 
                 if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-                    window.location.assign('/login')
+                    const redirectUrl =
+                        window.location.pathname === '/post-test'
+                            ? '/login?next=%2Fpost-test'
+                            : '/login'
+                    window.location.assign(redirectUrl)
                 }
             }
         }

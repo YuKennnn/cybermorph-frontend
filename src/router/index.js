@@ -230,6 +230,9 @@ router.beforeEach((to) => {
 
   // 3. Unauthenticated access to protected routes
   if (to.meta?.requiresAuth && !authStore.isAuthenticated) {
+    if (to.path === '/post-test') {
+      return { path: '/login', query: { next: '/post-test' } }
+    }
     return '/login'
   }
 
@@ -239,6 +242,9 @@ router.beforeEach((to) => {
     to.meta.roles.length > 0 &&
     (!authStore.userRole || !to.meta.roles.includes(authStore.userRole))
   ) {
+    if (to.path === '/post-test' && (authStore.isEducator || authStore.isAdmin)) {
+      authStore.setDashboardNotice('The post-test is for players')
+    }
     return '/dashboard'
   }
 

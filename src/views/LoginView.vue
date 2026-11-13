@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import {
   validateEmailField,
@@ -12,6 +12,7 @@ import PublicHeader from '../components/common/PublicHeader.vue'
 import AppIcon from '../components/common/AppIcon.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const email = ref('')
@@ -113,7 +114,18 @@ const handleLogin = async () => {
       email: emailCheck.trimmed,
       password: password.value,
     })
-    router.push('/dashboard')
+    const rawNext = route.query.next
+    const hasPostTestNext = typeof rawNext === 'string' && rawNext === '/post-test'
+    if (hasPostTestNext) {
+      if (authStore.userRole === 'player') {
+        await router.replace('/post-test')
+        return
+      }
+      if (authStore.userRole === 'educator' || authStore.userRole === 'admin') {
+        authStore.setDashboardNotice('The post-test is for players')
+      }
+    }
+    await router.push('/dashboard')
   } catch (error) {
     const mapped = mapAuthApiError(error, { mode: 'login' })
     credentialsError.value = mapped.credentialsError
