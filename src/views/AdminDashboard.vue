@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/authStore'
 import { useApiCacheStore } from '../stores/apiCacheStore'
 import { fetchAdminStats, fetchAdminApprovals, fetchAdminLogs } from '../api/admin'
+import { fetchAdminPostTestSummary } from '../api/adminPostTest'
 import { formatAuditLogTimestamp } from '../utils/datetime'
 import { getActionLabel, getActionBadgeClass } from '../utils/auditLogs'
 import { usePageRecovery } from '../composables/usePageRecovery'
@@ -19,6 +20,9 @@ const APPROVALS_TTL = 60000 // 60s
 
 const LOGS_KEY = 'admin::logs::preview::page_size=5'
 const LOGS_TTL = 60000 // 60s
+
+const POST_TEST_SUMMARY_KEY = 'admin::post-test::summary'
+const POST_TEST_SUMMARY_TTL = 120000 // 120s
 
 const adminGreetingName = computed(() => authStore.user?.display_name?.trim() || 'Admin')
 
@@ -44,6 +48,13 @@ const activityRefreshing = ref(false)
 const activityError = ref(false)
 const hasLoadedActivityOnce = ref(false)
 
+// Post-test summary
+const postTestSummary = ref(null)
+const postTestSummaryLoading = ref(true)
+const postTestSummaryRefreshing = ref(false)
+const postTestSummaryError = ref(false)
+const hasLoadedPostTestSummaryOnce = ref(false)
+
 const lastFetchedTimestamp = ref(null)
 
 const lastUpdatedText = computed(() => {
@@ -56,13 +67,18 @@ const lastUpdatedText = computed(() => {
 })
 
 const isRefreshingAny = computed(
-  () => statsRefreshing.value || approvalsRefreshing.value || activityRefreshing.value,
+  () =>
+    statsRefreshing.value ||
+    approvalsRefreshing.value ||
+    activityRefreshing.value ||
+    postTestSummaryRefreshing.value,
 )
 
 let currentSessionEpoch = 0
 let latestStatsRequestId = 0
 let latestApprovalsRequestId = 0
 let latestActivityRequestId = 0
+let latestPostTestSummaryRequestId = 0
 
 const resetDashboardState = () => {
   totalUsers.value = null
@@ -83,6 +99,13 @@ const resetDashboardState = () => {
   activityRefreshing.value = false
   activityError.value = false
   hasLoadedActivityOnce.value = false
+
+  postTestSummary.value = null
+  postTestSummaryLoading.value = false
+  postTestSummaryRefreshing.value = false
+  postTestSummaryError.value = false
+  hasLoadedPostTestSummaryOnce.value = false
+
   lastFetchedTimestamp.value = null
 }
 
@@ -297,12 +320,82 @@ const loadRecentActivity = async ({ force = false } = {}) => {
   }
 }
 
+const loadPostTestSummary = async ({ force = false } = {}) => {
+  if (!authStore.isAuthenticated || !authStore.isAdmin) return
+  const reqId = ++latestPostTestSummaryRequestId
+  const reqSession = currentSessionEpoch
+  const reqAuthEpoch = authStore.activeSessionEpoch
+  const reqKeyVersion = cacheStore.getKeyVersion(POST_TEST_SUMMARY_KEY)
+
+  const cached = cacheStore.get(POST_TEST_SUMMARY_KEY)
+  if (cached && !force) {
+    postTestSummary.value = cached.data ?? null
+    hasLoadedPostTestSummaryOnce.value = true
+    postTestSummaryLoading.value = false
+    postTestSummaryError.value = false
+
+    if (!cached.isExpired) {
+      postTestSummaryRefreshing.value = false
+      return
+    }
+
+    postTestSummaryRefreshing.value = true
+  } else {
+    postTestSummaryLoading.value = !hasLoadedPostTestSummaryOnce.value
+    postTestSummaryError.value = false
+  }
+
+  try {
+    const data = await fetchAdminPostTestSummary()
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestPostTestSummaryRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(POST_TEST_SUMMARY_KEY) ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
+
+    cacheStore.set(POST_TEST_SUMMARY_KEY, data, POST_TEST_SUMMARY_TTL)
+    postTestSummary.value = data ?? null
+    hasLoadedPostTestSummaryOnce.value = true
+    postTestSummaryError.value = false
+  } catch (err) {
+    if (err?.response?.status === 403) {
+      authStore.handleAdminForbidden()
+      return
+    }
+    if (
+      reqSession !== currentSessionEpoch ||
+      reqId !== latestPostTestSummaryRequestId ||
+      reqAuthEpoch !== authStore.activeSessionEpoch ||
+      reqKeyVersion !== cacheStore.getKeyVersion(POST_TEST_SUMMARY_KEY) ||
+      !authStore.isAuthenticated ||
+      !authStore.isAdmin
+    ) {
+      return
+    }
+    postTestSummaryError.value = true
+    if (!hasLoadedPostTestSummaryOnce.value) {
+      postTestSummary.value = null
+    }
+  } finally {
+    if (reqSession === currentSessionEpoch && reqId === latestPostTestSummaryRequestId) {
+      postTestSummaryLoading.value = false
+      postTestSummaryRefreshing.value = false
+    }
+  }
+}
+
 const refreshAll = ({ force = false } = {}) => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return Promise.resolve()
   return Promise.allSettled([
     loadStats({ force }),
     loadApprovals({ force }),
     loadRecentActivity({ force }),
+    loadPostTestSummary({ force }),
   ])
 }
 
@@ -312,7 +405,12 @@ const manualRefresh = () => {
 
 usePageRecovery(async () => {
   if (!authStore.isAuthenticated || !authStore.isAdmin) return
-  if (statsLoading.value || approvalsLoading.value || activityLoading.value) {
+  if (
+    statsLoading.value ||
+    approvalsLoading.value ||
+    activityLoading.value ||
+    postTestSummaryLoading.value
+  ) {
     return
   }
   // Passing force: false checks freshness; entries with age < TTL produce 0 API calls!
@@ -324,6 +422,7 @@ onMounted(() => {
     loadStats()
     loadApprovals()
     loadRecentActivity()
+    loadPostTestSummary()
   } else {
     resetDashboardState()
   }
@@ -334,6 +433,7 @@ onUnmounted(() => {
   latestStatsRequestId++
   latestApprovalsRequestId++
   latestActivityRequestId++
+  latestPostTestSummaryRequestId++
 })
 
 watch(
@@ -344,6 +444,7 @@ watch(
       latestStatsRequestId++
       latestApprovalsRequestId++
       latestActivityRequestId++
+      latestPostTestSummaryRequestId++
       resetDashboardState()
       return
     }
@@ -352,13 +453,23 @@ watch(
       latestStatsRequestId++
       latestApprovalsRequestId++
       latestActivityRequestId++
+      latestPostTestSummaryRequestId++
       resetDashboardState()
       loadStats()
       loadApprovals()
       loadRecentActivity()
+      loadPostTestSummary()
     }
   },
 )
+
+const displayPassRate = (summary, loading, error) => {
+  if (loading) return '…'
+  if (error && !summary) return 'Unavailable'
+  const rate = summary?.pass_rate_percent
+  if (rate === null || rate === undefined) return '—'
+  return `${rate}%`
+}
 
 const displayStat = (val, loading, error) => {
   if (loading) return '…'
@@ -477,6 +588,57 @@ const displayStat = (val, loading, error) => {
         </div>
       </div>
     </div>
+
+    <!-- Post-test Summary Card (Independent from other Overview cards) -->
+    <section class="content-section post-test-summary-card" aria-label="Post-test summary">
+      <div class="section-header">
+        <div class="post-test-summary-title-wrap">
+          <AppIcon name="clipboard-check" :size="18" class="stat-icon" aria-hidden="true" />
+          <h4 class="section-title">Post-test summary</h4>
+        </div>
+        <router-link to="/admin/post-test-results" class="link-view-all">
+          <span>View post-test results</span>
+          <AppIcon name="arrow-right" :size="15" aria-hidden="true" />
+        </router-link>
+      </div>
+
+      <div v-if="postTestSummaryError && !postTestSummary" class="error-banner" role="alert">
+        <span>Post-test summary could not be loaded.</span>
+        <button type="button" class="btn-retry" @click="loadPostTestSummary({ force: true })">
+          Retry
+        </button>
+      </div>
+
+      <div v-else class="post-test-metrics-grid">
+        <div class="post-test-metric">
+          <span class="stat-label">Eligible players</span>
+          <strong class="post-test-metric-value highlight-neutral">
+            {{ displayStat(postTestSummary?.eligible_players, postTestSummaryLoading, postTestSummaryError) }}
+          </strong>
+        </div>
+
+        <div class="post-test-metric">
+          <span class="stat-label">Submitted</span>
+          <strong class="post-test-metric-value highlight-purple">
+            {{ displayStat(postTestSummary?.players_attempted, postTestSummaryLoading, postTestSummaryError) }}
+          </strong>
+        </div>
+
+        <div class="post-test-metric">
+          <span class="stat-label">Passed</span>
+          <strong class="post-test-metric-value highlight-secondary">
+            {{ displayStat(postTestSummary?.players_passed, postTestSummaryLoading, postTestSummaryError) }}
+          </strong>
+        </div>
+
+        <div class="post-test-metric">
+          <span class="stat-label">Pass rate</span>
+          <strong class="post-test-metric-value highlight-neutral">
+            {{ displayPassRate(postTestSummary, postTestSummaryLoading, postTestSummaryError) }}
+          </strong>
+        </div>
+      </div>
+    </section>
 
     <!-- Recent Activity Section -->
     <div class="content-section">
@@ -1055,6 +1217,43 @@ td {
 
 .text-muted {
   color: var(--color-text-muted);
+}
+
+.post-test-summary-title-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.post-test-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.post-test-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.85rem 1rem;
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.post-test-metric-value {
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .post-test-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {

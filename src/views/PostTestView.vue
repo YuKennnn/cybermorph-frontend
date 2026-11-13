@@ -21,6 +21,38 @@ const activeQuestion = computed(() => postTestStore.currentQuestion)
 const result = computed(() => postTestStore.activeResult)
 const bestAttempt = computed(() => postTestStore.bestAttempt)
 
+const orderedAttemptHistory = computed(() => {
+  const list = Array.isArray(postTestStore.attemptHistory) ? postTestStore.attemptHistory : []
+  return [...list].sort((a, b) => {
+    const timeA = a?.submittedAt ? Date.parse(a.submittedAt) : 0
+    const timeB = b?.submittedAt ? Date.parse(b.submittedAt) : 0
+    if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) {
+      return timeB - timeA
+    }
+    return 0
+  })
+})
+
+const latestAttempt = computed(() => orderedAttemptHistory.value[0] || null)
+
+const showBestVsLatest = computed(() => {
+  if (orderedAttemptHistory.value.length <= 1 || !bestAttempt.value || !latestAttempt.value) {
+    return false
+  }
+  return (
+    bestAttempt.value.attemptId !== latestAttempt.value.attemptId &&
+    (bestAttempt.value.correctCount !== latestAttempt.value.correctCount ||
+      bestAttempt.value.scorePercent !== latestAttempt.value.scorePercent)
+  )
+})
+
+const primaryStartLabel = computed(() => {
+  if (postTestStore.isStarting) return 'Preparing questions...'
+  if (postTestStore.currentAttempt) return 'Continue post-test'
+  if (orderedAttemptHistory.value.length > 0) return 'Retake post-test'
+  return 'Start post-test'
+})
+
 const attemptTotal = computed(
   () => activeAttempt.value?.questionCount || POST_TEST_CONFIG.totalQuestions,
 )
@@ -238,12 +270,25 @@ onMounted(() => {
       class="surface-panel intro-panel"
       aria-labelledby="intro-heading"
     >
-      <div class="intro-top">
-        <h2 id="intro-heading" class="panel-heading">Before you begin</h2>
-        <p class="panel-copy">
-          Evaluate realistic digital safety situations drawn across all eight CyberMorph threat
-          categories. Take your time and choose the safest single response for each question.
-        </p>
+      <div class="intro-hero-row">
+        <div class="intro-summary-col">
+          <h2 id="intro-heading" class="intro-summary-line">
+            {{ attemptTotal }} questions · {{ passMarkPercent }}% to pass ({{ minCorrectForPass }}/{{ attemptTotal }}) · Unlimited retakes
+          </h2>
+          <p class="intro-instruction">Choose one answer per question.</p>
+        </div>
+
+        <div class="intro-cta-col">
+          <button
+            type="button"
+            class="btn-primary start-btn intro-primary-btn"
+            :disabled="postTestStore.isStarting"
+            @click="handleStart"
+          >
+            <span>{{ primaryStartLabel }}</span>
+            <AppIcon name="arrow-right" :size="15" />
+          </button>
+        </div>
       </div>
 
       <div v-if="postTestStore.inlineActionError" class="inline-alert-banner" role="alert">
@@ -256,28 +301,15 @@ onMounted(() => {
         <div class="callout-text">{{ postTestStore.historyWarning }}</div>
       </div>
 
-      <dl class="rules-grid">
-        <div class="rule-item">
-          <dt class="rule-label">Questions</dt>
-          <dd class="rule-value">{{ attemptTotal }} multiple-choice items</dd>
-          <dd class="rule-detail">
-            Balanced across all 8 threat categories (5 questions per category).
-          </dd>
-        </div>
-        <div class="rule-item">
-          <dt class="rule-label">Passing requirement</dt>
-          <dd class="rule-value">{{ passMarkPercent }}% or higher (at least {{ minCorrectForPass }}/{{ attemptTotal }})</dd>
-          <dd class="rule-detail">
-            {{ minCorrectForPass }} or more correct answers passes. You can retake the assessment as many times as needed.
-          </dd>
-        </div>
-      </dl>
-
-      <div v-if="postTestStore.attemptHistory.length > 0" class="previous-scores-strip">
+      <section
+        v-if="orderedAttemptHistory.length > 0"
+        class="previous-scores-strip"
+        aria-labelledby="history-heading"
+      >
         <div class="strip-heading-row">
-          <span class="strip-label">
-            Your submitted attempts ({{ postTestStore.attemptHistory.length }})
-          </span>
+          <h3 id="history-heading" class="strip-label">
+            Submitted attempts ({{ orderedAttemptHistory.length }})
+          </h3>
           <span
             class="status-badge"
             :class="postTestStore.overallPassed ? 'tone-success' : 'tone-neutral'"
@@ -286,24 +318,20 @@ onMounted(() => {
           </span>
         </div>
 
-        <div class="score-trio">
-          <div class="score-pill-box">
+        <div v-if="showBestVsLatest" class="best-latest-strip">
+          <div class="best-latest-item">
             <span class="trio-label">Best score</span>
             <strong class="trio-value">{{ formatAttemptRatio(bestAttempt) }}</strong>
           </div>
-          <div class="score-pill-box">
+          <div class="best-latest-item">
             <span class="trio-label">Latest attempt</span>
-            <strong class="trio-value">{{ formatAttemptRatio(postTestStore.attemptHistory[0]) }}</strong>
-          </div>
-          <div class="score-pill-box">
-            <span class="trio-label">Overall status</span>
-            <strong class="trio-value">{{ postTestStore.overallPassed ? 'Passed' : 'Not passed yet' }}</strong>
+            <strong class="trio-value">{{ formatAttemptRatio(latestAttempt) }}</strong>
           </div>
         </div>
 
         <ul class="attempt-history-list" aria-label="Submitted post-test attempts">
           <li
-            v-for="attempt in postTestStore.attemptHistory"
+            v-for="attempt in orderedAttemptHistory"
             :key="attempt.attemptId"
             class="attempt-history-row"
           >
@@ -326,27 +354,7 @@ onMounted(() => {
             </div>
           </li>
         </ul>
-      </div>
-
-      <div class="panel-actions">
-        <button
-          type="button"
-          class="btn-primary start-btn"
-          :disabled="postTestStore.isStarting"
-          @click="handleStart"
-        >
-          <span>
-            {{
-              postTestStore.isStarting
-                ? 'Preparing questions...'
-                : postTestStore.attemptHistory.length > 0
-                  ? 'Take it again'
-                  : 'Start post-test'
-            }}
-          </span>
-          <AppIcon name="arrow-right" :size="15" />
-        </button>
-      </div>
+      </section>
     </section>
 
     <!-- Quiz Screen (One Question at a Time) -->
@@ -992,58 +1000,52 @@ onMounted(() => {
   gap: 1.25rem;
 }
 
-.intro-top {
+.intro-hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+}
+
+.intro-summary-col {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
-.rules-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
-  margin: 0;
-}
-
-.rule-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
-  padding: 0.9rem 1rem;
-  border-radius: 10px;
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border-subtle);
-}
-
-.rule-label {
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-}
-
-.rule-value {
+.intro-summary-line {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.08rem;
   font-weight: 700;
+  line-height: 1.35;
   color: var(--color-text-main);
+  font-variant-numeric: tabular-nums;
 }
 
-.rule-detail {
+.intro-instruction {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.92rem;
   color: var(--color-text-muted);
   line-height: 1.45;
 }
 
-.categories-strip,
+.intro-cta-col {
+  flex-shrink: 0;
+}
+
+.intro-primary-btn {
+  min-height: 46px;
+  padding: 0.65rem 1.4rem;
+  font-size: 0.95rem;
+}
+
 .previous-scores-strip {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding-top: 0.85rem;
+  gap: 0.75rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--color-border-subtle);
 }
 
@@ -1052,37 +1054,32 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .strip-label {
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: var(--color-text-main);
-}
-
-.local-note {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-.category-chips {
-  list-style: none;
-  padding: 0;
   margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text-main);
 }
 
-.cat-chip {
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
+.best-latest-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.best-latest-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
   background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--color-text-main);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .score-trio {
@@ -1947,14 +1944,35 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .rules-grid,
   .review-grid,
   .breakdown-grid {
     grid-template-columns: 1fr;
   }
 }
 
+@media (max-width: 768px) {
+  .intro-hero-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .intro-cta-col {
+    width: 100%;
+  }
+
+  .intro-primary-btn {
+    width: 100%;
+  }
+}
+
 @media (max-width: 640px) {
+  .best-latest-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .attempt-view-btn {
+    min-height: 44px;
+  }
   .page-header,
   .surface-panel {
     padding: 1.05rem;

@@ -2,6 +2,11 @@ import MockAdapter from 'axios-mock-adapter'
 import apiClient from './client.js'
 import { publicClient } from './app.js'
 import { stripDisplayNameWhitespace, validateDisplayName } from '../utils/displayName.js'
+import {
+  getMockAdminPostTestPlayerResult,
+  getMockAdminPostTestResults,
+  getMockAdminPostTestSummary,
+} from '../mocks/adminPostTestMockService.js'
 
 const mock = new MockAdapter(apiClient, { delayResponse: 200 })
 const publicMock = new MockAdapter(publicClient, { delayResponse: 200 })
@@ -4426,6 +4431,56 @@ mock.onGet(new RegExp('^/post-test/attempts/([^/?]+)$')).reply(async (config) =>
     return [404, { detail: 'Attempt not found' }]
   }
   return [200, found]
+})
+
+// Admin Post-test Reporting Mocks (Admin token required)
+const authorizeMockAdminPostTest = (config) => {
+  const authHeader = config.headers?.Authorization || config.headers?.authorization
+  if (!authHeader) return [401, { detail: 'Missing authorization token' }]
+  const role = typeof localStorage !== 'undefined' ? localStorage.getItem('cyber_role') : null
+  if (role && role !== 'admin') return [403, { detail: 'Admin privileges required' }]
+  return null
+}
+
+mock.onGet('/admin/post-test/summary').reply(async (config) => {
+  const authError = authorizeMockAdminPostTest(config)
+  if (authError) return authError
+  return [200, getMockAdminPostTestSummary()]
+})
+
+mock.onGet('/admin/post-test/results').reply(async (config) => {
+  const authError = authorizeMockAdminPostTest(config)
+  if (authError) return authError
+
+  const rawPassed = config.params?.passed
+  let passed = null
+  if (rawPassed === true || rawPassed === 'true') {
+    passed = true
+  } else if (rawPassed === false || rawPassed === 'false') {
+    passed = false
+  } else if (rawPassed !== undefined && rawPassed !== null && rawPassed !== '') {
+    return [422, [{ loc: ['query', 'passed'], msg: 'Input should be a valid boolean', type: 'bool_parsing' }]]
+  }
+
+  const page = Number(config.params?.page) || 1
+  const pageSize = Number(config.params?.page_size) || 20
+  if (page < 1 || page > 10000 || pageSize < 1 || pageSize > 100) {
+    return [422, [{ loc: ['query', 'page'], msg: 'Pagination out of range', type: 'value_error' }]]
+  }
+
+  return [200, getMockAdminPostTestResults({ passed, page, pageSize })]
+})
+
+mock.onGet(new RegExp('^/admin/post-test/players/([^/?]+)$')).reply(async (config) => {
+  const authError = authorizeMockAdminPostTest(config)
+  if (authError) return authError
+  const match = config.url.match(new RegExp('^/admin/post-test/players/([^/?]+)$'))
+  const profileId = match ? decodeURIComponent(match[1]) : ''
+  const result = getMockAdminPostTestPlayerResult(profileId)
+  if (!result) {
+    return [404, { detail: 'Player not found' }]
+  }
+  return [200, result]
 })
 
 publicMock.onGet(new RegExp('/app/version')).reply(handleAppVersionMock)

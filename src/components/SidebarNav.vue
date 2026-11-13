@@ -507,6 +507,7 @@ const formatRole = (role) => {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
 }
 
 .brand-logo {
@@ -555,6 +556,7 @@ const formatRole = (role) => {
   gap: 0.75rem;
   box-shadow: var(--shadow-sm);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
 }
 
 .user-avatar {
@@ -604,6 +606,7 @@ const formatRole = (role) => {
 /* Navigation Links */
 .nav-menu {
   flex: 1;
+  min-height: 0;
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
@@ -701,6 +704,7 @@ const formatRole = (role) => {
 .sidebar-footer {
   padding: 1rem 0.75rem;
   border-top: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
 }
 
 .logout-btn {
@@ -805,11 +809,19 @@ const formatRole = (role) => {
   }
 
   .sidebar-nav {
+    box-sizing: border-box;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100%;
     transform: translateX(-100%);
   }
 
   .sidebar-nav.mobile-open {
     transform: translateX(0);
+  }
+
+  .sidebar-footer {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
 

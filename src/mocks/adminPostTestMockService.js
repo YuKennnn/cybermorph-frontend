@@ -1,288 +1,363 @@
 /**
- * Development-only mock service for the Admin "Post-test results" view.
+ * Development-only mock service for the Admin Post-test reporting endpoints.
  *
  * IMPORTANT:
- * - Dynamically imported ONLY when `import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'`.
+ * - Imported ONLY by `src/api/mock.js` when `import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true'`.
  * - Never imported in production builds.
- * - Intentionally excludes any answer key or individual question/answer payloads.
+ * - Aligned with the live FastAPI response shapes in `features/post_test/analytics_schemas.py`.
+ * - Excludes answer keys and per-question choices.
  */
 
-const PASS_THRESHOLD_CORRECT = 23
-const TOTAL_QUESTIONS = 30
+const QUESTION_COUNT = 40
+const PASS_MARK_PERCENT = 75
 
-const buildAttempt = ({ attemptNumber, score, submittedAt }) => {
-  const percentage = Math.round((score / TOTAL_QUESTIONS) * 100)
+const CANONICAL_TOPICS = [
+  'Phishing',
+  'Smishing',
+  'Vishing',
+  'Social Engineering',
+  'Credential Theft',
+  'Public Wi-Fi Attack',
+  'Malware Infection',
+  'Ransomware',
+]
+
+const roundOneDecimal = (value) => Math.round(value * 10) / 10
+
+const buildTopics = (correctCount) => {
+  const base = Math.floor(correctCount / CANONICAL_TOPICS.length)
+  let remainder = correctCount % CANONICAL_TOPICS.length
+
+  return CANONICAL_TOPICS.map((topic) => {
+    const extra = remainder > 0 ? 1 : 0
+    if (remainder > 0) remainder -= 1
+    const correct = Math.min(5, base + extra)
+    return {
+      topic,
+      correct,
+      total: 5,
+    }
+  })
+}
+
+const buildAttempt = ({ attemptId, correctCount, submittedAt }) => {
+  const scorePercent = roundOneDecimal((correctCount * 100) / QUESTION_COUNT)
   return {
-    attemptId: `mock-attempt-${attemptNumber}-${score}`,
-    attemptNumber,
-    score,
-    totalQuestions: TOTAL_QUESTIONS,
-    percentage,
-    passed: score >= PASS_THRESHOLD_CORRECT,
-    submittedAt,
+    attempt_id: attemptId,
+    correct_count: correctCount,
+    question_count: QUESTION_COUNT,
+    score_percent: scorePercent,
+    pass_mark_percent: PASS_MARK_PERCENT,
+    passed: scorePercent >= PASS_MARK_PERCENT,
+    submitted_at: submittedAt,
+    topics: buildTopics(correctCount),
   }
 }
 
-/**
- * Sample player records covering:
- * - Players without a classroom (independent players)
- * - Players with no attempts yet (0 attempts, distinct from 0/30)
- * - A player with a submitted 0/30 score
- * - Players with one failed attempt (including boundary 22/30)
- * - Players with one passed attempt (including boundary 23/30)
- * - Players with multiple attempts (including passed earlier, failed later retake)
- * - Enough records (14) to span multiple pages at pageSize = 8
- */
-const SAMPLE_PLAYERS = [
+const toAttemptSummary = (attempt) => ({
+  attempt_id: attempt.attempt_id,
+  correct_count: attempt.correct_count,
+  question_count: attempt.question_count,
+  score_percent: attempt.score_percent,
+  pass_mark_percent: attempt.pass_mark_percent,
+  passed: attempt.passed,
+  submitted_at: attempt.submitted_at,
+})
+
+const SAMPLE_PLAYER_RECORDS = [
   {
-    playerId: 'plr-001',
+    profile_id: '00000000-0000-4000-8000-000000000101',
     username: 'SMISShINGUCrazy',
-    displayName: 'Kenji Navarro',
-    classroomName: 'BSIT-3A Cybersecurity',
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 25, submittedAt: '2026-11-08T09:15:00Z' }),
-      buildAttempt({ attemptNumber: 2, score: 19, submittedAt: '2026-11-11T14:40:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001011',
+        correctCount: 33,
+        submittedAt: '2026-11-08T09:15:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001012',
+        correctCount: 24,
+        submittedAt: '2026-11-12T14:40:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-002',
+    profile_id: '00000000-0000-4000-8000-000000000102',
     username: 'solo_cipher',
-    displayName: 'Alex Rivera',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 22, submittedAt: '2026-11-10T11:20:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001021',
+        correctCount: 29,
+        submittedAt: '2026-11-12T11:20:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-003',
-    username: 'maya_tan',
-    displayName: 'Maya Tan',
-    classroomName: null,
-    attempts: [],
-  },
-  {
-    playerId: 'plr-004',
+    profile_id: '00000000-0000-4000-8000-000000000103',
     username: 'carlo_m',
-    displayName: 'Carlo Mendoza',
-    classroomName: 'BSCS-2B Network Defense',
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 0, submittedAt: '2026-11-09T16:05:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001031',
+        correctCount: 0,
+        submittedAt: '2026-11-11T16:05:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-005',
+    profile_id: '00000000-0000-4000-8000-000000000104',
     username: 'elena_v',
-    displayName: 'Elena Villanueva',
-    classroomName: 'BSIT-3A Cybersecurity',
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 18, submittedAt: '2026-11-06T08:30:00Z' }),
-      buildAttempt({ attemptNumber: 2, score: 24, submittedAt: '2026-11-09T10:45:00Z' }),
-      buildAttempt({ attemptNumber: 3, score: 27, submittedAt: '2026-11-12T07:50:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001041',
+        correctCount: 25,
+        submittedAt: '2026-11-06T08:30:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001042',
+        correctCount: 31,
+        submittedAt: '2026-11-09T10:45:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001043',
+        correctCount: 36,
+        submittedAt: '2026-11-12T07:50:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-006',
+    profile_id: '00000000-0000-4000-8000-000000000105',
     username: 'noah_reyes',
-    displayName: 'Noah Reyes',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 23, submittedAt: '2026-11-11T18:10:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001051',
+        correctCount: 30,
+        submittedAt: '2026-11-11T18:10:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-007',
-    username: 'trisha_lim',
-    displayName: 'Trisha Lim',
-    classroomName: 'BSIS-1A Digital Literacy',
-    attempts: [],
-  },
-  {
-    playerId: 'plr-008',
+    profile_id: '00000000-0000-4000-8000-000000000106',
     username: 'paolo_g',
-    displayName: 'Paolo Garcia',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 26, submittedAt: '2026-11-07T13:00:00Z' }),
-      buildAttempt({ attemptNumber: 2, score: 21, submittedAt: '2026-11-12T09:25:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001061',
+        correctCount: 34,
+        submittedAt: '2026-11-07T13:00:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001062',
+        correctCount: 27,
+        submittedAt: '2026-11-11T09:25:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-009',
+    profile_id: '00000000-0000-4000-8000-000000000107',
     username: 'hannah_b',
-    displayName: 'Hannah Bautista',
-    classroomName: 'BSIT-3A Cybersecurity',
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 28, submittedAt: '2026-11-10T15:35:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001071',
+        correctCount: 38,
+        submittedAt: '2026-11-10T15:35:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-010',
+    profile_id: '00000000-0000-4000-8000-000000000108',
     username: 'marco_dizon',
-    displayName: 'Marco Dizon',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 15, submittedAt: '2026-11-05T10:15:00Z' }),
-      buildAttempt({ attemptNumber: 2, score: 20, submittedAt: '2026-11-08T17:45:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001081',
+        correctCount: 21,
+        submittedAt: '2026-11-05T10:15:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001082',
+        correctCount: 26,
+        submittedAt: '2026-11-08T17:45:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-011',
-    username: 'sofia_cruz',
-    displayName: 'Sofia Cruz',
-    classroomName: 'BSCS-2B Network Defense',
-    attempts: [],
-  },
-  {
-    playerId: 'plr-012',
+    profile_id: '00000000-0000-4000-8000-000000000109',
     username: 'ivan_santos',
-    displayName: 'Ivan Santos',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 29, submittedAt: '2026-11-12T12:05:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001091',
+        correctCount: 39,
+        submittedAt: '2026-11-10T12:05:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-013',
+    profile_id: '00000000-0000-4000-8000-000000000110',
     username: 'bea_aquino',
-    displayName: 'Bea Aquino',
-    classroomName: 'BSIS-1A Digital Literacy',
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 21, submittedAt: '2026-11-04T09:40:00Z' }),
-      buildAttempt({ attemptNumber: 2, score: 25, submittedAt: '2026-11-09T14:20:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001101',
+        correctCount: 28,
+        submittedAt: '2026-11-04T09:40:00Z',
+      }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001102',
+        correctCount: 32,
+        submittedAt: '2026-11-09T14:20:00Z',
+      }),
     ],
   },
   {
-    playerId: 'plr-014',
+    profile_id: '00000000-0000-4000-8000-000000000111',
     username: 'liam_torres',
-    displayName: 'Liam Torres',
-    classroomName: null,
     attempts: [
-      buildAttempt({ attemptNumber: 1, score: 17, submittedAt: '2026-11-11T08:00:00Z' }),
+      buildAttempt({
+        attemptId: '00000000-0000-4000-9000-000000001111',
+        correctCount: 22,
+        submittedAt: '2026-11-09T08:00:00Z',
+      }),
     ],
+  },
+  // Player with zero finished attempts (excluded from /results, valid 200 on /players/{profile_id})
+  {
+    profile_id: '00000000-0000-4000-8000-000000000112',
+    username: 'maya_tan',
+    attempts: [],
   },
 ]
 
-const summarizePlayer = (player) => {
-  const attempts = Array.isArray(player.attempts) ? player.attempts : []
-  const attemptCount = attempts.length
+const getBestAttempt = (attempts) => {
+  if (!attempts.length) return null
+  return attempts.reduce((best, current) => {
+    if (current.correct_count > best.correct_count) return current
+    if (
+      current.correct_count === best.correct_count &&
+      current.submitted_at < best.submitted_at
+    ) {
+      return current
+    }
+    return best
+  }, attempts[0])
+}
 
-  if (attemptCount === 0) {
-    return {
-      playerId: player.playerId,
-      username: player.username,
-      displayName: player.displayName,
-      classroomName: player.classroomName,
-      attemptCount: 0,
-      latestScore: null,
-      latestPercentage: null,
-      latestPassed: null,
-      bestScore: null,
-      bestPercentage: null,
-      bestPassed: null,
-      hasPassedAny: false,
-      lastSubmittedAt: null,
+const getLastSubmittedAt = (attempts) => {
+  if (!attempts.length) return null
+  return attempts.reduce(
+    (latest, current) => (current.submitted_at > latest ? current.submitted_at : latest),
+    attempts[0].submitted_at,
+  )
+}
+
+export const getMockAdminPostTestSummary = () => {
+  const attemptedPlayers = SAMPLE_PLAYER_RECORDS.filter((player) => player.attempts.length > 0)
+  const bestAttempts = attemptedPlayers.map((player) => getBestAttempt(player.attempts))
+  const playersAttempted = attemptedPlayers.length
+  const playersPassed = bestAttempts.filter((attempt) => attempt.passed).length
+  const finishedAttempts = attemptedPlayers.reduce(
+    (sum, player) => sum + player.attempts.length,
+    0,
+  )
+
+  const averageBestScorePercent = playersAttempted
+    ? roundOneDecimal(
+        bestAttempts.reduce((sum, attempt) => sum + attempt.score_percent, 0) /
+          playersAttempted,
+      )
+    : null
+
+  const passRatePercent = playersAttempted
+    ? roundOneDecimal((playersPassed * 100) / playersAttempted)
+    : null
+
+  const topicMap = new Map(CANONICAL_TOPICS.map((topic) => [topic, { correct: 0, total: 0 }]))
+  for (const best of bestAttempts) {
+    for (const item of best.topics) {
+      const bucket = topicMap.get(item.topic)
+      if (bucket) {
+        bucket.correct += item.correct
+        bucket.total += item.total
+      }
     }
   }
 
-  // Attempts are ordered oldest -> newest in fixture; pick last as latest
-  const latest = attempts[attempts.length - 1]
-  const best = attempts.reduce(
-    (top, current) => (current.score > top.score ? current : top),
-    attempts[0],
+  return {
+    pass_mark_percent: PASS_MARK_PERCENT,
+    eligible_players: 15,
+    players_attempted: playersAttempted,
+    players_passed: playersPassed,
+    pass_rate_percent: passRatePercent,
+    finished_attempts: finishedAttempts,
+    anonymous_attempts: 0,
+    average_best_score_percent: averageBestScorePercent,
+    topics: CANONICAL_TOPICS.map((topic) => {
+      const counts = topicMap.get(topic)
+      return {
+        topic,
+        correct: counts.correct,
+        total: counts.total,
+        accuracy_percent: counts.total
+          ? roundOneDecimal((counts.correct * 100) / counts.total)
+          : 0,
+      }
+    }),
+  }
+}
+
+export const getMockAdminPostTestResults = ({
+  passed = null,
+  page = 1,
+  pageSize = 20,
+} = {}) => {
+  const allRows = SAMPLE_PLAYER_RECORDS.filter((player) => player.attempts.length > 0)
+    .map((player) => {
+      const best = getBestAttempt(player.attempts)
+      const lastSubmittedAt = getLastSubmittedAt(player.attempts)
+      return {
+        profile_id: player.profile_id,
+        username: player.username,
+        attempts: player.attempts.length,
+        best_attempt_id: best.attempt_id,
+        best_correct_count: best.correct_count,
+        question_count: best.question_count,
+        best_score_percent: best.score_percent,
+        passed: best.passed,
+        last_submitted_at: lastSubmittedAt,
+      }
+    })
+    .sort((a, b) => b.last_submitted_at.localeCompare(a.last_submitted_at))
+
+  const filteredRows =
+    typeof passed === 'boolean'
+      ? allRows.filter((row) => row.passed === passed)
+      : allRows
+
+  const safePageSize = Math.max(1, Math.min(100, Number(pageSize) || 20))
+  const safePage = Math.max(1, Number(page) || 1)
+  const start = (safePage - 1) * safePageSize
+
+  return {
+    items: filteredRows.slice(start, start + safePageSize),
+    total_count: filteredRows.length,
+    page: safePage,
+    page_size: safePageSize,
+  }
+}
+
+export const getMockAdminPostTestPlayerResult = (profileId) => {
+  const player = SAMPLE_PLAYER_RECORDS.find((entry) => entry.profile_id === profileId)
+  if (!player) return null
+
+  const best = getBestAttempt(player.attempts)
+  const attemptsNewestFirst = [...player.attempts].sort((a, b) =>
+    b.submitted_at.localeCompare(a.submitted_at),
   )
 
   return {
-    playerId: player.playerId,
+    profile_id: player.profile_id,
     username: player.username,
-    displayName: player.displayName,
-    classroomName: player.classroomName,
-    attemptCount,
-    latestScore: latest.score,
-    latestPercentage: latest.percentage,
-    latestPassed: latest.passed,
-    bestScore: best.score,
-    bestPercentage: best.percentage,
-    bestPassed: best.passed,
-    hasPassedAny: attempts.some((a) => a.passed),
-    lastSubmittedAt: latest.submittedAt,
-  }
-}
-
-export const fetchMockAdminPostTestPlayers = async ({
-  search = '',
-  page = 1,
-  pageSize = 8,
-  previewState = 'default',
-} = {}) => {
-  if (previewState === 'error') {
-    throw new Error('Simulated preview error: unable to load sample post-test results.')
-  }
-
-  if (previewState === 'empty') {
-    return {
-      backendSupported: false,
-      mockEnabled: true,
-      isSampleData: true,
-      items: [],
-      totalCount: 0,
-      page: 1,
-      pageSize,
-    }
-  }
-
-  const normalizedSearch = String(search || '').trim().toLowerCase()
-  const filtered = SAMPLE_PLAYERS.filter((player) => {
-    if (!normalizedSearch) return true
-    const username = player.username.toLowerCase()
-    const displayName = (player.displayName || '').toLowerCase()
-    const classroom = (player.classroomName || 'independent player').toLowerCase()
-    return (
-      username.includes(normalizedSearch) ||
-      displayName.includes(normalizedSearch) ||
-      classroom.includes(normalizedSearch)
-    )
-  })
-
-  const safePageSize = Math.max(1, Math.min(50, Number(pageSize) || 8))
-  const totalCount = filtered.length
-  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize))
-  const safePage = Math.max(1, Math.min(totalPages, Number(page) || 1))
-  const startIndex = (safePage - 1) * safePageSize
-  const pageItems = filtered.slice(startIndex, startIndex + safePageSize).map(summarizePlayer)
-
-  return {
-    backendSupported: false,
-    mockEnabled: true,
-    isSampleData: true,
-    items: pageItems,
-    totalCount,
-    page: safePage,
-    pageSize: safePageSize,
-  }
-}
-
-export const fetchMockAdminPostTestPlayerHistory = async ({
-  playerId,
-  previewState = 'default',
-} = {}) => {
-  if (previewState === 'error') {
-    throw new Error('Simulated preview error: unable to load player attempt history.')
-  }
-
-  const player = SAMPLE_PLAYERS.find((entry) => entry.playerId === playerId)
-  if (!player) {
-    throw new Error('Player record not found in sample dataset.')
-  }
-
-  const summary = summarizePlayer(player)
-  // Return newest attempt first for admin review
-  const attemptsNewestFirst = [...player.attempts].reverse().map((attempt) => ({ ...attempt }))
-
-  return {
-    backendSupported: false,
-    mockEnabled: true,
-    isSampleData: true,
-    player: summary,
-    attempts: attemptsNewestFirst,
+    passed: Boolean(best?.passed),
+    best: best ? toAttemptSummary(best) : null,
+    attempts: attemptsNewestFirst.map((attempt) => ({
+      ...attempt,
+      topics: attempt.topics.map((topic) => ({ ...topic })),
+    })),
   }
 }

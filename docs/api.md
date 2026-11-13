@@ -670,23 +670,18 @@ All player post-test endpoints use the shared `/v1` base URL and require a `play
 - `POST /post-test/attempts/{attempt_id}/submit` -> submits `{ answers: [{ question_id, option_id }, ...] }` covering every issued question and returns the graded result with `topics` breakdown (`[{ topic, correct, total }]`). Returns `409` if already submitted and `422` if incomplete/invalid.
 - `GET /post-test/attempts/{attempt_id}` -> returns a previously submitted attempt result (`attempt_id`, `correct_count`, `question_count`, `score_percent`, `pass_mark_percent`, `passed`, `submitted_at`, `topics`).
 
+### Admin Post-Test Reporting Endpoints (`/admin/post-test/*`)
+All admin post-test reporting endpoints require an `admin` bearer token (`get_current_admin`). Educators have no post-test reporting route. Results exclude answer keys and individual question choices, and remain readable after a player's account is soft-deleted.
+- `GET /admin/post-test/summary` -> `{ pass_mark_percent, eligible_players, players_attempted, players_passed, pass_rate_percent, finished_attempts, anonymous_attempts, average_best_score_percent, topics }` (`pass_rate_percent` and `average_best_score_percent` are `null` until at least one attempt is submitted; each player counts once by their best attempt).
+- `GET /admin/post-test/results` -> `?passed=&page=&page_size=` (`passed`: optional `true` or `false`; default `page_size=20`), returning `{ items, total_count, page, page_size }` with one row per player who submitted at least one attempt, ordered most recent finisher first (`profile_id`, `username`, `attempts`, `best_attempt_id`, `best_correct_count`, `question_count`, `best_score_percent`, `passed`, `last_submitted_at`).
+- `GET /admin/post-test/players/{profile_id}` -> `{ profile_id, username, passed, best, attempts }` with finished attempts ordered newest first, each including `attempt_id`, `correct_count`, `question_count` (40 questions, 5 per topic), `score_percent`, `pass_mark_percent` (75%), `passed`, `submitted_at`, and `topics` (`[{ topic, correct, total }]`). Returns `200` with `attempts: []`, `best: null`, `passed: false` for a player with no submitted attempts, or `404` for an unknown profile.
+
 ### Explicitly Unbuilt Endpoints (Do Not Integrate)
 Per `API_GUIDE.md`, the following endpoints are **not yet built** on the backend:
 - Modifying or deleting user accounts (`PATCH /admin/users/{id}`, `DELETE /admin/users/{id}`)
 - Deleted-records inspection and restore screens (`GET /admin/deleted-records`, `POST /admin/deleted-records/{id}/restore`)
 - Uploading avatars or self-service password reset
-- Admin and educator post-test results reporting endpoints (see proposed capabilities below)
-
-### Proposed Future Backend Capabilities for Admin Post-Test Results (Not Yet Implemented)
-To replace the frontend development-only preview in `AdminPostTestResultsView.vue` with real persisted data, the FastAPI backend will need:
-1. **Persisted Post-Test Attempts**: Server-side storage and grading of submitted player post-test attempts (`attempt_id`, `player_id`/`profile_id`, `score` out of 30, `total_questions`, `percentage`, `passed` where `score >= 23`, `submitted_at` UTC timestamp), keeping the answer key and per-question answers out of admin summary/history responses.
-2. **Paginated Admin Player Summary (`GET /admin/post-test-results`, proposed)**:
-   - Query parameters: `?search=&page=&page_size=` (standard `{ items, total_count, page, page_size }` envelope).
-   - Includes **all** player accounts, including independent players without a classroom (`classroom_name: null`).
-   - Returns per-player summary fields: `player_id`, `username`, `display_name`, `classroom_name`, `attempt_count`, `latest_score`, `latest_percentage`, `latest_passed`, `best_score`, `best_percentage`, `best_passed`, `last_submitted_at` (with `attempt_count: 0` / `null` scores distinct from a submitted `0/30` score).
-3. **Per-Player Attempt History (`GET /admin/post-test-results/{player_id}`, proposed)**:
-   - Returns player summary plus chronological `attempts` list (`attempt_id`, `attempt_number`, `score`, `total_questions`, `percentage`, `passed`, `submitted_at`).
-4. **Independent Server-Side Authorization**: Both proposed endpoints must enforce `get_current_admin` on the backend independently of the Vue Router role guard.
+- Educator post-test reporting routes, per-question statistics, or classroom-filtered post-test results
 
 ## 11. Synchronization Endpoints
 
